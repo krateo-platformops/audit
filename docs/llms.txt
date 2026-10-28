@@ -1,0 +1,13 @@
+# audit — LLM doc index (pinned: v0.1.0)
+# One line per file; regenerate the pin on release.
+docs/index.md: the map of this bundle
+docs/overview.md: why one shared emitter, and how a record flows to krateo_audit
+docs/usage.md: install, when to emit, and correlating a reconcile with its request
+docs/configuration.md: the OTel Logs SDK setup the package relies on
+docs/api.md: the Go API and the full record contract
+docs/examples.md: examples index
+docs/release.md: tag-only release runbook (v-prefixed git tags, Go module proxy)
+docs/log.md: curated history
+audit.go: the package source
+examples/emit-to-stdout/README.md: runnable example emitting one record to stdout
+examples/emit-to-stdout/main.go: the example source
