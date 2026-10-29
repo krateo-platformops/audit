@@ -22,8 +22,10 @@ package audit
 
 import (
 	"context"
-	"go.opentelemetry.io/otel/attribute"
+	"net/url"
+	"strings"
 
+	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/baggage"
 	"go.opentelemetry.io/otel/log"
 	"go.opentelemetry.io/otel/trace"
@@ -47,9 +49,11 @@ const (
 // Event is the caller-facing input. Every field is optional; an unset field is
 // omitted from the record, never written empty.
 //
-// Never put a credential in any field. In particular ServerAddress is host[:port]
-// only — never a path, query or userinfo, which can carry a secret — and Message
-// must not echo an upstream response body.
+// Never put a credential in any field. In particular Message must not echo an
+// upstream response body, and ServerAddress names an endpoint by host[:port]
+// only: a path, query or userinfo can carry a secret. Emit enforces the latter by
+// reducing ServerAddress to host[:port], so passing the request URL is safe, but
+// that is defence in depth, not permission to put a secret in any other field.
 type Event struct {
 	Message string // LogRecord body
 
@@ -70,7 +74,10 @@ type Event struct {
 	ObjectGeneration      int64  // k8s.object.generation (0 => omitted)
 	ObjectResourceVersion string // k8s.object.resource_version
 
-	ServerAddress string // server.address — host[:port] of an external endpoint
+	// server.address — host[:port] of an external endpoint. A URL is accepted:
+	// Emit drops its scheme, userinfo, path, query and fragment. A value with no
+	// parseable host is omitted, never written raw.
+	ServerAddress string
 
 	Action     string // krateo.action (logical verb, e.g. "call", "rest.write")
 	HTTPMethod string // http.request.method
@@ -129,7 +136,7 @@ func (e *Emitter) Emit(ctx context.Context, ev Event) {
 	add("k8s.resource.name", ev.ObjectName)
 	add("k8s.object.uid", ev.ObjectUID)
 	add("k8s.object.resource_version", ev.ObjectResourceVersion)
-	add("server.address", ev.ServerAddress)
+	add("server.address", hostPort(ev.ServerAddress))
 	add("krateo.action", ev.Action)
 	add("http.request.method", ev.HTTPMethod)
 	add("outcome", ev.Outcome)
@@ -160,4 +167,26 @@ func (e *Emitter) Emit(ctx context.Context, ev Event) {
 
 	rec.AddAttributes(attrs...)
 	e.logger.Emit(ctx, rec)
+}
+
+// hostPort reduces addr to the host[:port] it names, as url.URL.Host spells it
+// (an IPv6 literal keeps its brackets). It drops any scheme, userinfo, path,
+// query and fragment. It returns "" when addr has no parseable host, so Emit
+// omits server.address rather than write the raw value: the raw value is exactly
+// what may carry a secret.
+func hostPort(addr string) string {
+	if addr == "" {
+		return ""
+	}
+	// A value with no scheme ("host:port", "host/path") is read as an authority.
+	// "://" counts as a scheme separator only before any path, query or fragment,
+	// so a URL embedded in a query ("host/cb?next=https://...") does not.
+	if i := strings.Index(addr, "://"); i < 0 || strings.ContainsAny(addr[:i], "/?#") {
+		addr = "//" + addr
+	}
+	u, err := url.Parse(addr)
+	if err != nil || u.Hostname() == "" {
+		return ""
+	}
+	return strings.TrimSuffix(u.Host, ":") // "host:" has an empty port
 }

@@ -2,6 +2,7 @@ package audit
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"go.opentelemetry.io/otel/attribute"
@@ -142,6 +143,50 @@ func TestEmit_OmitsUnsetFields(t *testing.T) {
 	}
 	if a["event.name"].AsString() != "audit" || a["krateo.action"].AsString() != "call" {
 		t.Errorf("discriminator/action missing: %v", a)
+	}
+}
+
+// server.address is host[:port] only: a path, query or userinfo can carry a
+// secret. Emit enforces that for every caller, and omits a value it cannot reduce
+// rather than write it raw. want "" means the attribute must be absent.
+func TestEmit_ServerAddressIsHostPortOnly(t *testing.T) {
+	for _, tc := range []struct{ name, in, want string }{
+		{"bare host", "api.example.com", "api.example.com"},
+		{"host:port", "api.example.com:8443", "api.example.com:8443"},
+		{"url drops path, query, fragment", "https://api.example.com/v1/orgs/123?token=SECRET#frag", "api.example.com"},
+		{"url drops userinfo, keeps port", "https://user:pass@api.example.com:8443/x", "api.example.com:8443"},
+		{"userinfo without scheme", "user:pass@api.example.com", "api.example.com"},
+		{"ipv6 with port", "[2001:db8::1]:443", "[2001:db8::1]:443"},
+		{"ipv6 url", "https://[2001:db8::1]/p", "[2001:db8::1]"},
+		{"token in path, no scheme", "vendor.example.com/v2/tok_ABCDEF1234567890/items", "vendor.example.com"},
+		{"url in query, no scheme", "vendor.example.com/cb?next=https://x.example.com/tok_ABCDEF", "vendor.example.com"},
+		{"empty port", "api.example.com:", "api.example.com"},
+		{"empty", "", ""},
+		{"unparseable ipv6", "http://[::1/tok_ABCDEF?token=SECRET", ""},
+		{"control character", "api.example.com/tok_ABCDEF\x00?token=SECRET", ""},
+		{"invalid port", "api.example.com:SECRET/tok_ABCDEF", ""},
+		{"no host", "file:///tok_ABCDEF?token=SECRET", ""},
+		{"userinfo only", "https://user:pass@/tok_ABCDEF", ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			e, rec := newEmitter(t)
+			e.Emit(spanCtx(t), Event{Action: "call", ServerAddress: tc.in})
+			a := attrs(only(t, rec))
+			got, ok := a["server.address"]
+			switch {
+			case tc.want == "" && ok:
+				t.Errorf("server.address = %q, want it omitted", got.AsString())
+			case tc.want != "" && got.AsString() != tc.want:
+				t.Errorf("server.address = %q, want %q", got.AsString(), tc.want)
+			}
+			for k, v := range a {
+				for _, secret := range []string{"SECRET", "pass", "tok_"} {
+					if strings.Contains(v.Emit(), secret) {
+						t.Errorf("%s = %q leaks %q", k, v.Emit(), secret)
+					}
+				}
+			}
+		})
 	}
 }
 
