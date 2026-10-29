@@ -21,6 +21,9 @@ It is consumed as a plain Go module. It ships no image, no chart and no CRDs.
 go get github.com/krateo-platformops/audit@latest
 ```
 
+Requires Go ≥ 1.26; build with Go ≥ 1.26.10 for a patched standard library (see
+[docs/usage.md](docs/usage.md)).
+
 ```go
 import "github.com/krateo-platformops/audit"
 
