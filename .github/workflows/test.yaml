@@ -28,6 +28,11 @@ jobs:
   # consumer on v0.21 or later.
   otel-log-compat:
     runs-on: ubuntu-latest
+    env:
+      # otel/log v1.47 requires go >= 1.26. A consumer on it already builds with that
+      # toolchain; `auto` lets `go get` select it here the same way (setup-go defaults
+      # to `local`, which pins the go.mod version).
+      GOTOOLCHAIN: auto
     strategy:
       fail-fast: false
       matrix:
