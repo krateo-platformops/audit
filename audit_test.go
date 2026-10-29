@@ -4,6 +4,7 @@ import (
 	"context"
 	"testing"
 
+	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/baggage"
 	otellog "go.opentelemetry.io/otel/log"
 	sdklog "go.opentelemetry.io/otel/sdk/log"
@@ -30,10 +31,10 @@ func newEmitter(t *testing.T) (*Emitter, *recorder) {
 	return New(lp.Logger("test")), rec
 }
 
-func attrs(r sdklog.Record) map[string]otellog.Value {
-	out := map[string]otellog.Value{}
-	r.WalkAttributes(func(kv otellog.KeyValue) bool {
-		out[kv.Key] = kv.Value
+func attrs(r sdklog.Record) map[string]attribute.Value {
+	out := map[string]attribute.Value{}
+	r.WalkAttributes(func(kv attribute.KeyValue) bool {
+		out[string(kv.Key)] = kv.Value
 		return true
 	})
 	return out
@@ -159,8 +160,8 @@ func TestEmit_RolesAreASlice(t *testing.T) {
 	e, rec := newEmitter(t)
 	e.Emit(spanCtx(t), Event{UserRoles: []string{"admins", "devs"}})
 	v := attrs(only(t, rec))["user.roles"]
-	if v.Kind() != otellog.KindSlice {
-		t.Fatalf("user.roles kind = %v, want Slice", v.Kind())
+	if v.Type() != attribute.SLICE {
+		t.Fatalf("user.roles kind = %v, want Slice", v.Type())
 	}
 	s := v.AsSlice()
 	if len(s) != 2 || s[0].AsString() != "admins" || s[1].AsString() != "devs" {

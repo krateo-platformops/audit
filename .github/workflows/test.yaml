@@ -22,5 +22,30 @@ jobs:
       - name: Test (race, coverage)
         run: go test -race -covermode=atomic -coverprofile=coverage.txt ./...
 
+  # The module requires the lowest otel/log it supports. Consumers raise it through
+  # MVS, so the package must keep building and passing on the versions they run.
+  # The Logs API changed its value types in v0.21.0; that broke v0.1.0 for every
+  # consumer on v0.21 or later.
+  otel-log-compat:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        otel-log: [v0.21.0, v0.22.0, v1.47.0]
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+      - name: Raise otel/log and sdk/log to ${{ matrix.otel-log }}
+        run: |
+          go get go.opentelemetry.io/otel/log@${{ matrix.otel-log }} go.opentelemetry.io/otel/sdk/log@${{ matrix.otel-log }}
+          go mod tidy
+          go list -m go.opentelemetry.io/otel go.opentelemetry.io/otel/log go.opentelemetry.io/otel/sdk/log
+      - name: Vet and test the package
+        run: |
+          go vet .
+          go test -race .
+
   lint-docs:
     uses: krateo-platformops/.github/.github/workflows/lint-docs.yaml@main
