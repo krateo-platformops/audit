@@ -22,6 +22,7 @@ package audit
 
 import (
 	"context"
+	"go.opentelemetry.io/otel/attribute"
 
 	"go.opentelemetry.io/otel/baggage"
 	"go.opentelemetry.io/otel/log"
@@ -99,7 +100,7 @@ func (e *Emitter) Emit(ctx context.Context, ev Event) {
 	}
 
 	var rec log.Record
-	rec.SetBody(log.StringValue(ev.Message))
+	rec.SetBody(attribute.StringValue(ev.Message))
 
 	if ev.Outcome == OutcomeSuccess || ev.Outcome == "" {
 		rec.SetSeverity(log.SeverityInfo)
@@ -111,10 +112,10 @@ func (e *Emitter) Emit(ctx context.Context, ev Event) {
 
 	// event.name is written as a LogAttribute: that is the exact key
 	// (LogAttributes['event.name']) the collector routes and every query filters on.
-	attrs := []log.KeyValue{log.String("event.name", EventName)}
+	attrs := []attribute.KeyValue{attribute.String("event.name", EventName)}
 	add := func(k, v string) {
 		if v != "" {
-			attrs = append(attrs, log.String(k, v))
+			attrs = append(attrs, attribute.String(k, v))
 		}
 	}
 	add("enduser.id", ev.EndUserID)
@@ -134,27 +135,27 @@ func (e *Emitter) Emit(ctx context.Context, ev Event) {
 	add("outcome", ev.Outcome)
 
 	if ev.ObjectGeneration != 0 {
-		attrs = append(attrs, log.Int64("k8s.object.generation", ev.ObjectGeneration))
+		attrs = append(attrs, attribute.Int64("k8s.object.generation", ev.ObjectGeneration))
 	}
 	if len(ev.UserRoles) > 0 {
-		vals := make([]log.Value, len(ev.UserRoles))
+		vals := make([]attribute.Value, len(ev.UserRoles))
 		for i, r := range ev.UserRoles {
-			vals[i] = log.StringValue(r)
+			vals[i] = attribute.StringValue(r)
 		}
-		attrs = append(attrs, log.Slice("user.roles", vals...))
+		attrs = append(attrs, attribute.Slice("user.roles", vals...))
 	}
 	if ev.StatusCode != 0 {
-		attrs = append(attrs, log.Int("http.response.status_code", ev.StatusCode))
+		attrs = append(attrs, attribute.Int("http.response.status_code", ev.StatusCode))
 	}
 
 	if m := baggage.FromContext(ctx).Member(BaggageSessionKey); m.Key() != "" {
-		attrs = append(attrs, log.String("session.id", m.Value()))
+		attrs = append(attrs, attribute.String("session.id", m.Value()))
 	}
 
 	// TraceId/SpanId are LogRecord fields the SDK stamps from ctx, not
 	// attributes. Flag a record emitted with no trace context so it is findable.
 	if sc := trace.SpanContextFromContext(ctx); !sc.IsValid() {
-		attrs = append(attrs, log.Bool("krateo.audit.no_trace_context", true))
+		attrs = append(attrs, attribute.Bool("krateo.audit.no_trace_context", true))
 	}
 
 	rec.AddAttributes(attrs...)
