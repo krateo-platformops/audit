@@ -14,6 +14,12 @@ timestamp: 2026-10-29T13:55:06Z
   standard-library vulnerabilities (`net/http`, `crypto/x509`, `net/url`) that a
   patched toolchain doesn't have; with go1.26.10 it reports none. Consumers
   should build with Go ≥ 1.26.10. No dependency, API or behaviour change.
+- **2026-10-29**: `Emit` reduces `ServerAddress` to host[:port] before writing
+  `server.address`. It drops any scheme, userinfo, path, query and fragment, so
+  a caller that passes a full URL no longer writes the path or query (which can
+  carry a token) into the 365-day trail. A value with no parseable host is
+  omitted, never written raw. The API is unchanged; the emitted value changes
+  only for callers that passed more than host[:port].
 - **2026-10-29**: builds on the Logs API from `go.opentelemetry.io/otel/log`
   v0.21.0 onward. v0.21.0 moved the record value types (`KeyValue`, `Value`,
   `String`, `Int64`, ...) to `go.opentelemetry.io/otel/attribute`, so v0.1.0 did

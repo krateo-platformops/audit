@@ -50,6 +50,11 @@ or query can carry a secret (webhook tokens, signed URLs), and so can an upstrea
 response body. That is why `ServerAddress` is host[:port] only and `Message` must
 not echo a response body.
 
+`Emit` enforces the `ServerAddress` rule itself: it reduces the value to
+host[:port], so passing the request URL records only its host and port. A value
+with no parseable host is omitted, never written raw. That reduction is a
+safety net, not permission to put a secret in any other field.
+
 ## Correlating a reconcile with the request that caused it
 
 A reconcile has no inbound request, so there is no `session.id` in its baggage.
