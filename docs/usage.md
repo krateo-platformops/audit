@@ -4,7 +4,7 @@ title: audit — usage
 description: Install the package, when and how to emit, and how a reconcile's audit row is correlated with the request that caused it.
 resource: github.com/krateo-platformops/audit
 tags: [library, audit, usage]
-timestamp: 2026-10-28T00:00:00Z
+timestamp: 2026-10-29T13:48:03Z
 ---
 
 # Usage
@@ -38,6 +38,11 @@ with OTLP logs switched off needs no guard at each call site.
 or query can carry a secret (webhook tokens, signed URLs), and so can an upstream
 response body. That is why `ServerAddress` is host[:port] only and `Message` must
 not echo a response body.
+
+`Emit` enforces the `ServerAddress` rule itself: it reduces the value to
+host[:port], so passing the request URL records only its host and port. A value
+with no parseable host is omitted, never written raw. That reduction is a
+safety net, not permission to put a secret in any other field.
 
 ## Correlating a reconcile with the request that caused it
 

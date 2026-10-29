@@ -4,11 +4,17 @@ title: audit — log
 description: Curated history of the audit package.
 resource: github.com/krateo-platformops/audit
 tags: [library, audit, log]
-timestamp: 2026-10-29T00:00:00Z
+timestamp: 2026-10-29T13:48:03Z
 ---
 
 # Log
 
+- **2026-10-29**: `Emit` reduces `ServerAddress` to host[:port] before writing
+  `server.address`. It drops any scheme, userinfo, path, query and fragment, so
+  a caller that passes a full URL no longer writes the path or query (which can
+  carry a token) into the 365-day trail. A value with no parseable host is
+  omitted, never written raw. The API is unchanged; the emitted value changes
+  only for callers that passed more than host[:port].
 - **2026-10-29**: builds on the Logs API from `go.opentelemetry.io/otel/log`
   v0.21.0 onward. v0.21.0 moved the record value types (`KeyValue`, `Value`,
   `String`, `Int64`, ...) to `go.opentelemetry.io/otel/attribute`, so v0.1.0 did

@@ -4,7 +4,7 @@ title: audit — API
 description: The exported Go API of the audit package and the full record contract: every attribute an AuditEvent can carry.
 resource: github.com/krateo-platformops/audit
 tags: [library, audit, api]
-timestamp: 2026-10-28T00:00:00Z
+timestamp: 2026-10-29T13:48:03Z
 ---
 
 # API
@@ -42,7 +42,7 @@ type Event struct { /* see the record contract below */ }
 | `k8s.object.uid` | `ObjectUID` | correlation key |
 | `k8s.object.generation` | `ObjectGeneration` | correlation key; omitted when 0 |
 | `k8s.object.resource_version` | `ObjectResourceVersion` | exact-match key |
-| `server.address` | `ServerAddress` | external endpoint, **host[:port] only** |
+| `server.address` | `ServerAddress` | external endpoint, **host[:port] only**: `Emit` drops any scheme, userinfo, path, query and fragment, and omits a value with no parseable host rather than write it raw |
 | `session.id` | read from W3C baggage on `ctx` | present on request paths |
 | `krateo.audit.no_trace_context` | set automatically | `true` when `ctx` carries no valid span |
 | LogRecord body | `Message` | must not echo a response body |
