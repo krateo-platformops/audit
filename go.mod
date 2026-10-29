@@ -1,6 +1,8 @@
 module github.com/krateo-platformops/audit
 
-go 1.25.6
+go 1.26.0
+
+toolchain go1.26.10
 
 require (
 	go.opentelemetry.io/otel v1.45.0

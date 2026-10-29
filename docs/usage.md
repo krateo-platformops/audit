@@ -4,7 +4,7 @@ title: audit — usage
 description: Install the package, when and how to emit, and how a reconcile's audit row is correlated with the request that caused it.
 resource: github.com/krateo-platformops/audit
 tags: [library, audit, usage]
-timestamp: 2026-10-29T13:48:03Z
+timestamp: 2026-10-29T13:55:06Z
 ---
 
 # Usage
@@ -14,6 +14,17 @@ timestamp: 2026-10-29T13:48:03Z
 ```sh
 go get github.com/krateo-platformops/audit@latest
 ```
+
+The module requires Go ≥ 1.26 (see `go.mod`). Build with **Go ≥ 1.26.10**: the
+`go` line is only the language floor, and the standard library comes from your
+toolchain. Older 1.26 patches carry `net/http`, `crypto/x509` and `net/url`
+vulnerabilities that `govulncheck` reports against code using this package. The
+floating `golang:1.26` images track the latest 1.26 patch.
+
+This repo's `go.mod` also carries `toolchain go1.26.10`, so its own builds,
+tests and scans use a patched standard library. Go ignores a dependency's
+`toolchain` line, so it does not raise your floor; set your own if you scan with
+an older Go.
 
 Build one `Emitter` at startup from the process `LoggerProvider` and inject it.
 A nil `*Emitter`, or one built with a nil logger, is a no-op, so a component
