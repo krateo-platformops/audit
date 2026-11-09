@@ -98,6 +98,10 @@ func TestSchema_Rulings(t *testing.T) {
 	if get(KeyEventName).Writers[WriterController].Level != LevelRequired {
 		t.Errorf("event.name must stay required")
 	}
+	// method_original exists only beside _OTHER: required there, unexpected anywhere else.
+	if mo := get(KeyHTTPMethodOriginal); mo.OnlyWhen != CondMethodOther || mo.Writers[WriterRequest].Check != CondMethodOther {
+		t.Errorf("http.request.method_original: OnlyWhen %q, request check %q; want both %q", mo.OnlyWhen, mo.Writers[WriterRequest].Check, CondMethodOther)
+	}
 	// Gap d: a Kubernetes target always names its resource.
 	if r := get(KeyObjectResource).Writers[WriterController]; r.Check != CondK8sTarget {
 		t.Errorf("object_ref.resource for a controller = %+v, want it conditional on a Kubernetes target", r)

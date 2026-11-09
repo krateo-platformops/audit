@@ -78,6 +78,7 @@ func TestParse_RefusesABrokenSchema(t *testing.T) {
 		"dangling replacement": {"replaced_by: krateo.audit.outcome", "replaced_by: krateo.audit.result"},
 		"duplicate key":        {"  - name: user.roles\n", "  - name: user.name\n"},
 		"no target mode":       {"    controller: at_least_one\n", ""},
+		"unknown only_when":    {"    only_when: method_other\n", "    only_when: method_othr\n"},
 	} {
 		t.Run(name, func(t *testing.T) {
 			bad := strings.Replace(src, m[0], m[1], 1)

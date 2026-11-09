@@ -114,7 +114,10 @@ type KeySpec struct {
 	ReplacedBy string
 	// DualWrite says Emit adds this v0.3 key beside its replacement. False
 	// for a v0.3 key written only where it is written today (enduser.id).
-	DualWrite   bool
+	DualWrite bool
+	// OnlyWhen, when set, is the condition the key may be written under, and
+	// only under: Check reports the key anywhere else (ReasonUnexpected).
+	OnlyWhen    Condition
 	Description string
 	// Writers holds every writer's requirement.
 	Writers map[Writer]Requirement

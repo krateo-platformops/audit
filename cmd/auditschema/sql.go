@@ -160,6 +160,9 @@ func rulesSQL(w audit.Writer) string {
 			}
 			add(alias("unmet", k.Name), pred)
 		}
+		if k.OnlyWhen != "" {
+			add(alias("unexpected", k.Name), attr(k.Name)+" != '' AND NOT "+conditionSQL[k.OnlyWhen])
+		}
 		if len(k.Values) > 0 {
 			add(alias("bad", k.Name), attr(k.Name)+" NOT IN ("+strings.Join(append([]string{"''"}, quoted(k.Values)...), ", ")+")")
 		}

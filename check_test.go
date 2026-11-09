@@ -135,6 +135,10 @@ func TestCheck_Violations(t *testing.T) {
 		// semconv: a method recorded as _OTHER carries the method as given.
 		{"_OTHER without the method as given", WriterRequest, with(req, attribute.String(KeyHTTPMethod, "_OTHER")), []Violation{v(KeyHTTPMethodOriginal, ReasonMissing)}},
 		{"_OTHER with the method as given", WriterRequest, with(req, attribute.String(KeyHTTPMethod, "_OTHER"), attribute.String(KeyHTTPMethodOriginal, "post")), nil},
+		// method_original only when the method is _OTHER (schema only_when: method_other).
+		{"method_original beside a method semconv names", WriterRequest, with(req, attribute.String(KeyHTTPMethodOriginal, "POST")), []Violation{v(KeyHTTPMethodOriginal, ReasonUnexpected)}},
+		{"method_original beside a canonicalised method", WriterRequest, with(req, attribute.String(KeyHTTPMethodOriginal, "post")), []Violation{v(KeyHTTPMethodOriginal, ReasonUnexpected)}},
+		{"method_original with no method at all", WriterController, with(ctrl, attribute.String(KeyHTTPMethodOriginal, "post")), []Violation{v(KeyHTTPMethodOriginal, ReasonUnexpected)}},
 		{"actor class missing for a controller is not excused by a mark", WriterController, with(without(ctrl, KeyActorClass), attribute.String(KeyIncomplete, "actor_class")), []Violation{v(KeyActorClass, ReasonMissing)}},
 		{"actor class missing for a request must be marked", WriterRequest, without(req, KeyActorClass), []Violation{v(KeyActorClass, ReasonMissing)}},
 		{"actor class marked for a request", WriterRequest, with(without(req, KeyActorClass), attribute.String(KeyIncomplete, "actor_class")), []Violation{v(KeyActorClass, ReasonIncomplete)}},

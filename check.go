@@ -44,6 +44,10 @@ const (
 	// ReasonMarkedButPresent: krateo.audit.incomplete marks a key the record
 	// carries.
 	ReasonMarkedButPresent Reason = "marked-but-present"
+	// ReasonUnexpected: the key is written while the condition it may only
+	// be written under (KeySpec.OnlyWhen) does not hold, e.g.
+	// http.request.method_original beside a method semconv names.
+	ReasonUnexpected Reason = "unexpected"
 	// ReasonTwoTargets: the record names a Kubernetes object and an external
 	// endpoint, for a writer whose record has exactly one target.
 	ReasonTwoTargets Reason = "two-targets"
@@ -80,10 +84,11 @@ func (v Violation) String() string { return v.Key + ": " + string(v.Reason) }
 // Check validates one record's attributes against the schema for writer w. It
 // reports, in a fixed order: per attribute, keys outside the closed set, keys
 // this writer cannot write, type, enum, format and UTF-8 errors, duplicates;
-// then every key the writer must write here that is absent (missing, or
-// incomplete when marked); then the target rule; then the W1 pairs; then an
-// affected user equal to the actor. An empty result means the record
-// conforms.
+// then marks of keys the record carries; then keys written outside their
+// only_when condition; then every key the writer must write here that is
+// absent (missing, or incomplete when marked); then the target rule; then
+// the W1 pairs; then an affected user equal to the actor. An empty result
+// means the record conforms.
 //
 // Check sees attributes only. CheckRecord also checks the LogRecord EventName.
 func Check(w Writer, attrs []attribute.KeyValue) []Violation {
@@ -129,6 +134,15 @@ func Check(w Writer, attrs []attribute.KeyValue) []Violation {
 			}
 		} else if m == schemaTarget.Marker && targets(present) > 0 {
 			out = append(out, Violation{Key: RuleTarget, Reason: ReasonMarkedButPresent})
+		}
+	}
+	for i := range schemaKeys {
+		spec := &schemaKeys[i]
+		if _, here := present[spec.Name]; !here || spec.OnlyWhen == "" {
+			continue
+		}
+		if holds, _ := evalCondition(spec.OnlyWhen, present); !holds {
+			out = append(out, Violation{Key: spec.Name, Reason: ReasonUnexpected})
 		}
 	}
 	for i := range schemaKeys {

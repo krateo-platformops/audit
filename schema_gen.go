@@ -63,7 +63,10 @@ const (
 	KeyHTTPMethod = "http.request.method"
 	// KeyHTTPMethodOriginal is "http.request.method_original". The HTTP method
 	// exactly as the writer was given it, when http.request.method records it as
-	// _OTHER. Written only then, so no value a writer passes is lost.
+	// _OTHER. Written only then, so no value a writer passes is lost. Semconv also
+	// lets a framework that treats methods as case-insensitive pair a canonical
+	// method with its original; this schema does not: a method semconv does not
+	// name, lowercase included, is _OTHER.
 	KeyHTTPMethodOriginal = "http.request.method_original"
 	// KeyOutcome is "krateo.audit.outcome". What the authority this writer sent to
 	// answered, at the protocol level the writer observes. denied means the writer
@@ -297,6 +300,7 @@ var schemaKeys = []KeySpec{
 		Asserted:    false,
 		ReplacedBy:  "",
 		DualWrite:   false,
+		OnlyWhen:    "",
 		Description: "The discriminator the collector partitions on. Also set as the LogRecord EventName; the attribute stays until the collector partitions on EventName and krateo_audit has an EventName column.",
 		Writers: map[Writer]Requirement{
 			WriterRequest:    {Level: LevelRequired},
@@ -316,6 +320,7 @@ var schemaKeys = []KeySpec{
 		Asserted:    false,
 		ReplacedBy:  "",
 		DualWrite:   false,
+		OnlyWhen:    "",
 		Description: "The schema version the record was written to. Tells migrated rows apart.",
 		Writers: map[Writer]Requirement{
 			WriterRequest:    {Level: LevelRequired},
@@ -335,6 +340,7 @@ var schemaKeys = []KeySpec{
 		Asserted:    false,
 		ReplacedBy:  "",
 		DualWrite:   false,
+		OnlyWhen:    "",
 		Description: "The principal performing the action (Kubernetes user.username). On a delegated token, the outermost actor. For a controller, system:serviceaccount:<namespace>:<name>. A writer that names no actor still emits the record, without this key and marked actor: a record is never dropped.",
 		Writers: map[Writer]Requirement{
 			WriterRequest:    {Level: LevelRequired, Markable: true},
@@ -354,6 +360,7 @@ var schemaKeys = []KeySpec{
 		Asserted:    false,
 		ReplacedBy:  "",
 		DualWrite:   false,
+		OnlyWhen:    "",
 		Description: "The groups of the principal in user.name (Kubernetes user.groups).",
 		Writers: map[Writer]Requirement{
 			WriterRequest:    {Level: LevelConditional, When: "the token carries groups"},
@@ -373,6 +380,7 @@ var schemaKeys = []KeySpec{
 		Asserted:    false,
 		ReplacedBy:  "",
 		DualWrite:   false,
+		OnlyWhen:    "",
 		Description: "The class of the principal in user.name, as its credential proves it: authn's signed `principal` claim (UserInfo.ActorPrincipal()). Omitted, never defaulted, when the claim is absent or unknown. Under TOKEN_PASSTHROUGH an agent replays a person's token, so the class is human; only a /delegate token names the agent.",
 		Writers: map[Writer]Requirement{
 			WriterRequest:    {Level: LevelConditional, When: "the token carries a known principal claim", Markable: true},
@@ -392,6 +400,7 @@ var schemaKeys = []KeySpec{
 		Asserted:    false,
 		ReplacedBy:  "",
 		DualWrite:   false,
+		OnlyWhen:    "",
 		Description: "On a delegated token, the person the actor acts for (the token's sub). Read only from a signed act chain, never from baggage.",
 		Writers: map[Writer]Requirement{
 			WriterRequest:    {Level: LevelConditional, When: "the token carries a signed act chain", Check: CondDelegated},
@@ -411,6 +420,7 @@ var schemaKeys = []KeySpec{
 		Asserted:    false,
 		ReplacedBy:  "",
 		DualWrite:   false,
+		OnlyWhen:    "",
 		Description: "The signed act chain, outermost actor first and ending with the subject, each entry <class>:<subject>. A link whose class is unknown is written :<subject>.",
 		Writers: map[Writer]Requirement{
 			WriterRequest:    {Level: LevelConditional, When: "the token carries a signed act chain", Check: CondDelegated},
@@ -430,6 +440,7 @@ var schemaKeys = []KeySpec{
 		Asserted:    false,
 		ReplacedBy:  "",
 		DualWrite:   false,
+		OnlyWhen:    "",
 		Description: "The user the writer impersonated (Kubernetes impersonatedUser.username).",
 		Writers: map[Writer]Requirement{
 			WriterRequest:    {Level: LevelConditional, When: "the writer impersonated", Check: CondImpersonated},
@@ -449,6 +460,7 @@ var schemaKeys = []KeySpec{
 		Asserted:    false,
 		ReplacedBy:  "",
 		DualWrite:   false,
+		OnlyWhen:    "",
 		Description: "The groups the writer impersonated (Kubernetes impersonatedUser.groups).",
 		Writers: map[Writer]Requirement{
 			WriterRequest:    {Level: LevelConditional, When: "the writer impersonated with groups"},
@@ -468,6 +480,7 @@ var schemaKeys = []KeySpec{
 		Asserted:    false,
 		ReplacedBy:  "",
 		DualWrite:   false,
+		OnlyWhen:    "",
 		Description: "The user the action was done TO, when that is not the actor: separates \"done to alice\" from \"done by alice\". Never equal to user.name.",
 		Writers: map[Writer]Requirement{
 			WriterRequest:    {Level: LevelNotApplicable},
@@ -487,6 +500,7 @@ var schemaKeys = []KeySpec{
 		Asserted:    false,
 		ReplacedBy:  "",
 		DualWrite:   false,
+		OnlyWhen:    "",
 		Description: "The emit site's logical action, a literal of the writer (call, export, restaction, rest.write, gateway.<backend type>). Not the verb.",
 		Writers: map[Writer]Requirement{
 			WriterRequest:    {Level: LevelRequired, Markable: true},
@@ -506,6 +520,7 @@ var schemaKeys = []KeySpec{
 		Asserted:    false,
 		ReplacedBy:  "",
 		DualWrite:   false,
+		OnlyWhen:    "",
 		Description: "The verb as the apiserver derives it (RequestInfoFactory) for a Kubernetes target; for anything else the lowercase method (the apiserver's non-resource rule). Omitted and marked when the method is not recognised.",
 		Writers: map[Writer]Requirement{
 			WriterRequest:    {Level: LevelRequired, Markable: true},
@@ -525,6 +540,7 @@ var schemaKeys = []KeySpec{
 		Asserted:    false,
 		ReplacedBy:  "",
 		DualWrite:   false,
+		OnlyWhen:    "",
 		Description: "The HTTP method the writer sent or proxied; _OTHER for a method semconv does not name (lowercase included), with the method as given in http.request.method_original.",
 		Writers: map[Writer]Requirement{
 			WriterRequest:    {Level: LevelRequired, Markable: true},
@@ -544,7 +560,8 @@ var schemaKeys = []KeySpec{
 		Asserted:    false,
 		ReplacedBy:  "",
 		DualWrite:   false,
-		Description: "The HTTP method exactly as the writer was given it, when http.request.method records it as _OTHER. Written only then, so no value a writer passes is lost.",
+		OnlyWhen:    CondMethodOther,
+		Description: "The HTTP method exactly as the writer was given it, when http.request.method records it as _OTHER. Written only then, so no value a writer passes is lost. Semconv also lets a framework that treats methods as case-insensitive pair a canonical method with its original; this schema does not: a method semconv does not name, lowercase included, is _OTHER.",
 		Writers: map[Writer]Requirement{
 			WriterRequest:    {Level: LevelConditional, When: "http.request.method is _OTHER", Check: CondMethodOther},
 			WriterGateway:    {Level: LevelConditional, When: "http.request.method is _OTHER", Check: CondMethodOther},
@@ -563,6 +580,7 @@ var schemaKeys = []KeySpec{
 		Asserted:    false,
 		ReplacedBy:  "",
 		DualWrite:   false,
+		OnlyWhen:    "",
 		Description: "What the authority this writer sent to answered, at the protocol level the writer observes. denied means the writer itself refused.",
 		Writers: map[Writer]Requirement{
 			WriterRequest:    {Level: LevelRequired},
@@ -582,6 +600,7 @@ var schemaKeys = []KeySpec{
 		Asserted:    false,
 		ReplacedBy:  "",
 		DualWrite:   false,
+		OnlyWhen:    "",
 		Description: "The status code the authority answered (Kubernetes responseStatus.code).",
 		Writers: map[Writer]Requirement{
 			WriterRequest:    {Level: LevelConditional, When: "the authority answered"},
@@ -601,6 +620,7 @@ var schemaKeys = []KeySpec{
 		Asserted:    false,
 		ReplacedBy:  "",
 		DualWrite:   false,
+		OnlyWhen:    "",
 		Description: "true when the target is a namespaced Kubernetes object whose Namespace carries the label krateo.io/purpose=preview-sandbox, read by the writer from apiserver state. false for any other Kubernetes target, a cluster-scoped one included (installer#716 §2.4). Omitted and marked when the Namespace could not be read. Not written for an external endpoint alone. Not a retention key, not a filter.",
 		Writers: map[Writer]Requirement{
 			WriterRequest:    {Level: LevelConditional, When: "the target is a Kubernetes object (false when cluster-scoped)", Check: CondK8sTarget, Markable: true},
@@ -620,6 +640,7 @@ var schemaKeys = []KeySpec{
 		Asserted:    false,
 		ReplacedBy:  "",
 		DualWrite:   false,
+		OnlyWhen:    "",
 		Description: "The object's API group (objectRef.apiGroup). Omitted for the core group.",
 		Writers: map[Writer]Requirement{
 			WriterRequest:    {Level: LevelConditional, When: "Kubernetes target outside the core group"},
@@ -639,6 +660,7 @@ var schemaKeys = []KeySpec{
 		Asserted:    false,
 		ReplacedBy:  "",
 		DualWrite:   false,
+		OnlyWhen:    "",
 		Description: "The object's API version (objectRef.apiVersion).",
 		Writers: map[Writer]Requirement{
 			WriterRequest:    {Level: LevelConditional, When: "Kubernetes target", Check: CondK8sTarget},
@@ -658,6 +680,7 @@ var schemaKeys = []KeySpec{
 		Asserted:    false,
 		ReplacedBy:  "",
 		DualWrite:   false,
+		OnlyWhen:    "",
 		Description: "The object's resource, the plural (objectRef.resource). Every Kubernetes target names it.",
 		Writers: map[Writer]Requirement{
 			WriterRequest:    {Level: LevelConditional, When: "Kubernetes target", Check: CondK8sTarget},
@@ -677,6 +700,7 @@ var schemaKeys = []KeySpec{
 		Asserted:    false,
 		ReplacedBy:  "",
 		DualWrite:   false,
+		OnlyWhen:    "",
 		Description: "The addressed subresource (objectRef.subresource), e.g. status.",
 		Writers: map[Writer]Requirement{
 			WriterRequest:    {Level: LevelConditional, When: "a subresource was addressed"},
@@ -696,6 +720,7 @@ var schemaKeys = []KeySpec{
 		Asserted:    false,
 		ReplacedBy:  "",
 		DualWrite:   false,
+		OnlyWhen:    "",
 		Description: "The object's name (objectRef.name).",
 		Writers: map[Writer]Requirement{
 			WriterRequest:    {Level: LevelConditional, When: "the target is a named object"},
@@ -715,6 +740,7 @@ var schemaKeys = []KeySpec{
 		Asserted:    false,
 		ReplacedBy:  "",
 		DualWrite:   false,
+		OnlyWhen:    "",
 		Description: "The object's namespace (objectRef.namespace). sse-proxy scopes tenants by it.",
 		Writers: map[Writer]Requirement{
 			WriterRequest:    {Level: LevelConditional, When: "the target is namespaced"},
@@ -734,6 +760,7 @@ var schemaKeys = []KeySpec{
 		Asserted:    false,
 		ReplacedBy:  "",
 		DualWrite:   false,
+		OnlyWhen:    "",
 		Description: "The object's kind. Not part of objectRef; never a substitute for resource.",
 		Writers: map[Writer]Requirement{
 			WriterRequest:    {Level: LevelOptional},
@@ -753,6 +780,7 @@ var schemaKeys = []KeySpec{
 		Asserted:    false,
 		ReplacedBy:  "",
 		DualWrite:   false,
+		OnlyWhen:    "",
 		Description: "The uid of the object written, as the authority returned it, or of the object a controller acted on. The join key between a write and the reconcile it caused.",
 		Writers: map[Writer]Requirement{
 			WriterRequest:    {Level: LevelConditional, When: "a successful"},
@@ -772,6 +800,7 @@ var schemaKeys = []KeySpec{
 		Asserted:    false,
 		ReplacedBy:  "",
 		DualWrite:   false,
+		OnlyWhen:    "",
 		Description: "The resourceVersion the authority returned for the write, or the one a controller read.",
 		Writers: map[Writer]Requirement{
 			WriterRequest:    {Level: LevelConditional, When: "a successful"},
@@ -791,6 +820,7 @@ var schemaKeys = []KeySpec{
 		Asserted:    false,
 		ReplacedBy:  "",
 		DualWrite:   false,
+		OnlyWhen:    "",
 		Description: "The generation the authority returned for the write, or the one a controller acted on.",
 		Writers: map[Writer]Requirement{
 			WriterRequest:    {Level: LevelConditional, When: "a successful"},
@@ -810,6 +840,7 @@ var schemaKeys = []KeySpec{
 		Asserted:    false,
 		ReplacedBy:  "",
 		DualWrite:   false,
+		OnlyWhen:    "",
 		Description: "The external endpoint the action was sent to, host[:port] only.",
 		Writers: map[Writer]Requirement{
 			WriterRequest:    {Level: LevelConditional, When: "the target is not a Kubernetes object"},
@@ -829,6 +860,7 @@ var schemaKeys = []KeySpec{
 		Asserted:    false,
 		ReplacedBy:  "",
 		DualWrite:   false,
+		OnlyWhen:    "",
 		Description: "The path and query the writer received (Kubernetes requestURI). Never a scheme or host.",
 		Writers: map[Writer]Requirement{
 			WriterRequest:    {Level: LevelRequired},
@@ -848,6 +880,7 @@ var schemaKeys = []KeySpec{
 		Asserted:    false,
 		ReplacedBy:  "",
 		DualWrite:   false,
+		OnlyWhen:    "",
 		Description: "Kubernetes sourceIPs: forwarded entries, then the TCP peer. Only the last entry is established by the writer.",
 		Writers: map[Writer]Requirement{
 			WriterRequest:    {Level: LevelRequired},
@@ -867,6 +900,7 @@ var schemaKeys = []KeySpec{
 		Asserted:    false,
 		ReplacedBy:  "",
 		DualWrite:   false,
+		OnlyWhen:    "",
 		Description: "The User-Agent header, cut at 1024 bytes with ...TRUNCATED, as the apiserver does.",
 		Writers: map[Writer]Requirement{
 			WriterRequest:    {Level: LevelConditional, When: "the header was sent"},
@@ -886,6 +920,7 @@ var schemaKeys = []KeySpec{
 		Asserted:    false,
 		ReplacedBy:  "",
 		DualWrite:   false,
+		OnlyWhen:    "",
 		Description: "When the request was received (Kubernetes requestReceivedTimestamp), Unix nanoseconds.",
 		Writers: map[Writer]Requirement{
 			WriterRequest:    {Level: LevelOptional},
@@ -905,6 +940,7 @@ var schemaKeys = []KeySpec{
 		Asserted:    false,
 		ReplacedBy:  "",
 		DualWrite:   false,
+		OnlyWhen:    "",
 		Description: "The business/session correlation id from W3C baggage. A correlation key a client can set: never identity, never a policy key.",
 		Writers: map[Writer]Requirement{
 			WriterRequest:    {Level: LevelRequired},
@@ -924,6 +960,7 @@ var schemaKeys = []KeySpec{
 		Asserted:    false,
 		ReplacedBy:  "",
 		DualWrite:   false,
+		OnlyWhen:    "",
 		Description: "The namespace of the RESTAction whose stage performed the action.",
 		Writers: map[Writer]Requirement{
 			WriterRequest:    {Level: LevelConditional, When: "a RESTAction stage record"},
@@ -943,6 +980,7 @@ var schemaKeys = []KeySpec{
 		Asserted:    false,
 		ReplacedBy:  "",
 		DualWrite:   false,
+		OnlyWhen:    "",
 		Description: "The name of the RESTAction whose stage performed the action.",
 		Writers: map[Writer]Requirement{
 			WriterRequest:    {Level: LevelConditional, When: "a RESTAction stage record"},
@@ -962,6 +1000,7 @@ var schemaKeys = []KeySpec{
 		Asserted:    false,
 		ReplacedBy:  "",
 		DualWrite:   false,
+		OnlyWhen:    "",
 		Description: "The api[] stage of the RESTAction that performed the action.",
 		Writers: map[Writer]Requirement{
 			WriterRequest:    {Level: LevelConditional, When: "a RESTAction stage record"},
@@ -981,6 +1020,7 @@ var schemaKeys = []KeySpec{
 		Asserted:    false,
 		ReplacedBy:  "",
 		DualWrite:   false,
+		OnlyWhen:    "",
 		Description: "The comma-separated markers of the facts this record lacks, in a fixed order. A gap is recorded, never hidden.",
 		Writers: map[Writer]Requirement{
 			WriterRequest:    {Level: LevelConditional, When: "the record has a gap"},
@@ -1000,6 +1040,7 @@ var schemaKeys = []KeySpec{
 		Asserted:    false,
 		ReplacedBy:  "",
 		DualWrite:   false,
+		OnlyWhen:    "",
 		Description: "true when the record was emitted with no valid span on its context, so it carries no TraceId.",
 		Writers: map[Writer]Requirement{
 			WriterRequest:    {Level: LevelConditional, When: "no span on the context"},
@@ -1019,6 +1060,7 @@ var schemaKeys = []KeySpec{
 		Asserted:    false,
 		ReplacedBy:  "",
 		DualWrite:   false,
+		OnlyWhen:    "",
 		Description: "The gateway route the request matched (gateway configuration).",
 		Writers: map[Writer]Requirement{
 			WriterRequest:    {Level: LevelNotApplicable},
@@ -1038,6 +1080,7 @@ var schemaKeys = []KeySpec{
 		Asserted:    false,
 		ReplacedBy:  "",
 		DualWrite:   false,
+		OnlyWhen:    "",
 		Description: "The MCP tool name of an MCP hop.",
 		Writers: map[Writer]Requirement{
 			WriterRequest:    {Level: LevelNotApplicable},
@@ -1057,6 +1100,7 @@ var schemaKeys = []KeySpec{
 		Asserted:    true,
 		ReplacedBy:  "",
 		DualWrite:   false,
+		OnlyWhen:    "",
 		Description: "The client-controlled x-kagent-host header, recorded as an assertion. Never an actor identity, never a policy key.",
 		Writers: map[Writer]Requirement{
 			WriterRequest:    {Level: LevelNotApplicable},
@@ -1076,6 +1120,7 @@ var schemaKeys = []KeySpec{
 		Asserted:    false,
 		ReplacedBy:  "krateo.audit.outcome",
 		DualWrite:   true,
+		OnlyWhen:    "",
 		Description: "The v0.3 name of krateo.audit.outcome.",
 		Writers: map[Writer]Requirement{
 			WriterRequest:    {Level: LevelOptional},
@@ -1095,6 +1140,7 @@ var schemaKeys = []KeySpec{
 		Asserted:    false,
 		ReplacedBy:  "user.name",
 		DualWrite:   false,
+		OnlyWhen:    "",
 		Description: "The v0.3 copy of user.name; deprecated in semconv. Written only by a writer that writes it today (snowplow; a library caller that sets Event.EndUserID): Emit never adds it.",
 		Writers: map[Writer]Requirement{
 			WriterRequest:    {Level: LevelOptional},
@@ -1114,6 +1160,7 @@ var schemaKeys = []KeySpec{
 		Asserted:    false,
 		ReplacedBy:  "krateo.audit.object_ref.api_group",
 		DualWrite:   true,
+		OnlyWhen:    "",
 		Description: "The v0.3 name of krateo.audit.object_ref.api_group.",
 		Writers: map[Writer]Requirement{
 			WriterRequest:    {Level: LevelOptional},
@@ -1133,6 +1180,7 @@ var schemaKeys = []KeySpec{
 		Asserted:    false,
 		ReplacedBy:  "krateo.audit.object_ref.api_version",
 		DualWrite:   true,
+		OnlyWhen:    "",
 		Description: "The v0.3 name of krateo.audit.object_ref.api_version.",
 		Writers: map[Writer]Requirement{
 			WriterRequest:    {Level: LevelOptional},
@@ -1152,6 +1200,7 @@ var schemaKeys = []KeySpec{
 		Asserted:    false,
 		ReplacedBy:  "krateo.audit.object_ref.resource",
 		DualWrite:   true,
+		OnlyWhen:    "",
 		Description: "The v0.3 name of krateo.audit.object_ref.resource.",
 		Writers: map[Writer]Requirement{
 			WriterRequest:    {Level: LevelOptional},
@@ -1171,6 +1220,7 @@ var schemaKeys = []KeySpec{
 		Asserted:    false,
 		ReplacedBy:  "krateo.audit.object_ref.subresource",
 		DualWrite:   true,
+		OnlyWhen:    "",
 		Description: "The v0.3 name of krateo.audit.object_ref.subresource.",
 		Writers: map[Writer]Requirement{
 			WriterRequest:    {Level: LevelOptional},
@@ -1190,6 +1240,7 @@ var schemaKeys = []KeySpec{
 		Asserted:    false,
 		ReplacedBy:  "krateo.audit.object_ref.kind",
 		DualWrite:   true,
+		OnlyWhen:    "",
 		Description: "The v0.3 name of krateo.audit.object_ref.kind.",
 		Writers: map[Writer]Requirement{
 			WriterRequest:    {Level: LevelOptional},
@@ -1209,6 +1260,7 @@ var schemaKeys = []KeySpec{
 		Asserted:    false,
 		ReplacedBy:  "krateo.audit.object_ref.name",
 		DualWrite:   true,
+		OnlyWhen:    "",
 		Description: "The v0.3 name of krateo.audit.object_ref.name.",
 		Writers: map[Writer]Requirement{
 			WriterRequest:    {Level: LevelOptional},
@@ -1228,6 +1280,7 @@ var schemaKeys = []KeySpec{
 		Asserted:    false,
 		ReplacedBy:  "krateo.audit.object_ref.uid",
 		DualWrite:   true,
+		OnlyWhen:    "",
 		Description: "The v0.3 name of krateo.audit.object_ref.uid.",
 		Writers: map[Writer]Requirement{
 			WriterRequest:    {Level: LevelOptional},
@@ -1247,6 +1300,7 @@ var schemaKeys = []KeySpec{
 		Asserted:    false,
 		ReplacedBy:  "krateo.audit.object_ref.generation",
 		DualWrite:   true,
+		OnlyWhen:    "",
 		Description: "The v0.3 name of krateo.audit.object_ref.generation.",
 		Writers: map[Writer]Requirement{
 			WriterRequest:    {Level: LevelOptional},
@@ -1266,6 +1320,7 @@ var schemaKeys = []KeySpec{
 		Asserted:    false,
 		ReplacedBy:  "krateo.audit.object_ref.resource_version",
 		DualWrite:   true,
+		OnlyWhen:    "",
 		Description: "The v0.3 name of krateo.audit.object_ref.resource_version.",
 		Writers: map[Writer]Requirement{
 			WriterRequest:    {Level: LevelOptional},

@@ -32,6 +32,9 @@
 # `asserted: true` keys hold a value a client chose: never identity, never a
 # policy key.
 #
+# `only_when: <condition>` means the key may be written only while that
+# condition holds; the checker reports it, as unexpected, anywhere else.
+#
 # Keys with `replaced_by` are the v0.3 names, written side by side with their
 # replacement during migration window W1 (library v0.4.x) and removed in
 # v0.5.0. Such a key takes its replacement's writer levels, as optional: it is
@@ -318,7 +321,11 @@ keys:
     description: >-
       The HTTP method exactly as the writer was given it, when
       http.request.method records it as _OTHER. Written only then, so no
-      value a writer passes is lost.
+      value a writer passes is lost. Semconv also lets a framework that
+      treats methods as case-insensitive pair a canonical method with its
+      original; this schema does not: a method semconv does not name,
+      lowercase included, is _OTHER.
+    only_when: method_other
     writers:
       request: {level: conditional, when: http.request.method is _OTHER, check: method_other}
       gateway: {level: conditional, when: http.request.method is _OTHER, check: method_other}

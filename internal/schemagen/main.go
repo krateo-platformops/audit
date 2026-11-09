@@ -110,6 +110,7 @@ type key struct {
 	Asserted    bool                   `yaml:"asserted"`
 	ReplacedBy  string                 `yaml:"replaced_by"`
 	DualWrite   *bool                  `yaml:"dual_write"`
+	OnlyWhen    string                 `yaml:"only_when"`
 	Description string                 `yaml:"description"`
 	Writers     map[string]requirement `yaml:"writers"`
 }
@@ -224,6 +225,9 @@ func (s *schema) validate() error {
 		}
 		if k.DualWrite != nil && k.ReplacedBy == "" {
 			return fmt.Errorf("key %q: dual_write goes with, and only with, replaced_by", k.Name)
+		}
+		if k.OnlyWhen != "" && !condIDs[k.OnlyWhen] {
+			return fmt.Errorf("key %q: only_when %q is not a declared condition", k.Name, k.OnlyWhen)
 		}
 		if k.ReplacedBy != "" {
 			if len(k.Writers) != 0 {
@@ -483,6 +487,7 @@ var schemaKeys = []KeySpec{
 		Asserted: {{.Asserted}},
 		ReplacedBy: {{q .ReplacedBy}},
 		DualWrite: {{.DualWrites}},
+		OnlyWhen: {{if .OnlyWhen}}{{condGo .OnlyWhen}}{{else}}""{{end}},
 		Description: {{q .Description}},
 		Writers: map[Writer]Requirement{
 {{- $r := reqs $k}}

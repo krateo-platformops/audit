@@ -201,6 +201,19 @@ func TestSQL_IsGeneratedFromTheSchema(t *testing.T) {
 			t.Errorf("enum %s has no bad_ column", k.Name)
 		}
 	}
+	// Every only_when key has its unexpected_ column in each writer's rules query.
+	onlyWhen := 0
+	for _, k := range audit.Keys() {
+		if k.OnlyWhen != "" {
+			onlyWhen++
+			if n := strings.Count(sql, "AS "+alias("unexpected", k.Name)); n != 3 {
+				t.Errorf("%s: %d unexpected_ columns, want one per rules query (3)", k.Name, n)
+			}
+		}
+	}
+	if onlyWhen == 0 {
+		t.Errorf("no only_when key in the schema: the unexpected_ arm tests nothing (http.request.method_original has one)")
+	}
 	// The leak detector covers every identity key.
 	leak := sql[strings.Index(sql, "-- Leak detector"):]
 	for _, k := range audit.Keys() {

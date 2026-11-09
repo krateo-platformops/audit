@@ -115,7 +115,10 @@ type Violation struct{ Key string; Reason Reason } // never a value
 (the closed set: any key outside the schema), `not-for-writer` (not
 established by, or not applicable to, this writer), `bad-type`, `bad-enum`,
 `bad-format`, `empty`, `invalid-utf8`, `duplicate`, `marked-but-present`,
-`two-targets`, `legacy-without-replacement`, `legacy-disagrees`,
+`unexpected` (written outside the condition the schema allows it under, its
+`only_when`: `http.request.method_original` with a method other than
+`_OTHER`, or with none), `two-targets`, `legacy-without-replacement`,
+`legacy-disagrees`,
 `affected-user-is-actor`, `unknown-writer`, `bad-event-name`.
 `Violation.Key` is an attribute key, `RuleTarget` (`"target"`) or
 `KeyLogRecordEventName`.

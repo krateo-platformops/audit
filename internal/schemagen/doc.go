@@ -165,6 +165,9 @@ func keyNotes(k key) string {
 	if k.Asserted {
 		notes = append(notes, "**Asserted** (client-chosen).")
 	}
+	if k.OnlyWhen != "" {
+		notes = append(notes, "**Only when** `"+k.OnlyWhen+"` holds; anywhere else `Check` reports it `unexpected`.")
+	}
 	return k.Description + " " + strings.Join(notes, " ")
 }
 
