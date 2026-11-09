@@ -67,21 +67,45 @@ func newBareEmitter(t *testing.T, opts ...Option) (*Emitter, *recorder, *sdkmetr
 	return New(lp.Logger("test"), append([]Option{WithMeterProvider(mp)}, opts...)...), rec, reader
 }
 
-// Gap a: no actor, no record, and the refusal is counted.
-func TestEmit_NoActorIsRefusedAndCounted(t *testing.T) {
+// Gap a: a record that names no actor is never dropped. It is emitted without
+// user.name, marked actor, and counted (installer#407: the trail records
+// everything; a lost record is worse than an incomplete one).
+func TestEmit_NoActorIsEmittedMarkedAndCounted(t *testing.T) {
 	e, rec, reader := newBareEmitter(t)
 	e.Emit(spanCtx(t), Event{Action: "rest.write", Verb: "post", ServerAddress: "api.example.com", Outcome: OutcomeSuccess})
-	e.Emit(spanCtx(t), Event{UserRoles: []string{"g"}, ActorClass: ClassHuman, Action: "x"}) // roles and class name no one
-	if len(rec.records) != 0 {
-		t.Fatalf("%d records emitted without an actor, want 0", len(rec.records))
+	e.Emit(spanCtx(t), Event{UserRoles: []string{"g"}, Action: "x", Verb: "get", ServerAddress: "h"}) // roles, but no one named
+	if len(rec.records) != 2 {
+		t.Fatalf("%d records emitted without an actor, want 2: a record is never dropped", len(rec.records))
 	}
-	if got := counted(t, reader, MetricRefused, "reason", "actor"); got != 2 {
-		t.Errorf("%s{reason=actor} = %d, want 2", MetricRefused, got)
+	for i, r := range rec.records {
+		a := attrs(r)
+		if _, ok := a[KeyUserName]; ok {
+			t.Errorf("record %d: user.name written with no actor", i)
+		}
+		if m := strings.Split(a[KeyIncomplete].AsString(), ","); !slices.Contains(m, "actor") {
+			t.Errorf("record %d: incomplete = %q, want it to name actor", i, a[KeyIncomplete].AsString())
+		}
+		if a[KeyAction].AsString() == "" || a[KeySchemaVersion].AsString() != SchemaVersion {
+			t.Errorf("record %d lost the rest of its record: %v", i, a)
+		}
 	}
-	// Positive control: the same emitter with an actor emits, and counts no refusal.
-	e.Emit(spanCtx(t), Event{UserName: "alice", Action: "x"})
-	if len(rec.records) != 1 || counted(t, reader, MetricRefused, "reason", "actor") != 2 {
-		t.Errorf("an event with an actor was refused")
+	// The Event's fields are written as given: v0.3 wrote user.roles without user.name too.
+	if got := attrs(rec.records[1])[KeyUserRoles].AsStringSlice(); !slices.Equal(got, []string{"g"}) {
+		t.Errorf("user.roles = %v, want the Event's", got)
+	}
+	if got := counted(t, reader, MetricIncomplete, "marker", "actor"); got != 2 {
+		t.Errorf("%s{marker=actor} = %d, want 2", MetricIncomplete, got)
+	}
+	// Check still reports it, as incomplete: a writer's tests see the gap.
+	var kvs []attribute.KeyValue
+	rec.records[0].WalkAttributes(func(kv attribute.KeyValue) bool { kvs = append(kvs, kv); return true })
+	if !slices.Contains(Check(WriterController, kvs), Violation{Key: KeyUserName, Reason: ReasonIncomplete}) {
+		t.Errorf("Check does not report the missing actor as incomplete: %v", Check(WriterController, kvs))
+	}
+	// Control: an event with an actor is not marked actor.
+	e.Emit(spanCtx(t), Event{UserName: "alice", Action: "x", Verb: "get", ServerAddress: "h"})
+	if slices.Contains(strings.Split(attrs(rec.records[2])[KeyIncomplete].AsString(), ","), "actor") || counted(t, reader, MetricIncomplete, "marker", "actor") != 2 {
+		t.Errorf("an event with an actor was marked actor: %q", attrs(rec.records[2])[KeyIncomplete].AsString())
 	}
 }
 
@@ -154,7 +178,7 @@ func TestEmit_DualWritesTheV03Keys(t *testing.T) {
 	a := attrs(only(t, rec))
 	n := 0
 	for _, k := range Keys() {
-		if k.ReplacedBy == "" {
+		if !k.DualWrite {
 			continue
 		}
 		n++
@@ -164,22 +188,35 @@ func TestEmit_DualWritesTheV03Keys(t *testing.T) {
 			t.Errorf("%s = %v (%v), %s = %v (%v): want both, equal", k.Name, old.String(), okOld, k.ReplacedBy, cur.String(), okCur)
 		}
 	}
-	if n != 11 {
-		t.Errorf("%d v0.3 keys, want 11", n)
+	// outcome, six k8s.resource.* and three k8s.object.*: enduser.id is not
+	// one of them (below).
+	if n != 10 {
+		t.Errorf("%d dual-written v0.3 keys, want 10", n)
 	}
 }
 
-func TestEmit_EndUserIDDefaultsToTheActorAndStaysWhenSet(t *testing.T) {
+// enduser.id is written only where it is written today: by a caller that sets
+// EndUserID (snowplow, identity-lifecycle). Emit never adds it.
+func TestEmit_EndUserIDOnlyWhenTheCallerSetsIt(t *testing.T) {
 	e, rec := newEmitter(t)
 	e.Emit(spanCtx(t), Event{UserName: "alice", Action: "x"})
+	e.Emit(spanCtx(t), Event{UserName: "alice", EndUserID: "alice", Action: "x"})
 	e.Emit(spanCtx(t), Event{UserName: "alice", EndUserID: "bob", Action: "x"})
-	if got := attrs(rec.records[0])[KeyLegacyEndUserID].AsString(); got != "alice" {
-		t.Errorf("enduser.id = %q, want the actor", got)
+	if v, ok := attrs(rec.records[0])[KeyLegacyEndUserID]; ok {
+		t.Errorf("enduser.id = %q added to a record whose caller never set it", v.AsString())
 	}
-	// A v0.3 caller that sets EndUserID keeps its value; Check then reports it
-	// disagrees with the actor.
-	if got := attrs(rec.records[1])[KeyLegacyEndUserID].AsString(); got != "bob" {
+	if got := attrs(rec.records[1])[KeyLegacyEndUserID].AsString(); got != "alice" {
 		t.Errorf("enduser.id = %q, want the caller's", got)
+	}
+	// A value that differs from the actor is kept, and Check reports it.
+	r := rec.records[2]
+	if got := attrs(r)[KeyLegacyEndUserID].AsString(); got != "bob" {
+		t.Errorf("enduser.id = %q, want the caller's", got)
+	}
+	var kvs []attribute.KeyValue
+	r.WalkAttributes(func(kv attribute.KeyValue) bool { kvs = append(kvs, kv); return true })
+	if !slices.Contains(Check(WriterController, kvs), Violation{Key: KeyLegacyEndUserID, Reason: ReasonLegacyDisagrees}) {
+		t.Errorf("Check does not flag enduser.id disagreeing with user.name")
 	}
 }
 

@@ -111,7 +111,10 @@ type KeySpec struct {
 	Asserted bool
 	// ReplacedBy names the replacement of a v0.3 key written side by side
 	// with it during W1 (v0.4.x). Removed in v0.5.0.
-	ReplacedBy  string
+	ReplacedBy string
+	// DualWrite says Emit adds this v0.3 key beside its replacement. False
+	// for a v0.3 key written only where it is written today (enduser.id).
+	DualWrite   bool
 	Description string
 	// Writers holds every writer's requirement.
 	Writers map[Writer]Requirement
@@ -186,8 +189,9 @@ func Populations() []Population { return slices.Clone(schemaPopulations) }
 // positive control of the live conformance query.
 func LegacyControls() []Population { return slices.Clone(schemaLegacyControls) }
 
-// LegacyKey returns the v0.3 key written side by side with key during W1, or
-// "" when key has none.
+// LegacyKey returns the v0.3 key Emit writes side by side with key during W1,
+// or "" when it writes none (a key with no v0.3 name, or user.name, whose
+// v0.3 copy enduser.id is never added).
 func LegacyKey(key string) string { return legacyOf[key] }
 
 // Conditions returns every condition the checker evaluates.
@@ -207,7 +211,7 @@ var (
 func init() {
 	for i, k := range schemaKeys {
 		schemaIndex[k.Name] = i
-		if k.ReplacedBy != "" {
+		if k.ReplacedBy != "" && k.DualWrite {
 			legacyOf[k.ReplacedBy] = k.Name
 		}
 	}

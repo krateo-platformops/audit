@@ -109,9 +109,14 @@ type key struct {
 	Identity    bool                   `yaml:"identity"`
 	Asserted    bool                   `yaml:"asserted"`
 	ReplacedBy  string                 `yaml:"replaced_by"`
+	DualWrite   *bool                  `yaml:"dual_write"`
 	Description string                 `yaml:"description"`
 	Writers     map[string]requirement `yaml:"writers"`
 }
+
+// DualWrites reports whether Emit writes k beside its replacement: a replaced
+// key is, unless it says dual_write: false.
+func (k key) DualWrites() bool { return k.ReplacedBy != "" && (k.DualWrite == nil || *k.DualWrite) }
 
 // requirement is a scalar level ("required") or a mapping
 // ({level: conditional, when: ..., check: ..., markable: true}).
@@ -216,6 +221,9 @@ func (s *schema) validate() error {
 				return fmt.Errorf("key %q: marker %q is malformed or duplicate", k.Name, k.Marker)
 			}
 			markers[k.Marker] = true
+		}
+		if k.DualWrite != nil && k.ReplacedBy == "" {
+			return fmt.Errorf("key %q: dual_write goes with, and only with, replaced_by", k.Name)
 		}
 		if k.ReplacedBy != "" {
 			if len(k.Writers) != 0 {
@@ -411,8 +419,8 @@ const (
 	{{doc (printf "Key%s is %q." .Go .Name) .Description}}
 {{- if .ReplacedBy}}
 	//
-	// Deprecated: written side by side with {{.ReplacedBy}} during W1 (v0.4.x)
-	// and removed in v0.5.0. Read {{.ReplacedBy}}.
+	// Deprecated: the v0.3 name of {{.ReplacedBy}}, removed in v0.5.0. Read
+	// {{.ReplacedBy}}.
 {{- end}}
 	Key{{.Go}} = {{q .Name}}
 {{- end}}
@@ -474,6 +482,7 @@ var schemaKeys = []KeySpec{
 		Identity: {{.Identity}},
 		Asserted: {{.Asserted}},
 		ReplacedBy: {{q .ReplacedBy}},
+		DualWrite: {{.DualWrites}},
 		Description: {{q .Description}},
 		Writers: map[Writer]Requirement{
 {{- $r := reqs $k}}

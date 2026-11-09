@@ -16,18 +16,18 @@ options. Where records go is decided by the process's OTel Logs SDK.
 
 | option | effect |
 |---|---|
-| `WithActor(username, class)` | the actor of every record whose `Event` names none. A controller passes its ServiceAccount, `system:serviceaccount:<namespace>:<name>`, and `audit.ClassController`; a tool executor its own principal and `audit.ClassAgent`. Without it, an `Event` with no `UserName` is refused |
+| `WithActor(username, class)` | the actor of every record whose `Event` names none. A controller passes its ServiceAccount, `system:serviceaccount:<namespace>:<name>`, and `audit.ClassController`; a tool executor its own principal and `audit.ClassAgent`. Without it, an `Event` with no `UserName` is still emitted, marked `krateo.audit.incomplete=actor` |
 | `WithWriter(w)` | the writer class the Emitter records for. `Emit` then marks every gap that class must mark (snowplow, `WriterRequest`, gets `method` marked). Without it, a gap is marked only when every writer class that can write the key would have to |
-| `WithMeterProvider(mp)` | where the two counters below go. Default: `otel.GetMeterProvider()` |
+| `WithMeterProvider(mp)` | where the counter below goes. Default: `otel.GetMeterProvider()` |
 
 ## Metrics
 
 | instrument | attribute | counts |
 |---|---|---|
-| `krateo.audit.records.refused` | `reason="actor"` | records refused for want of an actor |
-| `krateo.audit.records.incomplete` | `marker` | records emitted marked `krateo.audit.incomplete`, per marker |
+| `krateo.audit.records.incomplete` | `marker` | records emitted marked `krateo.audit.incomplete`, per marker. `marker="actor"`: emitted with no actor |
 
-The attributes name a reason or a marker, never a value of the record.
+`Emit` never drops a record, so there is no refusal count. The attribute names a
+marker, never a value of the record.
 
 ## Sending records to the audit trail
 

@@ -103,17 +103,19 @@ type Link struct {
 type Event struct {
 	Message string // LogRecord body
 
-	// The actor: who performs the action. When UserName is empty, the
-	// Emitter's WithActor principal is the actor and UserRoles and ActorClass
-	// are ignored, so one record never mixes two principals. A record with no
-	// actor at all is refused.
+	// The actor: who performs the action. When UserName is empty and the
+	// Emitter has a WithActor principal, that principal is the actor and
+	// UserRoles and ActorClass are ignored, so one record never mixes two
+	// principals. With neither, the record is still emitted, as these fields
+	// give it, marked krateo.audit.incomplete=actor: a record is never
+	// dropped.
 	UserName   string   // user.name
 	UserRoles  []string // user.roles
 	ActorClass Class    // krateo.audit.actor_class; omitted (and marked) unless Known
 
 	// Deprecated: enduser.id is deprecated in semconv and is removed in
-	// v0.5.0. During W1 (v0.4.x) Emit writes enduser.id = user.name by itself;
-	// a value set here that differs from the actor is a Check violation.
+	// v0.5.0. Emit writes it only when it is set here, as v0.3 did, and never
+	// adds it; a value that differs from user.name is a Check violation.
 	EndUserID string
 
 	OnBehalfOf string // krateo.audit.on_behalf_of.user.name: a delegated token's sub
@@ -175,7 +177,6 @@ type Emitter struct {
 	actor  *principal
 	writer Writer
 
-	refused    metric.Int64Counter
 	incomplete metric.Int64Counter
 }
 
@@ -207,19 +208,19 @@ func WithActor(username string, class Class) Option {
 // writer class that can write the key would have to.
 func WithWriter(w Writer) Option { return func(o *options) { o.writer = w } }
 
-// WithMeterProvider sets where the Emitter counts refused and incomplete
-// records. The default is the global MeterProvider (otel.GetMeterProvider).
+// WithMeterProvider sets where the Emitter counts incomplete records. The
+// default is the global MeterProvider (otel.GetMeterProvider).
 func WithMeterProvider(mp metric.MeterProvider) Option {
 	return func(o *options) { o.meters = mp }
 }
 
-// The Emitter's instruments. Their attributes name a reason or a marker, never
-// a value of the record.
-const (
-	MetricRefused    = "krateo.audit.records.refused"    // {reason="actor"}
-	MetricIncomplete = "krateo.audit.records.incomplete" // {marker=<marker>}
-	meterName        = "github.com/krateo-platformops/audit"
-)
+// MetricIncomplete counts the records Emit emitted marked
+// krateo.audit.incomplete, one point per marker: {marker="actor"} is a record
+// emitted with no actor. The attribute names a marker, never a value of the
+// record.
+const MetricIncomplete = "krateo.audit.records.incomplete"
+
+const meterName = "github.com/krateo-platformops/audit"
 
 // New returns an Emitter bound to logger, typically
 // provider.Logger("<your module>/audit").
@@ -231,38 +232,30 @@ func New(logger log.Logger, opts ...Option) *Emitter {
 	if o.meters == nil {
 		o.meters = otel.GetMeterProvider()
 	}
-	m := o.meters.Meter(meterName)
-	refused, _ := m.Int64Counter(MetricRefused, metric.WithUnit("{record}"),
-		metric.WithDescription("Audit records refused, by reason. actor: the record named no actor."))
-	incomplete, _ := m.Int64Counter(MetricIncomplete, metric.WithUnit("{record}"),
-		metric.WithDescription("Audit records emitted marked krateo.audit.incomplete, by marker."))
-	return &Emitter{logger: logger, actor: o.actor, writer: o.writer, refused: refused, incomplete: incomplete}
+	incomplete, _ := o.meters.Meter(meterName).Int64Counter(MetricIncomplete, metric.WithUnit("{record}"),
+		metric.WithDescription("Audit records emitted marked krateo.audit.incomplete, by marker. actor: the record named no actor."))
+	return &Emitter{logger: logger, actor: o.actor, writer: o.writer, incomplete: incomplete}
 }
 
 // Emit writes one canonical AuditEvent. ctx should carry the active span (so the
 // SDK stamps TraceId/SpanId) and, on a request path, the W3C baggage (so
 // session.id is captured).
 //
-// Emit is the one writer:
-//   - NO ACTOR, NO RECORD: a record naming no actor (no Event.UserName and no
-//     WithActor) is refused and counted under MetricRefused{reason="actor"}.
-//   - Any other gap does not hide the record: it is emitted marked
-//     krateo.audit.incomplete=<markers> and each marker is counted under
-//     MetricIncomplete.
-//   - It sets the LogRecord EventName and the event.name attribute, stamps
+// Emit is the one writer, and it never drops a record:
+//   - a record missing a key its writer must write, the actor included (no
+//     Event.UserName and no WithActor), is emitted without it and marked
+//     krateo.audit.incomplete=<markers>, and each marker is counted under
+//     MetricIncomplete;
+//   - it rejects nothing: a key outside the schema is a Check finding in the
+//     writer's tests, never a reason not to emit;
+//   - it sets the LogRecord EventName and the event.name attribute, stamps
 //     krateo.audit.schema_version, writes the v0.3 keys beside their
 //     replacements (W1, v0.4.x), and makes every string valid UTF-8 (Sanitize).
 func (e *Emitter) Emit(ctx context.Context, ev Event) {
 	if e == nil || e.logger == nil {
 		return
 	}
-	actor, ok := e.actorOf(ev)
-	if !ok {
-		e.refused.Add(ctx, 1, metric.WithAttributes(attribute.String("reason", "actor")))
-		return
-	}
-
-	attrs := WithLegacyKeys(attributes(ctx, ev, actor))
+	attrs := WithLegacyKeys(attributes(ctx, ev, e.actorOf(ev)))
 	if markers := missingMarkers(e.markingWriters(), attrs); len(markers) > 0 {
 		attrs = append(attrs, attribute.String(KeyIncomplete, strings.Join(markers, ",")))
 		for _, m := range markers {
@@ -291,15 +284,13 @@ func (e *Emitter) Emit(ctx context.Context, ev Event) {
 }
 
 // actorOf is the record's actor: the Event's when it names one, else the
-// Emitter's.
-func (e *Emitter) actorOf(ev Event) (principal, bool) {
-	if ev.UserName != "" {
-		return principal{name: ev.UserName, roles: ev.UserRoles, class: ev.ActorClass}, true
+// Emitter's WithActor principal, else the Event's fields as given (a record
+// with no user.name, which Emit marks actor).
+func (e *Emitter) actorOf(ev Event) principal {
+	if ev.UserName == "" && e.actor != nil && e.actor.name != "" {
+		return *e.actor
 	}
-	if e.actor != nil && e.actor.name != "" {
-		return *e.actor, true
-	}
-	return principal{}, false
+	return principal{name: ev.UserName, roles: ev.UserRoles, class: ev.ActorClass}
 }
 
 // markingWriters is the writer classes whose gaps Emit marks: the declared

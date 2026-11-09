@@ -151,7 +151,7 @@ func AssertViolation(t testing.TB, w audit.Writer, attrs []attribute.KeyValue, k
 // AssertRemovalDetected is the falsifier for one key: rec must conform (opts
 // as for AssertConformant), and the same attributes without key must make
 // audit.Check newly report key missing. Any other new violation must name key,
-// its v0.3 twin, or the target rule when key is a target key; anything else
+// a v0.3 key it replaces, or the target rule when key is a target key; anything else
 // means the removal broke more than the one key.
 //
 // It mutates the checker's input, never its logic, so a green arm shows the
@@ -167,8 +167,10 @@ func AssertRemovalDetected(t testing.TB, w audit.Writer, rec sdklog.Record, key 
 		t.Fatalf("audittest: the record does not carry %s, so removing it proves nothing", key)
 	}
 	related := map[string]bool{key: true}
-	if old := audit.LegacyKey(key); old != "" {
-		related[old] = true
+	for _, k := range audit.Keys() {
+		if k.ReplacedBy == key {
+			related[k.Name] = true // its v0.3 name, now without its replacement
+		}
 	}
 	if slices.Contains(audit.Target().Keys, key) {
 		related[audit.RuleTarget] = true

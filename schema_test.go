@@ -76,8 +76,21 @@ func TestSchema_Rulings(t *testing.T) {
 		if got := get(old).ReplacedBy; got != cur {
 			t.Errorf("%s replaced by %q, want %q", old, got, cur)
 		}
-		if LegacyKey(cur) != old {
-			t.Errorf("LegacyKey(%s) = %q, want %q", cur, LegacyKey(cur), old)
+		// enduser.id is written only where it is written today (snowplow, a
+		// caller that sets EndUserID): Emit never adds it beside user.name.
+		dual := old != "enduser.id"
+		if get(old).DualWrite != dual {
+			t.Errorf("%s: DualWrite = %v, want %v", old, get(old).DualWrite, dual)
+		}
+		if want := map[bool]string{true: old, false: ""}[dual]; LegacyKey(cur) != want {
+			t.Errorf("LegacyKey(%s) = %q, want %q", cur, LegacyKey(cur), want)
+		}
+	}
+	// Gap a, as ruled: a record is never dropped. user.name is required of
+	// every writer, and markable: a record with no actor is emitted marked.
+	for _, w := range Writers() {
+		if r := get(KeyUserName).Writers[w]; r.Level != LevelRequired || !r.Markable || get(KeyUserName).Marker != "actor" {
+			t.Errorf("user.name for %s = %+v, want required and markable as actor", w, r)
 		}
 	}
 	// k8s.namespace.name is kept, and event.name stays as an attribute.

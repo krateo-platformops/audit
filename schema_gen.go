@@ -17,7 +17,9 @@ const (
 	KeySchemaVersion = "krateo.audit.schema_version"
 	// KeyUserName is "user.name". The principal performing the action (Kubernetes
 	// user.username). On a delegated token, the outermost actor. For a controller,
-	// system:serviceaccount:<namespace>:<name>. A record without it is refused.
+	// system:serviceaccount:<namespace>:<name>. A writer that names no actor still
+	// emits the record, without this key and marked actor: a record is never
+	// dropped.
 	KeyUserName = "user.name"
 	// KeyUserRoles is "user.roles". The groups of the principal in user.name
 	// (Kubernetes user.groups).
@@ -152,68 +154,69 @@ const (
 	KeyAssertedAgentHost = "krateo.audit.asserted.agent_host"
 	// KeyLegacyOutcome is "outcome". The v0.3 name of krateo.audit.outcome.
 	//
-	// Deprecated: written side by side with krateo.audit.outcome during W1 (v0.4.x)
-	// and removed in v0.5.0. Read krateo.audit.outcome.
+	// Deprecated: the v0.3 name of krateo.audit.outcome, removed in v0.5.0. Read
+	// krateo.audit.outcome.
 	KeyLegacyOutcome = "outcome"
 	// KeyLegacyEndUserID is "enduser.id". The v0.3 copy of user.name; deprecated
-	// in semconv.
+	// in semconv. Written only by a writer that writes it today (snowplow; a
+	// library caller that sets Event.EndUserID): Emit never adds it.
 	//
-	// Deprecated: written side by side with user.name during W1 (v0.4.x)
-	// and removed in v0.5.0. Read user.name.
+	// Deprecated: the v0.3 name of user.name, removed in v0.5.0. Read
+	// user.name.
 	KeyLegacyEndUserID = "enduser.id"
 	// KeyLegacyResourceGroup is "k8s.resource.group". The v0.3 name of
 	// krateo.audit.object_ref.api_group.
 	//
-	// Deprecated: written side by side with krateo.audit.object_ref.api_group during W1 (v0.4.x)
-	// and removed in v0.5.0. Read krateo.audit.object_ref.api_group.
+	// Deprecated: the v0.3 name of krateo.audit.object_ref.api_group, removed in v0.5.0. Read
+	// krateo.audit.object_ref.api_group.
 	KeyLegacyResourceGroup = "k8s.resource.group"
 	// KeyLegacyResourceVersion is "k8s.resource.version". The v0.3 name of
 	// krateo.audit.object_ref.api_version.
 	//
-	// Deprecated: written side by side with krateo.audit.object_ref.api_version during W1 (v0.4.x)
-	// and removed in v0.5.0. Read krateo.audit.object_ref.api_version.
+	// Deprecated: the v0.3 name of krateo.audit.object_ref.api_version, removed in v0.5.0. Read
+	// krateo.audit.object_ref.api_version.
 	KeyLegacyResourceVersion = "k8s.resource.version"
 	// KeyLegacyResourceResource is "k8s.resource.resource". The v0.3 name of
 	// krateo.audit.object_ref.resource.
 	//
-	// Deprecated: written side by side with krateo.audit.object_ref.resource during W1 (v0.4.x)
-	// and removed in v0.5.0. Read krateo.audit.object_ref.resource.
+	// Deprecated: the v0.3 name of krateo.audit.object_ref.resource, removed in v0.5.0. Read
+	// krateo.audit.object_ref.resource.
 	KeyLegacyResourceResource = "k8s.resource.resource"
 	// KeyLegacyResourceSubresource is "k8s.resource.subresource". The v0.3 name of
 	// krateo.audit.object_ref.subresource.
 	//
-	// Deprecated: written side by side with krateo.audit.object_ref.subresource during W1 (v0.4.x)
-	// and removed in v0.5.0. Read krateo.audit.object_ref.subresource.
+	// Deprecated: the v0.3 name of krateo.audit.object_ref.subresource, removed in v0.5.0. Read
+	// krateo.audit.object_ref.subresource.
 	KeyLegacyResourceSubresource = "k8s.resource.subresource"
 	// KeyLegacyResourceKind is "k8s.resource.kind". The v0.3 name of
 	// krateo.audit.object_ref.kind.
 	//
-	// Deprecated: written side by side with krateo.audit.object_ref.kind during W1 (v0.4.x)
-	// and removed in v0.5.0. Read krateo.audit.object_ref.kind.
+	// Deprecated: the v0.3 name of krateo.audit.object_ref.kind, removed in v0.5.0. Read
+	// krateo.audit.object_ref.kind.
 	KeyLegacyResourceKind = "k8s.resource.kind"
 	// KeyLegacyResourceName is "k8s.resource.name". The v0.3 name of
 	// krateo.audit.object_ref.name.
 	//
-	// Deprecated: written side by side with krateo.audit.object_ref.name during W1 (v0.4.x)
-	// and removed in v0.5.0. Read krateo.audit.object_ref.name.
+	// Deprecated: the v0.3 name of krateo.audit.object_ref.name, removed in v0.5.0. Read
+	// krateo.audit.object_ref.name.
 	KeyLegacyResourceName = "k8s.resource.name"
 	// KeyLegacyObjectUID is "k8s.object.uid". The v0.3 name of
 	// krateo.audit.object_ref.uid.
 	//
-	// Deprecated: written side by side with krateo.audit.object_ref.uid during W1 (v0.4.x)
-	// and removed in v0.5.0. Read krateo.audit.object_ref.uid.
+	// Deprecated: the v0.3 name of krateo.audit.object_ref.uid, removed in v0.5.0. Read
+	// krateo.audit.object_ref.uid.
 	KeyLegacyObjectUID = "k8s.object.uid"
 	// KeyLegacyObjectGeneration is "k8s.object.generation". The v0.3 name of
 	// krateo.audit.object_ref.generation.
 	//
-	// Deprecated: written side by side with krateo.audit.object_ref.generation during W1 (v0.4.x)
-	// and removed in v0.5.0. Read krateo.audit.object_ref.generation.
+	// Deprecated: the v0.3 name of krateo.audit.object_ref.generation, removed in v0.5.0. Read
+	// krateo.audit.object_ref.generation.
 	KeyLegacyObjectGeneration = "k8s.object.generation"
 	// KeyLegacyObjectResourceVersion is "k8s.object.resource_version". The v0.3
 	// name of krateo.audit.object_ref.resource_version.
 	//
-	// Deprecated: written side by side with krateo.audit.object_ref.resource_version during W1 (v0.4.x)
-	// and removed in v0.5.0. Read krateo.audit.object_ref.resource_version.
+	// Deprecated: the v0.3 name of krateo.audit.object_ref.resource_version, removed in v0.5.0. Read
+	// krateo.audit.object_ref.resource_version.
 	KeyLegacyObjectResourceVersion = "k8s.object.resource_version"
 )
 
@@ -251,7 +254,7 @@ var schemaWriters = []Writer{WriterRequest, WriterGateway, WriterAction, WriterC
 
 var schemaConditions = []Condition{CondK8sTarget, CondK8sTargetNamespaced, CondDelegated, CondImpersonated}
 
-var schemaMarkers = []string{"actor_class", "action", "verb", "method", "preview", "target"}
+var schemaMarkers = []string{"actor", "actor_class", "action", "verb", "method", "preview", "target"}
 
 var schemaTarget = TargetRule{
 	Marker: "target",
@@ -286,6 +289,7 @@ var schemaKeys = []KeySpec{
 		Identity:    false,
 		Asserted:    false,
 		ReplacedBy:  "",
+		DualWrite:   false,
 		Description: "The discriminator the collector partitions on. Also set as the LogRecord EventName; the attribute stays until the collector partitions on EventName and krateo_audit has an EventName column.",
 		Writers: map[Writer]Requirement{
 			WriterRequest:    {Level: LevelRequired},
@@ -304,6 +308,7 @@ var schemaKeys = []KeySpec{
 		Identity:    false,
 		Asserted:    false,
 		ReplacedBy:  "",
+		DualWrite:   false,
 		Description: "The schema version the record was written to. Tells migrated rows apart.",
 		Writers: map[Writer]Requirement{
 			WriterRequest:    {Level: LevelRequired},
@@ -318,16 +323,17 @@ var schemaKeys = []KeySpec{
 		Semconv:     "development",
 		Values:      nil,
 		Format:      "",
-		Marker:      "",
+		Marker:      "actor",
 		Identity:    true,
 		Asserted:    false,
 		ReplacedBy:  "",
-		Description: "The principal performing the action (Kubernetes user.username). On a delegated token, the outermost actor. For a controller, system:serviceaccount:<namespace>:<name>. A record without it is refused.",
+		DualWrite:   false,
+		Description: "The principal performing the action (Kubernetes user.username). On a delegated token, the outermost actor. For a controller, system:serviceaccount:<namespace>:<name>. A writer that names no actor still emits the record, without this key and marked actor: a record is never dropped.",
 		Writers: map[Writer]Requirement{
-			WriterRequest:    {Level: LevelRequired},
-			WriterGateway:    {Level: LevelRequired},
-			WriterAction:     {Level: LevelRequired},
-			WriterController: {Level: LevelRequired},
+			WriterRequest:    {Level: LevelRequired, Markable: true},
+			WriterGateway:    {Level: LevelRequired, Markable: true},
+			WriterAction:     {Level: LevelRequired, Markable: true},
+			WriterController: {Level: LevelRequired, Markable: true},
 		},
 	},
 	{
@@ -340,6 +346,7 @@ var schemaKeys = []KeySpec{
 		Identity:    true,
 		Asserted:    false,
 		ReplacedBy:  "",
+		DualWrite:   false,
 		Description: "The groups of the principal in user.name (Kubernetes user.groups).",
 		Writers: map[Writer]Requirement{
 			WriterRequest:    {Level: LevelConditional, When: "the token carries groups"},
@@ -358,6 +365,7 @@ var schemaKeys = []KeySpec{
 		Identity:    false,
 		Asserted:    false,
 		ReplacedBy:  "",
+		DualWrite:   false,
 		Description: "The class of the principal in user.name, as its credential proves it: authn's signed `principal` claim (UserInfo.ActorPrincipal()). Omitted, never defaulted, when the claim is absent or unknown. Under TOKEN_PASSTHROUGH an agent replays a person's token, so the class is human; only a /delegate token names the agent.",
 		Writers: map[Writer]Requirement{
 			WriterRequest:    {Level: LevelConditional, When: "the token carries a known principal claim", Markable: true},
@@ -376,6 +384,7 @@ var schemaKeys = []KeySpec{
 		Identity:    true,
 		Asserted:    false,
 		ReplacedBy:  "",
+		DualWrite:   false,
 		Description: "On a delegated token, the person the actor acts for (the token's sub). Read only from a signed act chain, never from baggage.",
 		Writers: map[Writer]Requirement{
 			WriterRequest:    {Level: LevelConditional, When: "the token carries a signed act chain", Check: CondDelegated},
@@ -394,6 +403,7 @@ var schemaKeys = []KeySpec{
 		Identity:    true,
 		Asserted:    false,
 		ReplacedBy:  "",
+		DualWrite:   false,
 		Description: "The signed act chain, outermost actor first and ending with the subject, each entry <class>:<subject>. A link whose class is unknown is written :<subject>.",
 		Writers: map[Writer]Requirement{
 			WriterRequest:    {Level: LevelConditional, When: "the token carries a signed act chain", Check: CondDelegated},
@@ -412,6 +422,7 @@ var schemaKeys = []KeySpec{
 		Identity:    true,
 		Asserted:    false,
 		ReplacedBy:  "",
+		DualWrite:   false,
 		Description: "The user the writer impersonated (Kubernetes impersonatedUser.username).",
 		Writers: map[Writer]Requirement{
 			WriterRequest:    {Level: LevelConditional, When: "the writer impersonated", Check: CondImpersonated},
@@ -430,6 +441,7 @@ var schemaKeys = []KeySpec{
 		Identity:    true,
 		Asserted:    false,
 		ReplacedBy:  "",
+		DualWrite:   false,
 		Description: "The groups the writer impersonated (Kubernetes impersonatedUser.groups).",
 		Writers: map[Writer]Requirement{
 			WriterRequest:    {Level: LevelConditional, When: "the writer impersonated with groups"},
@@ -448,6 +460,7 @@ var schemaKeys = []KeySpec{
 		Identity:    true,
 		Asserted:    false,
 		ReplacedBy:  "",
+		DualWrite:   false,
 		Description: "The user the action was done TO, when that is not the actor: separates \"done to alice\" from \"done by alice\". Never equal to user.name.",
 		Writers: map[Writer]Requirement{
 			WriterRequest:    {Level: LevelNotApplicable},
@@ -466,6 +479,7 @@ var schemaKeys = []KeySpec{
 		Identity:    false,
 		Asserted:    false,
 		ReplacedBy:  "",
+		DualWrite:   false,
 		Description: "The emit site's logical action, a literal of the writer (call, export, restaction, rest.write, gateway.<backend type>). Not the verb.",
 		Writers: map[Writer]Requirement{
 			WriterRequest:    {Level: LevelRequired, Markable: true},
@@ -484,6 +498,7 @@ var schemaKeys = []KeySpec{
 		Identity:    false,
 		Asserted:    false,
 		ReplacedBy:  "",
+		DualWrite:   false,
 		Description: "The verb as the apiserver derives it (RequestInfoFactory) for a Kubernetes target; for anything else the lowercase method (the apiserver's non-resource rule). Omitted and marked when the method is not recognised.",
 		Writers: map[Writer]Requirement{
 			WriterRequest:    {Level: LevelRequired, Markable: true},
@@ -502,6 +517,7 @@ var schemaKeys = []KeySpec{
 		Identity:    false,
 		Asserted:    false,
 		ReplacedBy:  "",
+		DualWrite:   false,
 		Description: "The HTTP method the writer sent or proxied; _OTHER for a method semconv does not name.",
 		Writers: map[Writer]Requirement{
 			WriterRequest:    {Level: LevelRequired, Markable: true},
@@ -520,6 +536,7 @@ var schemaKeys = []KeySpec{
 		Identity:    false,
 		Asserted:    false,
 		ReplacedBy:  "",
+		DualWrite:   false,
 		Description: "What the authority this writer sent to answered, at the protocol level the writer observes. denied means the writer itself refused.",
 		Writers: map[Writer]Requirement{
 			WriterRequest:    {Level: LevelRequired},
@@ -538,6 +555,7 @@ var schemaKeys = []KeySpec{
 		Identity:    false,
 		Asserted:    false,
 		ReplacedBy:  "",
+		DualWrite:   false,
 		Description: "The status code the authority answered (Kubernetes responseStatus.code).",
 		Writers: map[Writer]Requirement{
 			WriterRequest:    {Level: LevelConditional, When: "the authority answered"},
@@ -556,6 +574,7 @@ var schemaKeys = []KeySpec{
 		Identity:    false,
 		Asserted:    false,
 		ReplacedBy:  "",
+		DualWrite:   false,
 		Description: "true when the target is a namespaced Kubernetes object whose Namespace carries the label krateo.io/purpose=preview-sandbox, read by the writer from apiserver state. false for any other Kubernetes target. Omitted and marked when the Namespace could not be read. Not a retention key, not a filter.",
 		Writers: map[Writer]Requirement{
 			WriterRequest:    {Level: LevelConditional, When: "the target is a namespaced Kubernetes object", Check: CondK8sTargetNamespaced, Markable: true},
@@ -574,6 +593,7 @@ var schemaKeys = []KeySpec{
 		Identity:    false,
 		Asserted:    false,
 		ReplacedBy:  "",
+		DualWrite:   false,
 		Description: "The object's API group (objectRef.apiGroup). Omitted for the core group.",
 		Writers: map[Writer]Requirement{
 			WriterRequest:    {Level: LevelConditional, When: "Kubernetes target outside the core group"},
@@ -592,6 +612,7 @@ var schemaKeys = []KeySpec{
 		Identity:    false,
 		Asserted:    false,
 		ReplacedBy:  "",
+		DualWrite:   false,
 		Description: "The object's API version (objectRef.apiVersion).",
 		Writers: map[Writer]Requirement{
 			WriterRequest:    {Level: LevelConditional, When: "Kubernetes target", Check: CondK8sTarget},
@@ -610,6 +631,7 @@ var schemaKeys = []KeySpec{
 		Identity:    false,
 		Asserted:    false,
 		ReplacedBy:  "",
+		DualWrite:   false,
 		Description: "The object's resource, the plural (objectRef.resource). Every Kubernetes target names it.",
 		Writers: map[Writer]Requirement{
 			WriterRequest:    {Level: LevelConditional, When: "Kubernetes target", Check: CondK8sTarget},
@@ -628,6 +650,7 @@ var schemaKeys = []KeySpec{
 		Identity:    false,
 		Asserted:    false,
 		ReplacedBy:  "",
+		DualWrite:   false,
 		Description: "The addressed subresource (objectRef.subresource), e.g. status.",
 		Writers: map[Writer]Requirement{
 			WriterRequest:    {Level: LevelConditional, When: "a subresource was addressed"},
@@ -646,6 +669,7 @@ var schemaKeys = []KeySpec{
 		Identity:    false,
 		Asserted:    false,
 		ReplacedBy:  "",
+		DualWrite:   false,
 		Description: "The object's name (objectRef.name).",
 		Writers: map[Writer]Requirement{
 			WriterRequest:    {Level: LevelConditional, When: "the target is a named object"},
@@ -664,6 +688,7 @@ var schemaKeys = []KeySpec{
 		Identity:    false,
 		Asserted:    false,
 		ReplacedBy:  "",
+		DualWrite:   false,
 		Description: "The object's namespace (objectRef.namespace). sse-proxy scopes tenants by it.",
 		Writers: map[Writer]Requirement{
 			WriterRequest:    {Level: LevelConditional, When: "the target is namespaced"},
@@ -682,6 +707,7 @@ var schemaKeys = []KeySpec{
 		Identity:    false,
 		Asserted:    false,
 		ReplacedBy:  "",
+		DualWrite:   false,
 		Description: "The object's kind. Not part of objectRef; never a substitute for resource.",
 		Writers: map[Writer]Requirement{
 			WriterRequest:    {Level: LevelOptional},
@@ -700,6 +726,7 @@ var schemaKeys = []KeySpec{
 		Identity:    false,
 		Asserted:    false,
 		ReplacedBy:  "",
+		DualWrite:   false,
 		Description: "The uid of the object written, as the authority returned it, or of the object a controller acted on. The join key between a write and the reconcile it caused.",
 		Writers: map[Writer]Requirement{
 			WriterRequest:    {Level: LevelConditional, When: "a successful"},
@@ -718,6 +745,7 @@ var schemaKeys = []KeySpec{
 		Identity:    false,
 		Asserted:    false,
 		ReplacedBy:  "",
+		DualWrite:   false,
 		Description: "The resourceVersion the authority returned for the write, or the one a controller read.",
 		Writers: map[Writer]Requirement{
 			WriterRequest:    {Level: LevelConditional, When: "a successful"},
@@ -736,6 +764,7 @@ var schemaKeys = []KeySpec{
 		Identity:    false,
 		Asserted:    false,
 		ReplacedBy:  "",
+		DualWrite:   false,
 		Description: "The generation the authority returned for the write, or the one a controller acted on.",
 		Writers: map[Writer]Requirement{
 			WriterRequest:    {Level: LevelConditional, When: "a successful"},
@@ -754,6 +783,7 @@ var schemaKeys = []KeySpec{
 		Identity:    false,
 		Asserted:    false,
 		ReplacedBy:  "",
+		DualWrite:   false,
 		Description: "The external endpoint the action was sent to, host[:port] only.",
 		Writers: map[Writer]Requirement{
 			WriterRequest:    {Level: LevelConditional, When: "the target is not a Kubernetes object"},
@@ -772,6 +802,7 @@ var schemaKeys = []KeySpec{
 		Identity:    true,
 		Asserted:    false,
 		ReplacedBy:  "",
+		DualWrite:   false,
 		Description: "The path and query the writer received (Kubernetes requestURI). Never a scheme or host.",
 		Writers: map[Writer]Requirement{
 			WriterRequest:    {Level: LevelRequired},
@@ -790,6 +821,7 @@ var schemaKeys = []KeySpec{
 		Identity:    true,
 		Asserted:    false,
 		ReplacedBy:  "",
+		DualWrite:   false,
 		Description: "Kubernetes sourceIPs: forwarded entries, then the TCP peer. Only the last entry is established by the writer.",
 		Writers: map[Writer]Requirement{
 			WriterRequest:    {Level: LevelRequired},
@@ -808,6 +840,7 @@ var schemaKeys = []KeySpec{
 		Identity:    false,
 		Asserted:    false,
 		ReplacedBy:  "",
+		DualWrite:   false,
 		Description: "The User-Agent header, cut at 1024 bytes with ...TRUNCATED, as the apiserver does.",
 		Writers: map[Writer]Requirement{
 			WriterRequest:    {Level: LevelConditional, When: "the header was sent"},
@@ -826,6 +859,7 @@ var schemaKeys = []KeySpec{
 		Identity:    false,
 		Asserted:    false,
 		ReplacedBy:  "",
+		DualWrite:   false,
 		Description: "When the request was received (Kubernetes requestReceivedTimestamp), Unix nanoseconds.",
 		Writers: map[Writer]Requirement{
 			WriterRequest:    {Level: LevelOptional},
@@ -844,6 +878,7 @@ var schemaKeys = []KeySpec{
 		Identity:    false,
 		Asserted:    false,
 		ReplacedBy:  "",
+		DualWrite:   false,
 		Description: "The business/session correlation id from W3C baggage. A correlation key a client can set: never identity, never a policy key.",
 		Writers: map[Writer]Requirement{
 			WriterRequest:    {Level: LevelRequired},
@@ -862,6 +897,7 @@ var schemaKeys = []KeySpec{
 		Identity:    false,
 		Asserted:    false,
 		ReplacedBy:  "",
+		DualWrite:   false,
 		Description: "The namespace of the RESTAction whose stage performed the action.",
 		Writers: map[Writer]Requirement{
 			WriterRequest:    {Level: LevelConditional, When: "a RESTAction stage record"},
@@ -880,6 +916,7 @@ var schemaKeys = []KeySpec{
 		Identity:    false,
 		Asserted:    false,
 		ReplacedBy:  "",
+		DualWrite:   false,
 		Description: "The name of the RESTAction whose stage performed the action.",
 		Writers: map[Writer]Requirement{
 			WriterRequest:    {Level: LevelConditional, When: "a RESTAction stage record"},
@@ -898,6 +935,7 @@ var schemaKeys = []KeySpec{
 		Identity:    false,
 		Asserted:    false,
 		ReplacedBy:  "",
+		DualWrite:   false,
 		Description: "The api[] stage of the RESTAction that performed the action.",
 		Writers: map[Writer]Requirement{
 			WriterRequest:    {Level: LevelConditional, When: "a RESTAction stage record"},
@@ -916,6 +954,7 @@ var schemaKeys = []KeySpec{
 		Identity:    false,
 		Asserted:    false,
 		ReplacedBy:  "",
+		DualWrite:   false,
 		Description: "The comma-separated markers of the facts this record lacks, in a fixed order. A gap is recorded, never hidden.",
 		Writers: map[Writer]Requirement{
 			WriterRequest:    {Level: LevelConditional, When: "the record has a gap"},
@@ -934,6 +973,7 @@ var schemaKeys = []KeySpec{
 		Identity:    false,
 		Asserted:    false,
 		ReplacedBy:  "",
+		DualWrite:   false,
 		Description: "true when the record was emitted with no valid span on its context, so it carries no TraceId.",
 		Writers: map[Writer]Requirement{
 			WriterRequest:    {Level: LevelConditional, When: "no span on the context"},
@@ -952,6 +992,7 @@ var schemaKeys = []KeySpec{
 		Identity:    false,
 		Asserted:    false,
 		ReplacedBy:  "",
+		DualWrite:   false,
 		Description: "The gateway route the request matched (gateway configuration).",
 		Writers: map[Writer]Requirement{
 			WriterRequest:    {Level: LevelNotApplicable},
@@ -970,6 +1011,7 @@ var schemaKeys = []KeySpec{
 		Identity:    false,
 		Asserted:    false,
 		ReplacedBy:  "",
+		DualWrite:   false,
 		Description: "The MCP tool name of an MCP hop.",
 		Writers: map[Writer]Requirement{
 			WriterRequest:    {Level: LevelNotApplicable},
@@ -988,6 +1030,7 @@ var schemaKeys = []KeySpec{
 		Identity:    false,
 		Asserted:    true,
 		ReplacedBy:  "",
+		DualWrite:   false,
 		Description: "The client-controlled x-kagent-host header, recorded as an assertion. Never an actor identity, never a policy key.",
 		Writers: map[Writer]Requirement{
 			WriterRequest:    {Level: LevelNotApplicable},
@@ -1006,6 +1049,7 @@ var schemaKeys = []KeySpec{
 		Identity:    false,
 		Asserted:    false,
 		ReplacedBy:  "krateo.audit.outcome",
+		DualWrite:   true,
 		Description: "The v0.3 name of krateo.audit.outcome.",
 		Writers: map[Writer]Requirement{
 			WriterRequest:    {Level: LevelOptional},
@@ -1024,7 +1068,8 @@ var schemaKeys = []KeySpec{
 		Identity:    true,
 		Asserted:    false,
 		ReplacedBy:  "user.name",
-		Description: "The v0.3 copy of user.name; deprecated in semconv.",
+		DualWrite:   false,
+		Description: "The v0.3 copy of user.name; deprecated in semconv. Written only by a writer that writes it today (snowplow; a library caller that sets Event.EndUserID): Emit never adds it.",
 		Writers: map[Writer]Requirement{
 			WriterRequest:    {Level: LevelOptional},
 			WriterGateway:    {Level: LevelOptional},
@@ -1042,6 +1087,7 @@ var schemaKeys = []KeySpec{
 		Identity:    false,
 		Asserted:    false,
 		ReplacedBy:  "krateo.audit.object_ref.api_group",
+		DualWrite:   true,
 		Description: "The v0.3 name of krateo.audit.object_ref.api_group.",
 		Writers: map[Writer]Requirement{
 			WriterRequest:    {Level: LevelOptional},
@@ -1060,6 +1106,7 @@ var schemaKeys = []KeySpec{
 		Identity:    false,
 		Asserted:    false,
 		ReplacedBy:  "krateo.audit.object_ref.api_version",
+		DualWrite:   true,
 		Description: "The v0.3 name of krateo.audit.object_ref.api_version.",
 		Writers: map[Writer]Requirement{
 			WriterRequest:    {Level: LevelOptional},
@@ -1078,6 +1125,7 @@ var schemaKeys = []KeySpec{
 		Identity:    false,
 		Asserted:    false,
 		ReplacedBy:  "krateo.audit.object_ref.resource",
+		DualWrite:   true,
 		Description: "The v0.3 name of krateo.audit.object_ref.resource.",
 		Writers: map[Writer]Requirement{
 			WriterRequest:    {Level: LevelOptional},
@@ -1096,6 +1144,7 @@ var schemaKeys = []KeySpec{
 		Identity:    false,
 		Asserted:    false,
 		ReplacedBy:  "krateo.audit.object_ref.subresource",
+		DualWrite:   true,
 		Description: "The v0.3 name of krateo.audit.object_ref.subresource.",
 		Writers: map[Writer]Requirement{
 			WriterRequest:    {Level: LevelOptional},
@@ -1114,6 +1163,7 @@ var schemaKeys = []KeySpec{
 		Identity:    false,
 		Asserted:    false,
 		ReplacedBy:  "krateo.audit.object_ref.kind",
+		DualWrite:   true,
 		Description: "The v0.3 name of krateo.audit.object_ref.kind.",
 		Writers: map[Writer]Requirement{
 			WriterRequest:    {Level: LevelOptional},
@@ -1132,6 +1182,7 @@ var schemaKeys = []KeySpec{
 		Identity:    false,
 		Asserted:    false,
 		ReplacedBy:  "krateo.audit.object_ref.name",
+		DualWrite:   true,
 		Description: "The v0.3 name of krateo.audit.object_ref.name.",
 		Writers: map[Writer]Requirement{
 			WriterRequest:    {Level: LevelOptional},
@@ -1150,6 +1201,7 @@ var schemaKeys = []KeySpec{
 		Identity:    false,
 		Asserted:    false,
 		ReplacedBy:  "krateo.audit.object_ref.uid",
+		DualWrite:   true,
 		Description: "The v0.3 name of krateo.audit.object_ref.uid.",
 		Writers: map[Writer]Requirement{
 			WriterRequest:    {Level: LevelOptional},
@@ -1168,6 +1220,7 @@ var schemaKeys = []KeySpec{
 		Identity:    false,
 		Asserted:    false,
 		ReplacedBy:  "krateo.audit.object_ref.generation",
+		DualWrite:   true,
 		Description: "The v0.3 name of krateo.audit.object_ref.generation.",
 		Writers: map[Writer]Requirement{
 			WriterRequest:    {Level: LevelOptional},
@@ -1186,6 +1239,7 @@ var schemaKeys = []KeySpec{
 		Identity:    false,
 		Asserted:    false,
 		ReplacedBy:  "krateo.audit.object_ref.resource_version",
+		DualWrite:   true,
 		Description: "The v0.3 name of krateo.audit.object_ref.resource_version.",
 		Writers: map[Writer]Requirement{
 			WriterRequest:    {Level: LevelOptional},

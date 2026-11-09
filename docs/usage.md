@@ -104,21 +104,24 @@ itself: whoever creates an object writes its labels.
 
 ## Adopting v0.4.0
 
-v0.4.0 adds the schema and keeps every v0.3 field compiling. Two behaviours
-change for every caller:
+v0.4.0 adds the schema and keeps every v0.3 field compiling. **A plain bump
+keeps every record**: each one the caller emitted on v0.3 is still emitted,
+with every attribute and value v0.3 wrote. On top of that:
 
-1. **A record with no actor is refused.** v0.3 emitted it with no `user.name`.
-   Set `WithActor` (or `UserName`) **in the same change that bumps the
-   module**, or those records stop.
-2. **New keys are written beside the old ones** (W1): `krateo.audit.outcome`
+1. **New keys are written beside the old ones** (W1): `krateo.audit.outcome`
    beside `outcome`, `krateo.audit.object_ref.*` beside `k8s.resource.*` and
-   `k8s.object.*`, `enduser.id = user.name`. Readers of the old keys keep
-   working. v0.5.0 removes the old keys.
+   `k8s.object.*`. Readers of the old keys keep working. v0.5.0 removes the
+   old keys. `enduser.id` is not added: it stays only where a caller sets
+   `EndUserID`.
+2. **Gaps are marked.** A record that lacks what its writer must write is
+   emitted marked `krateo.audit.incomplete` (a v0.3 record with no actor:
+   `actor`), and counted under `krateo.audit.records.incomplete{marker}`.
 
-Then, per emit site: set `Verb`; set `Resource` (the plural) whenever the
-record names a Kubernetes object; set `Preview` for a namespaced object; move
-an affected user to `AffectedUser`; replace an upstream error text in
-`Message` with a closed-set text; and test the site (next section).
+Then adopt the schema, per emit site, to clear the marks: set `WithActor`;
+set `Verb`; set `Resource` (the plural) whenever the record names a
+Kubernetes object; set `Preview` for a namespaced object; move an affected
+user to `AffectedUser`; replace an upstream error text in `Message` with a
+closed-set text; and test the site (next section).
 
 ## Testing a writer
 

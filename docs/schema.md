@@ -42,7 +42,7 @@ through the generated `audit.Key*` constants and test their records with
 |---|---|---|---|---|---|---|---|
 | `event.name` | string | deprecated | R | R | R | R | The discriminator the collector partitions on. Also set as the LogRecord EventName; the attribute stays until the collector partitions on EventName and krateo_audit has an EventName column. One of `audit`. |
 | `krateo.audit.schema_version` | string | none | R | R | R | R | The schema version the record was written to. Tells migrated rows apart. One of `1`. |
-| `user.name` | string | development | R | R | R | R | The principal performing the action (Kubernetes user.username). On a delegated token, the outermost actor. For a controller, system:serviceaccount:&lt;namespace&gt;:&lt;name&gt;. A record without it is refused. **Identity.** |
+| `user.name` | string | development | R (mark) | R (mark) | R (mark) | R (mark) | The principal performing the action (Kubernetes user.username). On a delegated token, the outermost actor. For a controller, system:serviceaccount:&lt;namespace&gt;:&lt;name&gt;. A writer that names no actor still emits the record, without this key and marked actor: a record is never dropped. Marker `actor`. **Identity.** |
 | `user.roles` | string[] | development | C: the token carries groups | C: the token carries groups | C: the token carries groups | O | The groups of the principal in user.name (Kubernetes user.groups). **Identity.** |
 | `krateo.audit.actor_class` | string | none | C: the token carries a known principal claim (mark) | C: the token carries a known principal claim (mark) | R | R | The class of the principal in user.name, as its credential proves it: authn's signed `principal` claim (UserInfo.ActorPrincipal()). Omitted, never defaulted, when the claim is absent or unknown. Under TOKEN_PASSTHROUGH an agent replays a person's token, so the class is human; only a /delegate token names the agent. One of `human`, `agent`, `controller`, `service`. Marker `actor_class`. |
 | `krateo.audit.on_behalf_of.user.name` | string | none | C: the token carries a signed act chain [checked] | C: the token carries a signed act chain [checked] | C: the token carries a signed act chain [checked] | O | On a delegated token, the person the actor acts for (the token's sub). Read only from a signed act chain, never from baggage. **Identity.** |
@@ -104,21 +104,30 @@ Every record names its target: `krateo.audit.object_ref.resource` (a Kubernetes 
 
 Written side by side with their replacement by v0.4.x, with the same value,
 and removed in v0.5.0. Readers `coalesce` the two until the last row without
-`krateo.audit.schema_version` expires.
+`krateo.audit.schema_version` expires. `Emit` adds the ones marked
+"yes"; the others it writes only when the caller sets them.
 
-| v0.3 key | replaced by |
-|---|---|
-| `outcome` | `krateo.audit.outcome` |
-| `enduser.id` | `user.name` |
-| `k8s.resource.group` | `krateo.audit.object_ref.api_group` |
-| `k8s.resource.version` | `krateo.audit.object_ref.api_version` |
-| `k8s.resource.resource` | `krateo.audit.object_ref.resource` |
-| `k8s.resource.subresource` | `krateo.audit.object_ref.subresource` |
-| `k8s.resource.kind` | `krateo.audit.object_ref.kind` |
-| `k8s.resource.name` | `krateo.audit.object_ref.name` |
-| `k8s.object.uid` | `krateo.audit.object_ref.uid` |
-| `k8s.object.generation` | `krateo.audit.object_ref.generation` |
-| `k8s.object.resource_version` | `krateo.audit.object_ref.resource_version` |
+| v0.3 key | replaced by | added by `Emit` |
+|---|---|---|
+| `outcome` | `krateo.audit.outcome` | yes |
+| `enduser.id` | `user.name` | no: only where it is written today |
+| `k8s.resource.group` | `krateo.audit.object_ref.api_group` | yes |
+| `k8s.resource.version` | `krateo.audit.object_ref.api_version` | yes |
+| `k8s.resource.resource` | `krateo.audit.object_ref.resource` | yes |
+| `k8s.resource.subresource` | `krateo.audit.object_ref.subresource` | yes |
+| `k8s.resource.kind` | `krateo.audit.object_ref.kind` | yes |
+| `k8s.resource.name` | `krateo.audit.object_ref.name` | yes |
+| `k8s.object.uid` | `krateo.audit.object_ref.uid` | yes |
+| `k8s.object.generation` | `krateo.audit.object_ref.generation` | yes |
+| `k8s.object.resource_version` | `krateo.audit.object_ref.resource_version` | yes |
+
+## Emit never drops a record
+
+A record missing a key its writer must write is emitted without it, and
+`krateo.audit.incomplete` names the missing key's marker (for a record with no
+actor: `actor`). Each marker is counted under
+`krateo.audit.records.incomplete{marker}`. `Check` reports such a key as
+`incomplete`.
 
 ## Where each writer's records land
 

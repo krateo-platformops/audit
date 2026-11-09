@@ -93,16 +93,31 @@ Every record names its target: `+"`%s`"+` (a Kubernetes object) or `+"`%s`"+`
 
 Written side by side with their replacement by v0.4.x, with the same value,
 and removed in v0.5.0. Readers ` + "`coalesce`" + ` the two until the last row without
-` + "`krateo.audit.schema_version`" + ` expires.
+` + "`krateo.audit.schema_version`" + ` expires. ` + "`Emit`" + ` adds the ones marked
+"yes"; the others it writes only when the caller sets them.
 
-| v0.3 key | replaced by |
-|---|---|
+| v0.3 key | replaced by | added by ` + "`Emit`" + ` |
+|---|---|---|
 `)
 	for _, k := range s.Keys {
 		if k.ReplacedBy != "" {
-			fmt.Fprintf(&b, "| `%s` | `%s` |\n", k.Name, k.ReplacedBy)
+			added := "yes"
+			if !k.DualWrites() {
+				added = "no: only where it is written today"
+			}
+			fmt.Fprintf(&b, "| `%s` | `%s` | %s |\n", k.Name, k.ReplacedBy, added)
 		}
 	}
+
+	b.WriteString(`
+## Emit never drops a record
+
+A record missing a key its writer must write is emitted without it, and
+` + "`krateo.audit.incomplete`" + ` names the missing key's marker (for a record with no
+actor: ` + "`actor`" + `). Each marker is counted under
+` + "`krateo.audit.records.incomplete{marker}`" + `. ` + "`Check`" + ` reports such a key as
+` + "`incomplete`" + `.
+`)
 
 	b.WriteString("\n## Where each writer's records land\n\n| instrumentation scope | writer | who |\n|---|---|---|\n")
 	for _, p := range s.Populations {

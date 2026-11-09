@@ -31,19 +31,20 @@ func WithActor(username string, class Class) Option // the actor of every record
 func WithWriter(w Writer) Option                    // which writer class's gaps Emit marks
 func WithMeterProvider(mp metric.MeterProvider) Option
 
-const MetricRefused    = "krateo.audit.records.refused"    // {reason="actor"}
-const MetricIncomplete = "krateo.audit.records.incomplete" // {marker=...}
+const MetricIncomplete = "krateo.audit.records.incomplete" // {marker=...}; marker="actor": emitted with no actor
 ```
 
-`Emit` is the one writer:
+`Emit` is the one writer, and **it never drops a record**:
 
-- **No actor, no record.** An `Event` with no `UserName`, on an Emitter built
-  without `WithActor`, is refused and counted under `MetricRefused`.
-- **A gap is recorded, never hidden.** A record that lacks a fact the writer
-  must write is emitted with `krateo.audit.incomplete=<markers>`, and each
-  marker is counted under `MetricIncomplete`. With `WithWriter`, the declared
-  class's rules decide; without it, a gap is marked only when every writer
+- **A gap is recorded, never hidden.** A record that lacks a key the writer
+  must write is emitted without it, with `krateo.audit.incomplete=<markers>`,
+  and each marker is counted under `MetricIncomplete`. That includes the actor:
+  an `Event` with no `UserName`, on an Emitter built without `WithActor`, is
+  emitted marked `actor`. With `WithWriter`, the declared class's rules decide
+  which gaps are marked; without it, a gap is marked only when every writer
   class that can write the key would have to.
+- **It rejects nothing.** A key outside the schema is a `Check` finding in the
+  writer's tests, never a reason not to emit.
 - It sets the LogRecord Timestamp, EventName and severity (`success` or unset →
   INFO, otherwise ERROR), stamps `event.name` and
   `krateo.audit.schema_version`, writes the v0.3 keys beside their
@@ -55,8 +56,8 @@ const MetricIncomplete = "krateo.audit.records.incomplete" // {marker=...}
 | `Event` field | attribute | notes |
 |---|---|---|
 | `Message` | LogRecord body | closed-set text: no upstream body, no identity |
-| `UserName`, `UserRoles`, `ActorClass` | `user.name`, `user.roles`, `krateo.audit.actor_class` | the actor; when `UserName` is empty, `WithActor`'s, and the Event's roles and class are ignored. A class that is not `Known` is omitted and marked |
-| `EndUserID` | `enduser.id` | **Deprecated**: during W1 `Emit` writes `enduser.id = user.name` itself |
+| `UserName`, `UserRoles`, `ActorClass` | `user.name`, `user.roles`, `krateo.audit.actor_class` | the actor; when `UserName` is empty and the Emitter has `WithActor`, its principal, and the Event's roles and class are ignored. With neither, the Event's fields are written as given and the record is marked `actor`. A class that is not `Known` is omitted and marked |
+| `EndUserID` | `enduser.id` | **Deprecated**: written only when set, as v0.3 did; `Emit` never adds it |
 | `OnBehalfOf`, `Delegation` | `krateo.audit.on_behalf_of.user.name`, `krateo.audit.delegation` | a delegated token's `sub` and its act chain, each `Link` written `<class>:<subject>` |
 | `ImpersonatedUser`, `ImpersonatedRoles` | `krateo.audit.impersonated_user.{name,roles}` | |
 | `AffectedUser` | `krateo.audit.affected_user.name` | the user the action was done to, when that is not the actor |

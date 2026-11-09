@@ -17,19 +17,20 @@ timestamp: 2026-11-09T00:00:00Z
   rule table and [schema.md](./schema.md); a test fails when they are stale.
   New: `Check`/`CheckRecord`/`RequiredKeys`, `ParseClaim`, `Sanitize`,
   `WithLegacyKeys`, the `audittest` package and `cmd/auditschema`. `Emit` now:
-  - **refuses a record that names no actor**, and counts it
-    (`krateo.audit.records.refused`). `WithActor` sets the actor of a
-    controller or tool executor. *Behaviour change*: v0.3 emitted such records
-    with no `user.name`;
-  - marks every gap in `krateo.audit.incomplete` and counts it;
+  - **never drops a record**: one that lacks a key its writer must write is
+    emitted without it, marked in `krateo.audit.incomplete` and counted under
+    `krateo.audit.records.incomplete{marker}`. A record that names no actor is
+    marked `actor`. `WithActor` sets the actor of a controller or tool
+    executor. A caller that only bumps keeps every record and every attribute
+    it emitted on v0.3;
   - sets the LogRecord EventName and Timestamp, and stamps
     `krateo.audit.schema_version=1`;
   - writes the new keys (`krateo.audit.outcome`, `krateo.audit.object_ref.*`,
     `krateo.audit.actor_class`, `verb`, `preview`, delegation, impersonation,
     `affected_user`, the request facts) and, during migration window W1, the
     v0.3 keys beside them with the same value (`outcome`, `k8s.resource.*`,
-    `k8s.object.*`, and `enduser.id = user.name`). v0.5.0 removes the v0.3
-    keys;
+    `k8s.object.*`). v0.5.0 removes the v0.3 keys. `enduser.id` is written
+    only when the caller sets `EndUserID`, as in v0.3, and never added;
   - makes every string valid UTF-8, at any depth (snowplow#1261: one invalid
     string made the OTLP exporter drop the whole batch);
   - writes `user.roles` as a string slice (an OTLP array of strings, as

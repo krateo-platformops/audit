@@ -56,7 +56,8 @@ emitter.Emit(ctx, audit.Event{ // ctx carries the active span
 })
 ```
 
-A record that names no actor is refused and counted. A nil `*Emitter`, or one
+`Emit` never drops a record: one that lacks a key its writer must write, the
+actor included, is emitted marked `krateo.audit.incomplete` and counted. A nil `*Emitter`, or one
 built with a nil logger, is a no-op.
 
 Test each emit site against the schema:
