@@ -1,13 +1,24 @@
-# audit — LLM doc index (pinned: v0.1.0)
+# audit — LLM doc index (pinned: v0.4.0)
 # One line per file; regenerate the pin on release.
 docs/index.md: the map of this bundle
-docs/overview.md: why one shared emitter, and how a record flows to krateo_audit
-docs/usage.md: install, when to emit, and correlating a reconcile with its request
-docs/configuration.md: the OTel Logs SDK setup the package relies on
-docs/api.md: the Go API and the full record contract
+docs/overview.md: why one shared emitter and schema, and how a record flows to krateo_audit
+docs/schema.md: the record contract, key by key, per writer class (generated from schema/v1.yaml)
+docs/usage.md: install, when to emit, the actor, adopting v0.4, testing a writer, the live check
+docs/configuration.md: the Emitter's options and metrics, and the OTel Logs SDK setup
+docs/api.md: the Go API, audittest and cmd/auditschema
 docs/examples.md: examples index
 docs/release.md: tag-only release runbook (v-prefixed git tags, Go module proxy)
 docs/log.md: curated history
-audit.go: the package source
+schema/v1.yaml: THE schema, the source of the constants, the checker and docs/schema.md
+audit.go: the emitter
+check.go: the checker
+schema.go: the schema types and accessors
+schema_gen.go: generated from schema/v1.yaml
+sanitize.go: the UTF-8 sanitiser
+claim.go: the principal claim parser
+legacy.go: the W1 dual-write
+audittest/audittest.go: helpers for a writer's conformance tests, falsifier included
+cmd/auditschema/main.go: the checker for non-Go writers, and the live conformance SQL
+internal/schemagen/main.go: the generator
 examples/emit-to-stdout/README.md: runnable example emitting one record to stdout
 examples/emit-to-stdout/main.go: the example source

@@ -24,12 +24,17 @@ func (r *recorder) Export(_ context.Context, recs []sdklog.Record) error {
 func (r *recorder) Shutdown(context.Context) error   { return nil }
 func (r *recorder) ForceFlush(context.Context) error { return nil }
 
-func newEmitter(t *testing.T) (*Emitter, *recorder) {
+// testActor is the controller principal the v0.3 tests' records are made by:
+// v0.4.0 refuses a record that names no actor.
+const testActor = "system:serviceaccount:krateo-system:test-controller"
+
+func newEmitter(t *testing.T, opts ...Option) (*Emitter, *recorder) {
 	t.Helper()
 	rec := &recorder{}
 	lp := sdklog.NewLoggerProvider(sdklog.WithProcessor(sdklog.NewSimpleProcessor(rec)))
 	t.Cleanup(func() { _ = lp.Shutdown(context.Background()) })
-	return New(lp.Logger("test")), rec
+	opts = append([]Option{WithActor(testActor, ClassController)}, opts...)
+	return New(lp.Logger("test"), opts...), rec
 }
 
 func attrs(r sdklog.Record) map[string]attribute.Value {
@@ -109,7 +114,9 @@ func TestEmit_CanonicalRecord(t *testing.T) {
 }
 
 // The Option-B join key must use exactly the attribute names snowplow records
-// (snowplow#957), or the (uid, generation) join silently never matches.
+// (snowplow#957), or the (uid, generation) join silently never matches. During
+// W1 both the v0.3 names and their krateo.audit.object_ref.* replacements
+// carry it.
 func TestEmit_ObjectIdentityForTheJoin(t *testing.T) {
 	e, rec := newEmitter(t)
 	e.Emit(spanCtx(t), Event{
@@ -117,14 +124,20 @@ func TestEmit_ObjectIdentityForTheJoin(t *testing.T) {
 		ObjectResourceVersion: "123456", Outcome: OutcomeSuccess,
 	})
 	a := attrs(only(t, rec))
-	if got := a["k8s.object.uid"].AsString(); got != "0b6c1f4e-9a1c-4c51-8d0a-1f2e3d4c5b6a" {
-		t.Errorf("k8s.object.uid = %q", got)
+	for _, k := range []string{"k8s.object.uid", KeyObjectUID} {
+		if got := a[k].AsString(); got != "0b6c1f4e-9a1c-4c51-8d0a-1f2e3d4c5b6a" {
+			t.Errorf("%s = %q", k, got)
+		}
 	}
-	if got := a["k8s.object.generation"].AsInt64(); got != 7 {
-		t.Errorf("k8s.object.generation = %d, want 7", got)
+	for _, k := range []string{"k8s.object.generation", KeyObjectGeneration} {
+		if got := a[k].AsInt64(); got != 7 {
+			t.Errorf("%s = %d, want 7", k, got)
+		}
 	}
-	if got := a["k8s.object.resource_version"].AsString(); got != "123456" {
-		t.Errorf("k8s.object.resource_version = %q", got)
+	for _, k := range []string{"k8s.object.resource_version", KeyObjectResourceVersion} {
+		if got := a[k].AsString(); got != "123456" {
+			t.Errorf("%s = %q", k, got)
+		}
 	}
 }
 
@@ -133,9 +146,12 @@ func TestEmit_OmitsUnsetFields(t *testing.T) {
 	e.Emit(spanCtx(t), Event{Action: "call"})
 	a := attrs(only(t, rec))
 	for _, k := range []string{
-		"user.name", "enduser.id", "user.roles", "k8s.namespace.name", "k8s.resource.name",
+		"user.roles", "k8s.namespace.name", "k8s.resource.name",
 		"k8s.object.uid", "k8s.object.generation", "k8s.object.resource_version",
 		"server.address", "http.request.method", "http.response.status_code", "outcome", "session.id",
+		KeyVerb, KeyOutcome, KeyPreview, KeyObjectResource, KeyObjectUID,
+		KeyOnBehalfOf, KeyDelegation, KeyAffectedUser, KeyRequestURI, KeySourceIPs, KeyUserAgent,
+		KeyRequestReceivedTime, KeyRESTActionName,
 	} {
 		if _, ok := a[k]; ok {
 			t.Errorf("%s present but was never set", k)
@@ -181,8 +197,8 @@ func TestEmit_ServerAddressIsHostPortOnly(t *testing.T) {
 			}
 			for k, v := range a {
 				for _, secret := range []string{"SECRET", "pass", "tok_"} {
-					if strings.Contains(v.Emit(), secret) {
-						t.Errorf("%s = %q leaks %q", k, v.Emit(), secret)
+					if strings.Contains(v.String(), secret) {
+						t.Errorf("%s = %q leaks %q", k, v.String(), secret)
 					}
 				}
 			}
@@ -201,15 +217,17 @@ func TestEmit_NonSuccessIsError(t *testing.T) {
 	}
 }
 
-func TestEmit_RolesAreASlice(t *testing.T) {
+// user.roles is a list of strings. v0.3 wrote it as a SLICE of strings, v0.4 as
+// a STRINGSLICE: both are the same OTLP array of strings on the wire.
+func TestEmit_RolesAreAStringList(t *testing.T) {
 	e, rec := newEmitter(t)
-	e.Emit(spanCtx(t), Event{UserRoles: []string{"admins", "devs"}})
+	e.Emit(spanCtx(t), Event{UserName: "mario.rossi", UserRoles: []string{"admins", "devs"}})
 	v := attrs(only(t, rec))["user.roles"]
-	if v.Type() != attribute.SLICE {
-		t.Fatalf("user.roles kind = %v, want Slice", v.Type())
+	if v.Type() != attribute.STRINGSLICE {
+		t.Fatalf("user.roles kind = %v, want StringSlice", v.Type())
 	}
-	s := v.AsSlice()
-	if len(s) != 2 || s[0].AsString() != "admins" || s[1].AsString() != "devs" {
+	s := v.AsStringSlice()
+	if len(s) != 2 || s[0] != "admins" || s[1] != "devs" {
 		t.Errorf("user.roles = %v", s)
 	}
 }

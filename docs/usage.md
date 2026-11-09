@@ -1,10 +1,10 @@
 ---
 type: Usage
 title: audit — usage
-description: Install the package, when and how to emit, and how a reconcile's audit row is correlated with the request that caused it.
+description: Install the package, when and how to emit, who the actor is, adopting v0.4.0, testing a writer against the schema, and checking the live table.
 resource: github.com/krateo-platformops/audit
 tags: [library, audit, usage]
-timestamp: 2026-10-29T13:55:06Z
+timestamp: 2026-11-09T00:00:00Z
 ---
 
 # Usage
@@ -48,12 +48,119 @@ with OTLP logs switched off needs no guard at each call site.
 **Never put a credential in any field.** The trail is kept for 365 days. A path
 or query can carry a secret (webhook tokens, signed URLs), and so can an upstream
 response body. That is why `ServerAddress` is host[:port] only and `Message` must
-not echo a response body.
+not echo a response body: write a closed-set text, such as "external write
+failed", never `err.Error()`.
 
 `Emit` enforces the `ServerAddress` rule itself: it reduces the value to
 host[:port], so passing the request URL records only its host and port. A value
 with no parseable host is omitted, never written raw. That reduction is a
 safety net, not permission to put a secret in any other field.
+
+**Never log audit attributes.** They carry identity on purpose. They go to the
+audit LoggerProvider and nowhere else: not to a span, not to an ordinary log
+line. `Check` and `audittest` report keys and reasons, never values.
+
+## Who the actor is
+
+`user.name` is whoever performs the action, as their credential proves it.
+`krateo.audit.actor_class` is that principal's class.
+
+- **A controller or tool executor** reports its own principal: build the
+  Emitter with `audit.WithActor("system:serviceaccount:<ns>:<sa>",
+  audit.ClassController)` (a tool executor: `audit.ClassAgent`).
+- **A writer that serves authn tokens** takes the actor from the token. With
+  plumbing's `jwtutil` v1.34.0 or later:
+
+  ```go
+  ev.UserName = ui.Actor() // the outermost act subject on a delegated token
+  ev.UserRoles = ui.Groups
+  if c, ok := audit.ParseClaim(ui.ActorPrincipal()); ok {
+  	ev.ActorClass = c
+  } // else omit it: Emit marks krateo.audit.incomplete=actor_class. Never default to human.
+  if ui.Act != nil {
+  	ev.OnBehalfOf = ui.Username // the token's sub, the person
+  	for a := ui.Act; a != nil; a = a.Act {
+  		c, _ := audit.ParseClaim(a.Principal)
+  		ev.Delegation = append(ev.Delegation, audit.Link{Class: c, Subject: a.Sub})
+  	}
+  	c, _ := audit.ParseClaim(ui.Principal)
+  	ev.Delegation = append(ev.Delegation, audit.Link{Class: c, Subject: ui.Username})
+  }
+  ```
+
+- **The affected user is not the actor.** When an action is done *to* a user
+  (a revoked grant's subject, a deactivated account), that user goes in
+  `AffectedUser`, never in `UserName` and never in `Message`.
+
+## Preview
+
+`Preview` is `PreviewOf(true)` when the target is a namespaced object whose
+Namespace carries the label `krateo.io/purpose=preview-sandbox`, as read from
+apiserver state by the writer (a namespace lister or a get on its own
+client), `PreviewOf(false)` otherwise. Leave it `PreviewUnknown` when the
+Namespace could not be read: the record is then marked
+`krateo.audit.incomplete=preview`. Never read the label from the object
+itself: whoever creates an object writes its labels.
+
+## Adopting v0.4.0
+
+v0.4.0 adds the schema and keeps every v0.3 field compiling. Two behaviours
+change for every caller:
+
+1. **A record with no actor is refused.** v0.3 emitted it with no `user.name`.
+   Set `WithActor` (or `UserName`) **in the same change that bumps the
+   module**, or those records stop.
+2. **New keys are written beside the old ones** (W1): `krateo.audit.outcome`
+   beside `outcome`, `krateo.audit.object_ref.*` beside `k8s.resource.*` and
+   `k8s.object.*`, `enduser.id = user.name`. Readers of the old keys keep
+   working. v0.5.0 removes the old keys.
+
+Then, per emit site: set `Verb`; set `Resource` (the plural) whenever the
+record names a Kubernetes object; set `Preview` for a namespaced object; move
+an affected user to `AffectedUser`; replace an upstream error text in
+`Message` with a closed-set text; and test the site (next section).
+
+## Testing a writer
+
+Drive each emit site through the real SDK and assert the record conforms for
+your writer class, then prove the check fails when the site stops writing a
+key:
+
+```go
+rec := audittest.NewRecorder(t)
+e := audit.New(rec.Logger("test/audit"), audit.WithActor(sa, audit.ClassController))
+runTheEmitSite(ctx, e)
+r := rec.Only(t)
+audittest.AssertConformant(t, audit.WriterController, r)
+audittest.AssertRequiredKeysDetected(t, audit.WriterController, r)
+```
+
+`AssertRequiredKeysDetected` removes each key `Check` requires of that record,
+one at a time, and fails unless `Check` then reports it missing. It mutates the
+checker's input, never its logic. A site that legitimately cannot establish a
+key (a token minted before the principal claim) passes
+`audittest.AllowIncomplete(audit.KeyActorClass)`.
+
+A writer not written in Go validates its records with
+`auditschema check -writer <class> records.json` (OTLP/JSON).
+
+## Checking the live table
+
+`auditschema sql` prints the conformance queries for `default.krateo_audit`,
+generated from the same schema as `Check`:
+
+- **required keys** per population (scope name × service × schema × class ×
+  key), with `missing` and `missing_unmarked`. Controls: the impossible key
+  `claude.no.such.key` must be missing on every row, and the pre-schema gateway
+  rows (`ScopeName = 'request'`) must lack `event.name`;
+- **rules** on schema-1 rows: unmet conditional keys, enums, the closed set,
+  keys a writer cannot establish, the target rule, the W1 pairs, an affected
+  user equal to the actor. Every column must be 0;
+- **the leak detector**: no identity key on `otel_traces` or `otel_logs`, with
+  `krateo_audit` as the positive control and an impossible-key rerun.
+
+Run them read-only (`clickhouse-client --readonly 1`) with `--param_start` and
+`--param_end`. Zero rows in a window is not conformance.
 
 ## Correlating a reconcile with the request that caused it
 
@@ -66,8 +173,10 @@ The link back to the person is the **object's identity**:
   object's `metadata.generation` as read at reconcile start; a status
   `observedGeneration` is not required).
 
-Joining the two on `(k8s.object.uid, k8s.object.generation)` in `krateo_audit`
-ties the external write to the user's request and its `session.id`:
+Joining the two on `(krateo.audit.object_ref.uid,
+krateo.audit.object_ref.generation)` in `krateo_audit` (or the v0.3
+`k8s.object.uid`, `k8s.object.generation` during W1) ties the external write to
+the user's request and its `session.id`:
 
 - a `kubectl` or GitOps write produces a generation with no request-side record,
   so it is correctly not attributed to anyone's session;
