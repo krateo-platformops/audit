@@ -201,14 +201,25 @@ func TestSQL_IsGeneratedFromTheSchema(t *testing.T) {
 			t.Errorf("enum %s has no bad_ column", k.Name)
 		}
 	}
-	// Every only_when key has its unexpected_ column in each writer's rules query.
+	// Every only_when key has its unexpected_ column in the rules query of
+	// each writer that has a population and may write the key.
 	onlyWhen := 0
 	for _, k := range audit.Keys() {
-		if k.OnlyWhen != "" {
-			onlyWhen++
-			if n := strings.Count(sql, "AS "+alias("unexpected", k.Name)); n != 3 {
-				t.Errorf("%s: %d unexpected_ columns, want one per rules query (3)", k.Name, n)
+		if k.OnlyWhen == "" {
+			continue
+		}
+		onlyWhen++
+		want := 0
+		for _, w := range audit.Writers() {
+			if len(scopesOf(w, false)) > 0 && k.Writers[w].Level > audit.LevelNotEstablished {
+				want++
 			}
+		}
+		if want == 0 {
+			t.Errorf("%s: no rules query can carry its column, so this arm tests nothing for it", k.Name)
+		}
+		if n := strings.Count(sql, "AS "+alias("unexpected", k.Name)); n != want {
+			t.Errorf("%s: %d unexpected_ columns, want %d (one per rules query of a writer that may write it)", k.Name, n, want)
 		}
 	}
 	if onlyWhen == 0 {

@@ -22,6 +22,7 @@ const window = "Timestamp >= {start:DateTime64(9)} AND Timestamp < {end:DateTime
 var conditionSQL = map[audit.Condition]string{
 	audit.CondK8sTarget:    k8sTargetSQL,
 	audit.CondMethodOther:  "(" + attr(audit.KeyHTTPMethod) + " = '_OTHER')",
+	audit.CondWrite:        attr(audit.KeyVerb) + " IN " + inList(audit.WriteVerbs()),
 	audit.CondDelegated:    "(" + attr(audit.KeyDelegation) + " != '' OR " + attr(audit.KeyOnBehalfOf) + " != '')",
 	audit.CondImpersonated: "(" + attr(audit.KeyImpersonatedUser) + " != '' OR " + attr(audit.KeyImpersonatedRoles) + " != '')",
 }

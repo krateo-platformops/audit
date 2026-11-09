@@ -104,6 +104,42 @@ marked `krateo.audit.incomplete=preview`. A record that names only an
 external endpoint carries no preview. Never read the label from the object
 itself: whoever creates an object writes its labels.
 
+## Dry runs
+
+A writer that serves requests or performs actions (snowplow, a tool executor)
+builds its Emitter with `WithWriter(audit.WriterRequest)` or
+`WithWriter(audit.WriterAction)`, and sets `Event.DryRun` on a write the
+authority was asked to validate and not persist (Kubernetes `dryRun=All`).
+Every write record then carries `krateo.audit.dry_run`: `true` for a dry run,
+`false` otherwise. A read carries none, and neither does a controller record.
+Readers use the key, not a `.dryRun` suffix on `krateo.action`. That suffix is
+the writer's own literal, and snowplow keeps it.
+
+## Marking the trace of a request that wrote a record
+
+observability's tail sampler keeps a trace whole when its Server span carries
+`krateo.audit.recorded=true` (`audit.SpanKeyRecorded`). `Emit` sets it once
+the logger has taken a record:
+
+- **An HTTP writer** wraps its handler with `audit.RecordedMiddleware`, placed
+  inside the middleware that starts the Server span:
+
+  ```go
+  handler := otelhttp.NewHandler(audit.RecordedMiddleware(mux), "server")
+  ```
+
+  It installs a holder on the request context. Every `Emit` on that context, or
+  on one derived from it (a stage's client span included), sets the holder.
+  When the handler returns, it marks the Server span.
+- **A writer whose Server span is started elsewhere** does the same by hand:
+  `ctx = audit.WithRecordedMarker(ctx)` where the Server span is active, then
+  `audit.MarkRecorded(ctx, serverSpan)` before the span ends.
+- **With no holder installed**, `Emit` sets the attribute on the span active
+  on its `ctx`. That is right when that span is the Server span, and wrong
+  when it is a client span, which is why the holder exists.
+
+The marker is a boolean, only ever `true`, and never carries identity.
+
 ## Adopting v0.4.0
 
 v0.4.0 adds the schema and keeps every v0.3 field compiling. **A plain bump

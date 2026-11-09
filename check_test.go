@@ -32,6 +32,7 @@ func baseRecord(w Writer) []attribute.KeyValue {
 			attribute.String(KeyObjectResource, "configmaps"), attribute.String(KeyLegacyResourceResource, "configmaps"),
 			attribute.String(KeyObjectName, "cm"), attribute.String(KeyLegacyResourceName, "cm"),
 			attribute.Bool(KeyPreview, false),
+			attribute.Bool(KeyDryRun, false), // verb create: a write
 		)
 	case WriterGateway:
 		return append(common,
@@ -45,13 +46,17 @@ func baseRecord(w Writer) []attribute.KeyValue {
 			attribute.String(KeyAssertedAgentHost, "kagent-a"),
 		)
 	default: // action, controller
-		return append(common,
+		out := append(common,
 			attribute.String(KeyUserName, "system:serviceaccount:krateo-system:rdc"),
 			attribute.String(KeyLegacyEndUserID, "system:serviceaccount:krateo-system:rdc"),
 			attribute.String(KeyActorClass, "controller"),
 			attribute.String(KeyAction, "rest.write"), attribute.String(KeyVerb, "post"),
 			attribute.String(KeyServerAddress, "api.example.com"),
 		)
+		if w == WriterAction { // a write: an action writer says whether it was a dry run
+			out = append(out, attribute.Bool(KeyDryRun, false))
+		}
+		return out
 	}
 }
 
@@ -135,6 +140,17 @@ func TestCheck_Violations(t *testing.T) {
 		// semconv: a method recorded as _OTHER carries the method as given.
 		{"_OTHER without the method as given", WriterRequest, with(req, attribute.String(KeyHTTPMethod, "_OTHER")), []Violation{v(KeyHTTPMethodOriginal, ReasonMissing)}},
 		{"_OTHER with the method as given", WriterRequest, with(req, attribute.String(KeyHTTPMethod, "_OTHER"), attribute.String(KeyHTTPMethodOriginal, "post")), nil},
+		// krateo.audit.dry_run: on every write of a request or action writer, never on a read.
+		{"request write without dry_run", WriterRequest, without(req, KeyDryRun), []Violation{v(KeyDryRun, ReasonMissing)}},
+		{"request dry-run write", WriterRequest, with(req, attribute.Bool(KeyDryRun, true)), nil},
+		{"action write without dry_run", WriterAction, without(baseRecord(WriterAction), KeyDryRun), []Violation{v(KeyDryRun, ReasonMissing)}},
+		{"request read with dry_run", WriterRequest, with(req, attribute.String(KeyVerb, "get")), []Violation{v(KeyDryRun, ReasonUnexpected)}},
+		{"request read without dry_run", WriterRequest, with(without(req, KeyDryRun), attribute.String(KeyVerb, "list")), nil},
+		{"dry_run as a string", WriterRequest, with(req, attribute.String(KeyDryRun, "false")), []Violation{v(KeyDryRun, ReasonBadType)}},
+		{"controller writes dry_run", WriterController, with(ctrl, attribute.Bool(KeyDryRun, false)), []Violation{v(KeyDryRun, ReasonNotForWriter)}},
+		{"gateway writes dry_run", WriterGateway, with(gw, attribute.Bool(KeyDryRun, false)), []Violation{v(KeyDryRun, ReasonNotForWriter)}},
+		// The span marker is a span attribute, never a record key.
+		{"the span marker on a record", WriterController, with(ctrl, attribute.Bool(SpanKeyRecorded, true)), []Violation{v(SpanKeyRecorded, ReasonNotInSchema)}},
 		// method_original only when the method is _OTHER (schema only_when: method_other).
 		{"method_original beside a method semconv names", WriterRequest, with(req, attribute.String(KeyHTTPMethodOriginal, "POST")), []Violation{v(KeyHTTPMethodOriginal, ReasonUnexpected)}},
 		{"method_original beside a canonicalised method", WriterRequest, with(req, attribute.String(KeyHTTPMethodOriginal, "post")), []Violation{v(KeyHTTPMethodOriginal, ReasonUnexpected)}},

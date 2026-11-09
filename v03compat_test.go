@@ -143,11 +143,48 @@ func TestV03_APlainBumpKeepsEveryRecordAndEveryAttribute(t *testing.T) {
 						t.Errorf("%s: v0.3 wrote %v, v0.4 keeps it nowhere (writes %v)", kv.Key, kv.Value.String(), v.String())
 					}
 				}
+				// krateo.audit.dry_run: a v0.3 caller declares no writer class
+				// and sets no DryRun, and the key is the writer class's to
+				// require (request and action writes), so a plain bump adds
+				// none.
+				if v, ok := got[KeyDryRun]; ok {
+					t.Errorf("a plain bump added krateo.audit.dry_run = %v", v.String())
+				}
 				// A shape that names no actor is emitted marked actor, not dropped.
 				if m := strings.Split(got[KeyIncomplete].AsString(), ","); (ev.UserName == "") != slices.Contains(m, "actor") {
 					t.Errorf("actor marked = %v for UserName %q (incomplete = %q)", !(ev.UserName == ""), ev.UserName, got[KeyIncomplete].AsString())
 				}
 			})
+		}
+	}
+}
+
+// krateo.audit.dry_run=false appears only where the writer class says so: the
+// same v0.3 shapes, emitted by an Emitter that declares a request or action
+// writer, as a write, gain dry_run=false, and still lose and change no v0.3
+// value. Declared as a controller (rest-dynamic-controller, access-review,
+// identity-lifecycle when they adopt), they gain none.
+func TestV03_DryRunFalseOnlyWhereTheWriterClassSaysSo(t *testing.T) {
+	for name, ev := range v03CallerShapes {
+		ev.Verb = "create" // a write, as an adopting caller sets it
+		for _, w := range []Writer{WriterRequest, WriterAction, WriterController} {
+			ctx := spanCtx(t)
+			rec := &recorder{}
+			New(loggerFor(t, rec), WithWriter(w)).Emit(ctx, ev)
+			if len(rec.records) != 1 {
+				t.Fatalf("%s, %s: %d records", name, w, len(rec.records))
+			}
+			got := attrs(rec.records[0])
+			if n := missingV03(v03Attributes(ctx, ev), got); n != 0 {
+				t.Errorf("%s, %s: %d v0.3 values lost or changed", name, w, n)
+			}
+			v, ok := got[KeyDryRun]
+			switch want := w != WriterController; {
+			case want && (!ok || v.Type() != attribute.BOOL || v.AsBool()):
+				t.Errorf("%s, %s: dry_run = %v (present %v), want false", name, w, v.String(), ok)
+			case !want && ok:
+				t.Errorf("%s, %s: a controller record gained dry_run = %v", name, w, v.String())
+			}
 		}
 	}
 }

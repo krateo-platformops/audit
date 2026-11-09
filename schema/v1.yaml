@@ -76,6 +76,11 @@ conditions:
     description: >-
       The record names a Kubernetes object: k8s.namespace.name or any
       krateo.audit.object_ref.* key is present.
+  - id: write
+    go: CondWrite
+    description: >-
+      krateo.audit.verb is a write: create, update, patch, delete,
+      deletecollection (a Kubernetes object), post or put (anything else).
   - id: method_other
     go: CondMethodOther
     description: >-
@@ -331,6 +336,23 @@ keys:
       gateway: {level: conditional, when: http.request.method is _OTHER, check: method_other}
       action: {level: conditional, when: http.request.method is _OTHER, check: method_other}
       controller: {level: conditional, when: http.request.method is _OTHER, check: method_other}
+
+  - name: krateo.audit.dry_run
+    go: DryRun
+    type: bool
+    semconv: none
+    description: >-
+      true when the write was validated and not persisted (Kubernetes
+      dryRun=All, or an endpoint's own dry run), false for a write meant to
+      persist. On every write record of a writer that serves requests or
+      performs actions; never on a read. Readers use this key, not a suffix on
+      krateo.action.
+    only_when: write
+    writers:
+      request: {level: conditional, when: the record is a write, check: write}
+      gateway: not_established
+      action: {level: conditional, when: the record is a write, check: write}
+      controller: not_applicable
 
   - name: krateo.audit.outcome
     go: Outcome

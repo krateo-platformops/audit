@@ -151,8 +151,9 @@ func AssertViolation(t testing.TB, w audit.Writer, attrs []attribute.KeyValue, k
 // AssertRemovalDetected is the falsifier for one key: rec must conform (opts
 // as for AssertConformant), and the same attributes without key must make
 // audit.Check newly report key missing. Any other new violation must name key,
-// a v0.3 key it replaces, or the target rule when key is a target key; anything else
-// means the removal broke more than the one key.
+// a v0.3 key it replaces, the target rule when key is a target key, or a key
+// whose only_when condition held and no longer does once key is gone; anything
+// else means the removal broke more than the one key.
 //
 // It mutates the checker's input, never its logic, so a green arm shows the
 // check fails when the site stops writing key.
@@ -166,17 +167,23 @@ func AssertRemovalDetected(t testing.TB, w audit.Writer, rec sdklog.Record, key 
 	if !carries(attrs, key) {
 		t.Fatalf("audittest: the record does not carry %s, so removing it proves nothing", key)
 	}
+	removed := Without(attrs, key)
 	related := map[string]bool{key: true}
 	for _, k := range audit.Keys() {
 		if k.ReplacedBy == key {
 			related[k.Name] = true // its v0.3 name, now without its replacement
+		}
+		// A key written only under a condition that removing key turned false
+		// (krateo.audit.dry_run once krateo.audit.verb is gone).
+		if k.OnlyWhen != "" && audit.Holds(k.OnlyWhen, attrs) && !audit.Holds(k.OnlyWhen, removed) {
+			related[k.Name] = true
 		}
 	}
 	if slices.Contains(audit.Target().Keys, key) {
 		related[audit.RuleTarget] = true
 	}
 
-	fresh := slices.DeleteFunc(audit.Check(w, Without(attrs, key)), func(v audit.Violation) bool {
+	fresh := slices.DeleteFunc(audit.Check(w, removed), func(v audit.Violation) bool {
 		return slices.Contains(base, v)
 	})
 	if !slices.Contains(fresh, audit.Violation{Key: key, Reason: audit.ReasonMissing}) {

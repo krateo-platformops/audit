@@ -233,6 +233,17 @@ func mustWrite(r Requirement, present map[string]attribute.Value) bool {
 	}
 }
 
+// Holds reports whether condition c holds on a record's attributes, as Check
+// evaluates it. False for a condition the schema does not declare.
+func Holds(c Condition, attrs []attribute.KeyValue) bool {
+	present := make(map[string]attribute.Value, len(attrs))
+	for _, kv := range attrs {
+		present[string(kv.Key)] = kv.Value
+	}
+	holds, _ := evalCondition(c, present)
+	return holds
+}
+
 // evalCondition evaluates c on the record's attributes. known is false for a
 // condition this checker has no rule for; a test keeps that set empty.
 func evalCondition(c Condition, present map[string]attribute.Value) (holds, known bool) {
@@ -243,6 +254,9 @@ func evalCondition(c Condition, present map[string]attribute.Value) (holds, know
 	case CondMethodOther:
 		m, ok := present[KeyHTTPMethod]
 		return ok && m.Type() == attribute.STRING && m.AsString() == "_OTHER", true
+	case CondWrite:
+		v, ok := present[KeyVerb]
+		return ok && v.Type() == attribute.STRING && slices.Contains(writeVerbs, v.AsString()), true
 	case CondDelegated:
 		return has(KeyDelegation) || has(KeyOnBehalfOf), true
 	case CondImpersonated:
@@ -252,6 +266,14 @@ func evalCondition(c Condition, present map[string]attribute.Value) (holds, know
 }
 
 const objectRefPrefix = "krateo.audit.object_ref."
+
+// writeVerbs are the krateo.audit.verb values of a write (condition write):
+// the apiserver's mutating verbs, and the non-resource POST and PUT (a PATCH
+// or DELETE is spelled the same in both rules).
+var writeVerbs = []string{"create", "update", "patch", "delete", "deletecollection", "post", "put"}
+
+// WriteVerbs returns the krateo.audit.verb values that make a record a write.
+func WriteVerbs() []string { return slices.Clone(writeVerbs) }
 
 // k8sTarget reports whether the record names a Kubernetes object.
 func k8sTarget(present map[string]attribute.Value) bool {

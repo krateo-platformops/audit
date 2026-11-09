@@ -68,6 +68,12 @@ const (
 	// method with its original; this schema does not: a method semconv does not
 	// name, lowercase included, is _OTHER.
 	KeyHTTPMethodOriginal = "http.request.method_original"
+	// KeyDryRun is "krateo.audit.dry_run". true when the write was validated and
+	// not persisted (Kubernetes dryRun=All, or an endpoint's own dry run), false
+	// for a write meant to persist. On every write record of a writer that serves
+	// requests or performs actions; never on a read. Readers use this key, not a
+	// suffix on krateo.action.
+	KeyDryRun = "krateo.audit.dry_run"
 	// KeyOutcome is "krateo.audit.outcome". What the authority this writer sent to
 	// answered, at the protocol level the writer observes. denied means the writer
 	// itself refused.
@@ -249,6 +255,9 @@ const (
 	// CondK8sTarget: The record names a Kubernetes object: k8s.namespace.name or
 	// any krateo.audit.object_ref.* key is present.
 	CondK8sTarget Condition = "k8s_target"
+	// CondWrite: krateo.audit.verb is a write: create, update, patch, delete,
+	// deletecollection (a Kubernetes object), post or put (anything else).
+	CondWrite Condition = "write"
 	// CondMethodOther: http.request.method is _OTHER: the writer was given a
 	// method semconv does not name.
 	CondMethodOther Condition = "method_other"
@@ -262,7 +271,7 @@ const (
 
 var schemaWriters = []Writer{WriterRequest, WriterGateway, WriterAction, WriterController}
 
-var schemaConditions = []Condition{CondK8sTarget, CondMethodOther, CondDelegated, CondImpersonated}
+var schemaConditions = []Condition{CondK8sTarget, CondWrite, CondMethodOther, CondDelegated, CondImpersonated}
 
 var schemaMarkers = []string{"actor", "actor_class", "action", "verb", "method", "preview", "target"}
 
@@ -567,6 +576,26 @@ var schemaKeys = []KeySpec{
 			WriterGateway:    {Level: LevelConditional, When: "http.request.method is _OTHER", Check: CondMethodOther},
 			WriterAction:     {Level: LevelConditional, When: "http.request.method is _OTHER", Check: CondMethodOther},
 			WriterController: {Level: LevelConditional, When: "http.request.method is _OTHER", Check: CondMethodOther},
+		},
+	},
+	{
+		Name:        KeyDryRun,
+		Type:        TypeBool,
+		Semconv:     "none",
+		Values:      nil,
+		Format:      "",
+		Marker:      "",
+		Identity:    false,
+		Asserted:    false,
+		ReplacedBy:  "",
+		DualWrite:   false,
+		OnlyWhen:    CondWrite,
+		Description: "true when the write was validated and not persisted (Kubernetes dryRun=All, or an endpoint's own dry run), false for a write meant to persist. On every write record of a writer that serves requests or performs actions; never on a read. Readers use this key, not a suffix on krateo.action.",
+		Writers: map[Writer]Requirement{
+			WriterRequest:    {Level: LevelConditional, When: "the record is a write", Check: CondWrite},
+			WriterGateway:    {Level: LevelNotEstablished},
+			WriterAction:     {Level: LevelConditional, When: "the record is a write", Check: CondWrite},
+			WriterController: {Level: LevelNotApplicable},
 		},
 	},
 	{

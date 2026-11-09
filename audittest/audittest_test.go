@@ -67,7 +67,7 @@ func TestWriters_ConformAndEveryRequiredKeyIsDetected(t *testing.T) {
 		},
 		{
 			name: "tool executor", w: audit.WriterAction,
-			opts: []audit.Option{audit.WithActor("kagent-tools", audit.ClassAgent)}, ctx: sessionCtx,
+			opts: []audit.Option{audit.WithActor("kagent-tools", audit.ClassAgent), audit.WithWriter(audit.WriterAction)}, ctx: sessionCtx,
 			ev: audit.Event{Action: "tool.k8s.create", Verb: "create", Outcome: audit.OutcomeSuccess,
 				Namespace: "krateo-preview", Version: "v1", Resource: "configmaps", ObjectName: "draft", Preview: audit.PreviewTrue},
 		},

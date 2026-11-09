@@ -312,6 +312,49 @@ func TestEmit_HTTPMethodAsSemconvRecordsIt(t *testing.T) {
 	}
 }
 
+// krateo.audit.dry_run: true whenever the Event says so; false only on a
+// write record of a declared request or action writer; never on a read, and
+// never for a controller or an Emitter that declares no writer (a v0.3 caller).
+func TestEmit_DryRun(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		writer Writer
+		verb   string
+		dry    bool
+		want   string // "" = absent
+	}{
+		{"request write", WriterRequest, "create", false, "false"},
+		{"request dry-run write", WriterRequest, "create", true, "true"},
+		{"request non-resource write", WriterRequest, "post", false, "false"},
+		{"request read", WriterRequest, "get", false, ""},
+		{"request list", WriterRequest, "list", false, ""},
+		{"action write", WriterAction, "patch", false, "false"},
+		{"controller write", WriterController, "update", false, ""},
+		{"no writer declared, a v0.3 caller", "", "create", false, ""},
+		{"no writer declared, but a dry run", "", "create", true, "true"},
+		{"no verb", WriterRequest, "", false, ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var opts []Option
+			if tc.writer != "" {
+				opts = append(opts, WithWriter(tc.writer))
+			}
+			e, rec := newEmitter(t, opts...)
+			e.Emit(spanCtx(t), Event{Action: "x", Verb: tc.verb, ServerAddress: "h", DryRun: tc.dry})
+			got := ""
+			if v, ok := attrs(only(t, rec))[KeyDryRun]; ok {
+				if v.Type() != attribute.BOOL {
+					t.Fatalf("dry_run is a %v, want a bool", v.Type())
+				}
+				got = v.String()
+			}
+			if got != tc.want {
+				t.Errorf("dry_run = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
 func TestEmit_RequestFacts(t *testing.T) {
 	e, rec := newEmitter(t)
 	at := time.Unix(1700000000, 42)
@@ -346,7 +389,7 @@ func TestEmit_OutputConforms(t *testing.T) {
 		{WriterController, nil, Event{Action: "rest.write", Verb: "post", HTTPMethod: "POST", StatusCode: 201, Outcome: OutcomeSuccess,
 			Namespace: "ns", Group: "github.krateo.io", Version: "v1alpha1", Resource: "repoes", Kind: "Repo", ObjectName: "r",
 			ObjectUID: "u", ObjectGeneration: 2, ServerAddress: "https://api.github.com/x", Preview: PreviewFalse}},
-		{WriterAction, []Option{WithActor("kagent-tools", ClassAgent)}, Event{Action: "tool.call", Verb: "create", Outcome: OutcomeSuccess,
+		{WriterAction, []Option{WithActor("kagent-tools", ClassAgent), WithWriter(WriterAction)}, Event{Action: "tool.call", Verb: "create", Outcome: OutcomeSuccess,
 			Namespace: "ns", Version: "v1", Resource: "configmaps", ObjectName: "cm", Preview: PreviewTrue}},
 		{WriterRequest, []Option{WithWriter(WriterRequest)}, Event{UserName: "alice", UserRoles: []string{"devs"}, ActorClass: ClassHuman,
 			Action: "call", Verb: "create", HTTPMethod: "POST", StatusCode: 201, Outcome: OutcomeSuccess,

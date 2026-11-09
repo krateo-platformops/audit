@@ -38,7 +38,15 @@ timestamp: 2026-11-09T00:00:00Z
     as `_OTHER`, with the method as given in `http.request.method_original`,
     so no v0.3 value is lost;
   - requires `krateo.audit.preview` for every Kubernetes target, `false` for
-    a cluster-scoped one (installer#716 §2.4).
+    a cluster-scoped one (installer#716 §2.4);
+  - writes `krateo.audit.dry_run` (AUDIT-9). It is `true` from `Event.DryRun`,
+    and `false` on the other write records of a declared request or action
+    writer. Never on a read or a controller record, and never added to a v0.3
+    caller's records;
+  - marks the request recorded for the tail sampler,
+    `krateo.audit.recorded=true` on its Server span, once the logger has
+    taken a record. Through a `WithRecordedMarker` holder and
+    `RecordedMiddleware`, or on the active span when no holder is installed.
   Every v0.3 field and constant still compiles; `Event.EndUserID` is
   deprecated.
 - **2026-10-29**: requires Go 1.26 (`go 1.26.0`, was 1.25.6), and the module's

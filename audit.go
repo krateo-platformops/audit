@@ -135,6 +135,12 @@ type Event struct {
 	StatusCode int    // http.response.status_code (0 => omitted)
 	Outcome    string // krateo.audit.outcome: OutcomeSuccess | OutcomeFailure | OutcomeDenied
 	Preview    Preview
+	// DryRun marks a write the authority was asked to validate and not
+	// persist (Kubernetes dryRun=All) -> krateo.audit.dry_run=true. A request
+	// or action writer (WithWriter) gets dry_run=false on every other write
+	// record; a read never carries the key. The action literal is the
+	// caller's either way (snowplow writes call.dryRun).
+	DryRun bool
 
 	// The Kubernetes object acted on. During W1 each is also written under its
 	// v0.3 key (k8s.resource.*, k8s.object.*).
@@ -250,12 +256,20 @@ func New(logger log.Logger, opts ...Option) *Emitter {
 //     writer's tests, never a reason not to emit;
 //   - it sets the LogRecord EventName and the event.name attribute, stamps
 //     krateo.audit.schema_version, writes the v0.3 keys beside their
-//     replacements (W1, v0.4.x), and makes every string valid UTF-8 (Sanitize).
+//     replacements (W1, v0.4.x), and makes every string valid UTF-8 (Sanitize);
+//   - once the logger has taken the record (it reports itself enabled for
+//     it), it marks the request recorded: on ctx's WithRecordedMarker holder
+//     when one is installed, else SpanKeyRecorded=true on the span active on
+//     ctx. A nil Emitter or logger, or a disabled logger, marks nothing.
 func (e *Emitter) Emit(ctx context.Context, ev Event) {
 	if e == nil || e.logger == nil {
 		return
 	}
-	attrs := WithLegacyKeys(attributes(ctx, ev, e.actorOf(ev)))
+	attrs := attributes(ctx, ev, e.actorOf(ev))
+	if dry, ok := e.dryRun(ev, attrs); ok {
+		attrs = append(attrs, attribute.Bool(KeyDryRun, dry))
+	}
+	attrs = WithLegacyKeys(attrs)
 	if markers := missingMarkers(e.markingWriters(), attrs); len(markers) > 0 {
 		attrs = append(attrs, attribute.String(KeyIncomplete, strings.Join(markers, ",")))
 		for _, m := range markers {
@@ -280,7 +294,35 @@ func (e *Emitter) Emit(ctx context.Context, ev Event) {
 		rec.SetSeverityText("ERROR")
 	}
 	rec.AddAttributes(attrs...)
+
+	// Emit always hands the record over (a record is never dropped here), and
+	// marks the request recorded only when the logger says it processes the
+	// record: a disabled logger drops it, and a dropped record must not keep a
+	// trace on its behalf.
+	handed := e.logger.Enabled(ctx, log.EnabledParameters{Severity: rec.Severity(), EventName: EventName})
 	e.logger.Emit(ctx, rec)
+	if handed {
+		markRecorded(ctx)
+	}
+}
+
+// dryRun is the krateo.audit.dry_run value Emit writes, if any: true whenever
+// the Event says the write was a dry run; false only on a record the declared
+// writer class must carry the key on (a request or action writer's write). A
+// v0.3 caller declares no writer and sets no DryRun, so its records gain no
+// key.
+func (e *Emitter) dryRun(ev Event, attrs []attribute.KeyValue) (value, write bool) {
+	if ev.DryRun {
+		return true, true
+	}
+	if e.writer == "" {
+		return false, false
+	}
+	present := make(map[string]attribute.Value, len(attrs))
+	for _, kv := range attrs {
+		present[string(kv.Key)] = kv.Value
+	}
+	return false, mustWrite(schemaKeys[schemaIndex[KeyDryRun]].Writers[e.writer], present)
 }
 
 // actorOf is the record's actor: the Event's when it names one, else the

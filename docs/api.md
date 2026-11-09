@@ -28,7 +28,7 @@ func New(logger log.Logger, opts ...Option) *Emitter
 func (e *Emitter) Emit(ctx context.Context, ev Event) // nil-safe
 
 func WithActor(username string, class Class) Option // the actor of every record whose Event names none
-func WithWriter(w Writer) Option                    // which writer class's gaps Emit marks
+func WithWriter(w Writer) Option                    // which writer class's gaps Emit marks, and whether it writes dry_run=false
 func WithMeterProvider(mp metric.MeterProvider) Option
 
 const MetricIncomplete = "krateo.audit.records.incomplete" // {marker=...}; marker="actor": emitted with no actor
@@ -67,6 +67,7 @@ const MetricIncomplete = "krateo.audit.records.incomplete" // {marker=...}; mark
 | `StatusCode` | `http.response.status_code` | omitted when 0 |
 | `Outcome` | `krateo.audit.outcome` (+ `outcome`) | |
 | `Preview` | `krateo.audit.preview` | `PreviewUnknown` (omitted, and marked for any Kubernetes object), `PreviewFalse` (also for a cluster-scoped object), `PreviewTrue`; `PreviewOf(bool)` |
+| `DryRun` | `krateo.audit.dry_run` | `true` whenever set. `false` only on a write record (`Verb` in `WriteVerbs()`) of an Emitter declared `WithWriter(WriterRequest)` or `WithWriter(WriterAction)`. Never on a read or a controller record, and never added for an Emitter that declares no writer (a v0.3 caller). The `Action` literal is the caller's either way |
 | `Namespace` | `k8s.namespace.name` | |
 | `Group`, `Version`, `Resource`, `Subresource`, `Kind`, `ObjectName` | `krateo.audit.object_ref.{api_group,api_version,resource,subresource,kind,name}` (+ `k8s.resource.*`) | a Kubernetes object always names its `Resource` |
 | `ObjectUID`, `ObjectGeneration`, `ObjectResourceVersion` | `krateo.audit.object_ref.{uid,generation,resource_version}` (+ `k8s.object.*`) | the join key; generation omitted when 0 |
@@ -107,6 +108,8 @@ func SchemaYAML() []byte               // schema/v1.yaml
 func Check(w Writer, attrs []attribute.KeyValue) []Violation
 func CheckRecord(w Writer, eventName string, attrs []attribute.KeyValue) []Violation // + the LogRecord EventName
 func RequiredKeys(w Writer, attrs []attribute.KeyValue) []string                   // what Check requires of this record
+func Holds(c Condition, attrs []attribute.KeyValue) bool                            // a condition, as Check evaluates it
+func WriteVerbs() []string                                                          // the verbs that make a record a write (condition write)
 
 type Violation struct{ Key string; Reason Reason } // never a value
 ```
@@ -122,6 +125,31 @@ established by, or not applicable to, this writer), `bad-type`, `bad-enum`,
 `affected-user-is-actor`, `unknown-writer`, `bad-event-name`.
 `Violation.Key` is an attribute key, `RuleTarget` (`"target"`) or
 `KeyLogRecordEventName`.
+
+## The recorded span marker
+
+```go
+const SpanKeyRecorded = "krateo.audit.recorded" // on the Server span: the request wrote an audit record
+
+func WithRecordedMarker(ctx context.Context) context.Context // install the holder Emit sets (kept if one is already there)
+func Recorded(ctx context.Context) bool                     // did Emit hand a record to the logger on ctx's holder?
+func MarkRecorded(ctx context.Context, span trace.Span)     // set SpanKeyRecorded=true on span if so; call before span.End()
+func RecordedMiddleware(next http.Handler) http.Handler     // the HTTP server wrapper doing all three; place it inside otelhttp
+```
+
+Once the logger has taken a record (it reports itself enabled for it), `Emit`
+marks the request:
+- **with a holder** on `ctx` (`WithRecordedMarker`, installed by the server
+  wrapper), it sets the holder only, never the span on `ctx`. The span active
+  at `Emit` time may be a stage's client span. The wrapper then marks the
+  Server span from the holder with `MarkRecorded`;
+- **without one**, it sets `SpanKeyRecorded=true` on `trace.SpanFromContext(ctx)`,
+  which is right when the Server span is the active one.
+
+A nil Emitter or logger, or a disabled logger, marks nothing. The marker is a
+boolean, only ever `true`, and never identity (snowplow#848). It is a span
+attribute, not a record key: `Check` reports it on a record as `not-in-schema`.
+Concurrent `Emit`s on one holder or one span are safe.
 
 ## Claim, sanitiser, dual-write
 

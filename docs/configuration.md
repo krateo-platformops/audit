@@ -17,7 +17,7 @@ options. Where records go is decided by the process's OTel Logs SDK.
 | option | effect |
 |---|---|
 | `WithActor(username, class)` | the actor of every record whose `Event` names none. A controller passes its ServiceAccount, `system:serviceaccount:<namespace>:<name>`, and `audit.ClassController`; a tool executor its own principal and `audit.ClassAgent`. Without it, an `Event` with no `UserName` is still emitted, marked `krateo.audit.incomplete=actor` |
-| `WithWriter(w)` | the writer class the Emitter records for. `Emit` then marks every gap that class must mark (snowplow, `WriterRequest`, gets `method` marked). Without it, a gap is marked only when every writer class that can write the key would have to |
+| `WithWriter(w)` | the writer class the Emitter records for. `Emit` then marks every gap that class must mark (snowplow, `WriterRequest`, gets `method` marked). Without it, a gap is marked only when every writer class that can write the key would have to. A request or action writer must declare itself, so that its write records carry `krateo.audit.dry_run=false` |
 | `WithMeterProvider(mp)` | where the counter below goes. Default: `otel.GetMeterProvider()` |
 
 ## Metrics
