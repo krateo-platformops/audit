@@ -12,6 +12,7 @@ package audit
 
 import (
 	"context"
+	"maps"
 	"slices"
 	"strings"
 	"testing"
@@ -102,6 +103,19 @@ var v03CallerShapes = map[string]Event{
 		ObjectUID: "uid-1", ObjectGeneration: 4, Namespace: "tenant-a", Group: "github.krateo.io", Version: "v1alpha1",
 		Kind: "Repo", ObjectName: "demo", ServerAddress: "api.example.com", Action: "rest.write", HTTPMethod: "PUT",
 		StatusCode: 409, Outcome: OutcomeFailure},
+	// No caller sends these today (the RestDefinition CRD's method enum is
+	// GET/POST/PUT/DELETE/PATCH), but the library takes any string: v0.3 wrote
+	// it as given, and v0.4 must not lose it.
+	"a v0.3 caller with a lowercase method": {Message: "external write succeeded",
+		ObjectUID: "uid-1", ObjectGeneration: 4, Namespace: "tenant-a", Group: "github.krateo.io", Version: "v1alpha1",
+		Kind: "Repo", ObjectName: "demo", ServerAddress: "api.example.com", Action: "rest.write", HTTPMethod: "post",
+		StatusCode: 201, Outcome: OutcomeSuccess},
+	"a v0.3 caller with a method semconv does not name": {Message: "external write succeeded",
+		ServerAddress: "dav.example.com", Action: "rest.write", HTTPMethod: "PROPFIND", StatusCode: 207, Outcome: OutcomeSuccess},
+	// A cluster-scoped target: access-review's revoke of a ClusterRoleBinding has no namespace.
+	"access-review revoke of a ClusterRoleBinding": {Message: "grant revoked", EndUserID: "alice", UserName: "alice",
+		UserRoles: []string{"bob"}, Group: "rbac.authorization.k8s.io", Version: "v1", Resource: "clusterrolebindings",
+		Kind: "ClusterRoleBinding", ObjectName: "alice-admin", Action: "campaign.revoke", Outcome: OutcomeDenied},
 	"rest-dynamic-controller delegated write": {Message: "external write succeeded",
 		ObjectUID: "uid-1", ObjectGeneration: 4, Namespace: "tenant-a", Group: "github.krateo.io", Version: "v1alpha1",
 		Kind: "Repo", ObjectName: "demo", ServerAddress: "https://api.example.com", Action: "rest.write",
@@ -124,14 +138,9 @@ func TestV03_APlainBumpKeepsEveryRecordAndEveryAttribute(t *testing.T) {
 				}
 				got := attrs(rec.records[0])
 				for _, kv := range v03Attributes(ctx, ev) {
-					k := string(kv.Key)
-					v, ok := got[k]
-					if !ok {
-						t.Errorf("%s: v0.3 wrote it, v0.4 does not", k)
-						continue
-					}
-					if !sameValue(kv.Value, v) {
-						t.Errorf("%s: v0.3 wrote %v, v0.4 writes %v", k, kv.Value.String(), v.String())
+					if !keeps(kv, got) {
+						v := got[string(kv.Key)]
+						t.Errorf("%s: v0.3 wrote %v, v0.4 keeps it nowhere (writes %v)", kv.Key, kv.Value.String(), v.String())
 					}
 				}
 				// A shape that names no actor is emitted marked actor, not dropped.
@@ -166,6 +175,29 @@ func TestV03_TheComparisonCanFail(t *testing.T) {
 	}
 }
 
+// The one sanctioned move, a method semconv does not name recorded as _OTHER,
+// is accepted only while http.request.method_original holds v0.3's value.
+func TestV03_TheMethodMoveCanFail(t *testing.T) {
+	ev := v03CallerShapes["a v0.3 caller with a lowercase method"]
+	ctx := spanCtx(t)
+	want := v03Attributes(ctx, ev)
+	rec := &recorder{}
+	New(loggerFor(t, rec)).Emit(ctx, ev)
+	got := attrs(rec.records[0])
+	if got[KeyHTTPMethod].AsString() != "_OTHER" || missingV03(want, got) != 0 {
+		t.Fatalf("precondition: method %q, %d v0.3 attributes missing", got[KeyHTTPMethod].AsString(), missingV03(want, got))
+	}
+	lost := maps.Clone(got)
+	delete(lost, KeyHTTPMethodOriginal)
+	changed := maps.Clone(got)
+	changed[KeyHTTPMethodOriginal] = attribute.StringValue("POST")
+	for name, m := range map[string]map[string]attribute.Value{"lost": lost, "changed": changed} {
+		if n := missingV03(want, m); n != 1 {
+			t.Errorf("method_original %s: %d caught, want 1", name, n)
+		}
+	}
+}
+
 // loggerFor is a real SDK logger exporting into rec.
 func loggerFor(t *testing.T, rec *recorder) otellog.Logger {
 	t.Helper()
@@ -177,11 +209,26 @@ func loggerFor(t *testing.T, rec *recorder) otellog.Logger {
 func missingV03(want []attribute.KeyValue, got map[string]attribute.Value) int {
 	n := 0
 	for _, kv := range want {
-		if v, ok := got[string(kv.Key)]; !ok || !sameValue(kv.Value, v) {
+		if !keeps(kv, got) {
 			n++
 		}
 	}
 	return n
+}
+
+// keeps reports whether the v0.4 record got still carries the v0.3 attribute
+// kv: under its own key with the same value, or, for the one move semconv
+// requires, a method v0.4 records as _OTHER, under http.request.method_original
+// with the same value.
+func keeps(kv attribute.KeyValue, got map[string]attribute.Value) bool {
+	if v, ok := got[string(kv.Key)]; ok && sameValue(kv.Value, v) {
+		return true
+	}
+	if string(kv.Key) == KeyHTTPMethod && got[KeyHTTPMethod].AsString() == "_OTHER" {
+		orig, ok := got[KeyHTTPMethodOriginal]
+		return ok && sameValue(kv.Value, orig)
+	}
+	return false
 }
 
 // sameValue compares as the wire does: a SLICE of strings and a STRINGSLICE

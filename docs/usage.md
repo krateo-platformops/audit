@@ -94,12 +94,14 @@ line. `Check` and `audittest` report keys and reasons, never values.
 
 ## Preview
 
-`Preview` is `PreviewOf(true)` when the target is a namespaced object whose
-Namespace carries the label `krateo.io/purpose=preview-sandbox`, as read from
-apiserver state by the writer (a namespace lister or a get on its own
-client), `PreviewOf(false)` otherwise. Leave it `PreviewUnknown` when the
-Namespace could not be read: the record is then marked
-`krateo.audit.incomplete=preview`. Never read the label from the object
+Set `Preview` on every record that names a Kubernetes object. It is
+`PreviewOf(true)` when the target is a namespaced object whose Namespace
+carries the label `krateo.io/purpose=preview-sandbox`, as read from apiserver
+state by the writer (a namespace lister or a get on its own client), and
+`PreviewOf(false)` otherwise, a cluster-scoped object included. Leave it
+`PreviewUnknown` when the Namespace could not be read: the record is then
+marked `krateo.audit.incomplete=preview`. A record that names only an
+external endpoint carries no preview. Never read the label from the object
 itself: whoever creates an object writes its labels.
 
 ## Adopting v0.4.0
@@ -119,7 +121,8 @@ with every attribute and value v0.3 wrote. On top of that:
 
 Then adopt the schema, per emit site, to clear the marks: set `WithActor`;
 set `Verb`; set `Resource` (the plural) whenever the record names a
-Kubernetes object; set `Preview` for a namespaced object; move an affected
+Kubernetes object; set `Preview` for every Kubernetes object (`false` for a
+cluster-scoped one); move an affected
 user to `AffectedUser`; replace an upstream error text in `Message` with a
 closed-set text; and test the site (next section).
 

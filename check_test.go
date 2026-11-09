@@ -128,6 +128,13 @@ func TestCheck_Violations(t *testing.T) {
 			[]Violation{v(KeyObjectResource, ReasonMissing)}},
 		{"namespaced target without preview", WriterController, without(k8sCtrl, KeyPreview), []Violation{v(KeyPreview, ReasonMissing)}},
 		{"namespaced target, preview marked", WriterController, with(without(k8sCtrl, KeyPreview), attribute.String(KeyIncomplete, "preview")), []Violation{v(KeyPreview, ReasonIncomplete)}},
+		// installer#716 §2.4: preview is false for a cluster-scoped target, and required there too.
+		{"cluster-scoped target without preview", WriterController, without(k8sCtrl, KeyNamespace, KeyPreview), []Violation{v(KeyPreview, ReasonMissing)}},
+		{"cluster-scoped target, preview false", WriterController, without(k8sCtrl, KeyNamespace), nil},
+		{"external endpoint alone needs no preview", WriterController, ctrl, nil},
+		// semconv: a method recorded as _OTHER carries the method as given.
+		{"_OTHER without the method as given", WriterRequest, with(req, attribute.String(KeyHTTPMethod, "_OTHER")), []Violation{v(KeyHTTPMethodOriginal, ReasonMissing)}},
+		{"_OTHER with the method as given", WriterRequest, with(req, attribute.String(KeyHTTPMethod, "_OTHER"), attribute.String(KeyHTTPMethodOriginal, "post")), nil},
 		{"actor class missing for a controller is not excused by a mark", WriterController, with(without(ctrl, KeyActorClass), attribute.String(KeyIncomplete, "actor_class")), []Violation{v(KeyActorClass, ReasonMissing)}},
 		{"actor class missing for a request must be marked", WriterRequest, without(req, KeyActorClass), []Violation{v(KeyActorClass, ReasonMissing)}},
 		{"actor class marked for a request", WriterRequest, with(without(req, KeyActorClass), attribute.String(KeyIncomplete, "actor_class")), []Violation{v(KeyActorClass, ReasonIncomplete)}},
@@ -199,10 +206,14 @@ func TestMissingMarkers(t *testing.T) {
 	// No writer declared: a gap is marked when every writer that can write the
 	// key must. http.request.method is required of request and gateway
 	// writers only, so it is not marked; preview is not established by the
-	// gateway, so it is marked for a namespaced object.
+	// gateway, so it is marked for any Kubernetes object.
 	k8s := append(slices.Clone(bare), attribute.String(KeyNamespace, "ns"), attribute.String(KeyObjectResource, "pods"))
 	if got, want := missingMarkers(schemaWriters, k8s), []string{"actor_class", "action", "verb", "preview"}; !slices.Equal(got, want) {
 		t.Errorf("no writer: %v, want %v", got, want)
+	}
+	cluster := append(slices.Clone(bare), attribute.String(KeyObjectAPIVersion, "v1"), attribute.String(KeyObjectResource, "clusterrolebindings"))
+	if got, want := missingMarkers(schemaWriters, cluster), []string{"actor_class", "action", "verb", "preview"}; !slices.Equal(got, want) {
+		t.Errorf("cluster-scoped object: %v, want %v (preview is required there too)", got, want)
 	}
 	if got, want := missingMarkers([]Writer{WriterRequest}, k8s), []string{"actor_class", "action", "verb", "method", "preview"}; !slices.Equal(got, want) {
 		t.Errorf("request writer: %v, want %v", got, want)

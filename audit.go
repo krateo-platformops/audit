@@ -63,8 +63,8 @@ type Preview uint8
 
 // The preview states.
 const (
-	// PreviewUnknown: not determined. For a namespaced Kubernetes target the
-	// record is marked krateo.audit.incomplete=preview.
+	// PreviewUnknown: not determined. For a Kubernetes target, namespaced or
+	// cluster-scoped, the record is marked krateo.audit.incomplete=preview.
 	PreviewUnknown Preview = iota
 	// PreviewFalse: the target is not in a namespace labelled
 	// krateo.io/purpose=preview-sandbox, or is cluster-scoped.
@@ -339,7 +339,9 @@ func attributes(ctx context.Context, ev Event, actor principal) []attribute.KeyV
 
 	add(KeyAction, ev.Action)
 	add(KeyVerb, ev.Verb)
-	add(KeyHTTPMethod, httpMethod(ev.HTTPMethod))
+	method, original := httpMethod(ev.HTTPMethod)
+	add(KeyHTTPMethod, method)
+	add(KeyHTTPMethodOriginal, original)
 	num(KeyHTTPStatusCode, int64(ev.StatusCode))
 	add(KeyOutcome, ev.Outcome)
 	if ev.Preview != PreviewUnknown {
@@ -396,16 +398,18 @@ func delegation(chain []Link) []string {
 	return out
 }
 
-// httpMethod is method as semconv records it: a method it names stays, any
-// other becomes _OTHER.
-func httpMethod(method string) string {
+// httpMethod is method as semconv records it: a method it names stays, and
+// any other (lowercase included) becomes _OTHER, with the method as given
+// returned as original for http.request.method_original. original is ""
+// when nothing was rewritten.
+func httpMethod(method string) (recorded, original string) {
 	if method == "" {
-		return ""
+		return "", ""
 	}
 	if k := schemaKeys[schemaIndex[KeyHTTPMethod]]; slices.Contains(k.Values, method) {
-		return method
+		return method, ""
 	}
-	return "_OTHER"
+	return "_OTHER", method
 }
 
 // The apiserver's User-Agent bound and marker (k8s.io/apiserver

@@ -73,10 +73,11 @@ conditions:
     description: >-
       The record names a Kubernetes object: k8s.namespace.name or any
       krateo.audit.object_ref.* key is present.
-  - id: k8s_target_namespaced
-    go: CondK8sTargetNamespaced
+  - id: method_other
+    go: CondMethodOther
     description: >-
-      The record names a Kubernetes object and k8s.namespace.name is present.
+      http.request.method is _OTHER: the writer was given a method semconv
+      does not name.
   - id: delegated
     go: CondDelegated
     description: >-
@@ -300,12 +301,29 @@ keys:
     semconv: stable
     values: [CONNECT, DELETE, GET, HEAD, OPTIONS, PATCH, POST, PUT, QUERY, TRACE, _OTHER]
     marker: method
-    description: The HTTP method the writer sent or proxied; _OTHER for a method semconv does not name.
+    description: >-
+      The HTTP method the writer sent or proxied; _OTHER for a method semconv
+      does not name (lowercase included), with the method as given in
+      http.request.method_original.
     writers:
       request: {level: required, markable: true}
       gateway: {level: required, markable: true}
       action: {level: conditional, when: the action was an HTTP request}
       controller: {level: conditional, when: the action was an HTTP request}
+
+  - name: http.request.method_original
+    go: HTTPMethodOriginal
+    type: string
+    semconv: stable
+    description: >-
+      The HTTP method exactly as the writer was given it, when
+      http.request.method records it as _OTHER. Written only then, so no
+      value a writer passes is lost.
+    writers:
+      request: {level: conditional, when: http.request.method is _OTHER, check: method_other}
+      gateway: {level: conditional, when: http.request.method is _OTHER, check: method_other}
+      action: {level: conditional, when: http.request.method is _OTHER, check: method_other}
+      controller: {level: conditional, when: http.request.method is _OTHER, check: method_other}
 
   - name: krateo.audit.outcome
     go: Outcome
@@ -336,14 +354,15 @@ keys:
     description: >-
       true when the target is a namespaced Kubernetes object whose Namespace
       carries the label krateo.io/purpose=preview-sandbox, read by the writer
-      from apiserver state. false for any other Kubernetes target. Omitted and
-      marked when the Namespace could not be read. Not a retention key, not a
-      filter.
+      from apiserver state. false for any other Kubernetes target, a
+      cluster-scoped one included (installer#716 §2.4). Omitted and marked
+      when the Namespace could not be read. Not written for an external
+      endpoint alone. Not a retention key, not a filter.
     writers:
-      request: {level: conditional, when: the target is a namespaced Kubernetes object, check: k8s_target_namespaced, markable: true}
+      request: {level: conditional, when: the target is a Kubernetes object (false when cluster-scoped), check: k8s_target, markable: true}
       gateway: not_established
-      action: {level: conditional, when: the target is a namespaced Kubernetes object, check: k8s_target_namespaced, markable: true}
-      controller: {level: conditional, when: the target is a namespaced Kubernetes object, check: k8s_target_namespaced, markable: true}
+      action: {level: conditional, when: the target is a Kubernetes object (false when cluster-scoped), check: k8s_target, markable: true}
+      controller: {level: conditional, when: the target is a Kubernetes object (false when cluster-scoped), check: k8s_target, markable: true}
 
   # --- which target: a Kubernetes object ------------------------------------
   - name: krateo.audit.object_ref.api_group

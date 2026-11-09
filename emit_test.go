@@ -246,7 +246,9 @@ func TestEmit_Preview(t *testing.T) {
 		{PreviewTrue, "krateo-preview", "true", false},
 		{PreviewFalse, "tenant-a", "false", false},
 		{PreviewUnknown, "tenant-a", "", true},
-		{PreviewUnknown, "", "", false}, // cluster-scoped: nothing to mark
+		// Cluster-scoped (installer#716 §2.4): preview is false, and required.
+		{PreviewFalse, "", "false", false},
+		{PreviewUnknown, "", "", true},
 	} {
 		e, rec := newEmitter(t)
 		e.Emit(spanCtx(t), Event{Action: "x", Verb: "create", Namespace: tc.ns, Version: "v1", Resource: "configmaps", Preview: tc.p})
@@ -281,13 +283,32 @@ func TestEmit_MarkersFollowTheWriter(t *testing.T) {
 	}
 }
 
+// A method semconv names is recorded as is. Any other, lowercase included, is
+// recorded as _OTHER with the method as given in http.request.method_original:
+// semconv's rule, and no value the writer passed is lost.
 func TestEmit_HTTPMethodAsSemconvRecordsIt(t *testing.T) {
-	for in, want := range map[string]string{"POST": "POST", "PATCH": "PATCH", "post": "_OTHER", "PROPFIND": "_OTHER"} {
+	for in, want := range map[string][2]string{ // method, method_original ("" = absent)
+		"POST": {"POST", ""}, "PATCH": {"PATCH", ""}, "post": {"_OTHER", "post"}, "PROPFIND": {"_OTHER", "PROPFIND"},
+	} {
 		e, rec := newEmitter(t)
 		e.Emit(spanCtx(t), Event{Action: "x", HTTPMethod: in})
-		if got := attrs(only(t, rec))[KeyHTTPMethod].AsString(); got != want {
-			t.Errorf("method %q recorded as %q, want %q", in, got, want)
+		a := attrs(only(t, rec))
+		if got := a[KeyHTTPMethod].AsString(); got != want[0] {
+			t.Errorf("method %q recorded as %q, want %q", in, got, want[0])
 		}
+		orig, ok := a[KeyHTTPMethodOriginal]
+		switch {
+		case want[1] == "" && ok:
+			t.Errorf("method %q: method_original = %q written though nothing was rewritten", in, orig.AsString())
+		case want[1] != "" && orig.AsString() != want[1]:
+			t.Errorf("method %q: method_original = %q, want %q", in, orig.AsString(), want[1])
+		}
+	}
+	// No method, no method_original.
+	e, rec := newEmitter(t)
+	e.Emit(spanCtx(t), Event{Action: "x"})
+	if _, ok := attrs(only(t, rec))[KeyHTTPMethodOriginal]; ok {
+		t.Errorf("method_original written with no method")
 	}
 }
 

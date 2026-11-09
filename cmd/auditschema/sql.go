@@ -20,10 +20,10 @@ const window = "Timestamp >= {start:DateTime64(9)} AND Timestamp < {end:DateTime
 // row. TestConditionSQLIsTotal fails when the schema gains a condition this
 // map does not name.
 var conditionSQL = map[audit.Condition]string{
-	audit.CondK8sTarget:           k8sTargetSQL,
-	audit.CondK8sTargetNamespaced: "(" + k8sTargetSQL + " AND " + attr(audit.KeyNamespace) + " != '')",
-	audit.CondDelegated:           "(" + attr(audit.KeyDelegation) + " != '' OR " + attr(audit.KeyOnBehalfOf) + " != '')",
-	audit.CondImpersonated:        "(" + attr(audit.KeyImpersonatedUser) + " != '' OR " + attr(audit.KeyImpersonatedRoles) + " != '')",
+	audit.CondK8sTarget:    k8sTargetSQL,
+	audit.CondMethodOther:  "(" + attr(audit.KeyHTTPMethod) + " = '_OTHER')",
+	audit.CondDelegated:    "(" + attr(audit.KeyDelegation) + " != '' OR " + attr(audit.KeyOnBehalfOf) + " != '')",
+	audit.CondImpersonated: "(" + attr(audit.KeyImpersonatedUser) + " != '' OR " + attr(audit.KeyImpersonatedRoles) + " != '')",
 }
 
 var k8sTargetSQL = "(" + attr(audit.KeyNamespace) + " != '' OR arrayExists(k -> startsWith(k, 'krateo.audit.object_ref.'), mapKeys(LogAttributes)))"

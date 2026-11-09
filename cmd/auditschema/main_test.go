@@ -124,6 +124,34 @@ func TestCheck_UsageAndInputErrors(t *testing.T) {
 	}
 }
 
+// A decode error names a position, a field or an attribute key and a reason,
+// never a value from the input: audit values carry identity, and the error goes
+// to stderr and CI logs. encoding/json and strconv quote their input, so each
+// path that wraps one of them is driven with a marker value here.
+func TestCheck_DecodeErrorsNeverPrintAValue(t *testing.T) {
+	const secret = "alice.secret.identity"
+	for name, in := range map[string]string{
+		"intValue not a number": `{"attributes":[{"key":"k8s.object.generation","value":{"intValue":"` + secret + `"}}]}`,
+		"bytesValue not base64": `{"attributes":[{"key":"b","value":{"bytesValue":"` + secret + `!"}}]}`,
+		"JSON syntax error":     `{"attributes":[{"key":"user.name","value":{"stringValue":"x"}}]} ` + secret,
+		"syntax error inside":   `{"attributes":[{"key":"user.name","value":{"stringValue":` + secret + `}}]}`,
+		"number where a string": `{"eventName":4815162342,"attributes":[]}`,
+	} {
+		code, out, errs := runIt(t, in, "check", "-writer", "controller")
+		if code != 2 {
+			t.Errorf("%s: exit %d, want 2", name, code)
+		}
+		for _, leaked := range []string{secret, "4815162342"} {
+			if strings.Contains(errs, leaked) || strings.Contains(out, leaked) {
+				t.Errorf("%s: the output carries an input value:\n%s%s", name, out, errs)
+			}
+		}
+		if !strings.Contains(errs, "auditschema: stdin: ") {
+			t.Errorf("%s: no decode error reported: %q", name, errs)
+		}
+	}
+}
+
 func TestConditionSQLIsTotal(t *testing.T) {
 	for _, c := range audit.Conditions() {
 		if conditionSQL[c] == "" {

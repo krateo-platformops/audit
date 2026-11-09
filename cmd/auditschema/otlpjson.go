@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"strconv"
@@ -53,6 +54,11 @@ type jsonAnyValue struct {
 
 // decodeRecords reads an ExportLogsServiceRequest, one LogRecord, or a JSON
 // array of LogRecords.
+//
+// Its errors name a position, a field or an attribute key, and a reason:
+// never a value from the input, which is identity-bearing audit data.
+// encoding/json's and strconv's own errors quote input, so none is passed
+// through.
 func decodeRecords(r io.Reader) ([]record, error) {
 	raw, err := io.ReadAll(r)
 	if err != nil {
@@ -63,17 +69,17 @@ func decodeRecords(r io.Reader) ([]record, error) {
 	switch {
 	case len(raw) > 0 && raw[0] == '[':
 		if err := json.Unmarshal(raw, &lrs); err != nil {
-			return nil, err
+			return nil, jsonError(err)
 		}
 	default:
 		var probe map[string]json.RawMessage
 		if err := json.Unmarshal(raw, &probe); err != nil {
-			return nil, err
+			return nil, jsonError(err)
 		}
 		if _, ok := probe["resourceLogs"]; ok {
 			var req jsonRequest
 			if err := json.Unmarshal(raw, &req); err != nil {
-				return nil, err
+				return nil, jsonError(err)
 			}
 			for _, rl := range req.ResourceLogs {
 				for _, sl := range rl.ScopeLogs {
@@ -83,7 +89,7 @@ func decodeRecords(r io.Reader) ([]record, error) {
 		} else {
 			var lr jsonLogRecord
 			if err := json.Unmarshal(raw, &lr); err != nil {
-				return nil, err
+				return nil, jsonError(err)
 			}
 			lrs = append(lrs, lr)
 		}
@@ -114,7 +120,7 @@ func (a jsonAnyValue) value() (attribute.Value, error) {
 		s := string(bytes.Trim(a.IntValue, `"`))
 		n, err := strconv.ParseInt(s, 10, 64)
 		if err != nil {
-			return attribute.Value{}, fmt.Errorf("intValue: %w", err)
+			return attribute.Value{}, errors.New("intValue is not a decimal int64")
 		}
 		return attribute.Int64Value(n), nil
 	case a.DoubleValue != nil:
@@ -122,7 +128,7 @@ func (a jsonAnyValue) value() (attribute.Value, error) {
 	case a.BytesValue != nil:
 		b, err := base64.StdEncoding.DecodeString(*a.BytesValue)
 		if err != nil {
-			return attribute.Value{}, fmt.Errorf("bytesValue: %w", err)
+			return attribute.Value{}, errors.New("bytesValue is not base64")
 		}
 		return attribute.ByteSliceValue(b), nil
 	case a.ArrayValue != nil:
@@ -147,4 +153,20 @@ func (a jsonAnyValue) value() (attribute.Value, error) {
 		return attribute.MapValue(kvs...), nil
 	}
 	return attribute.Value{}, nil // an empty AnyValue
+}
+
+// jsonError reduces an encoding/json error to where it is and what is wrong.
+// A SyntaxError's text quotes the offending input character, and an
+// UnmarshalTypeError's Value holds a number's literal, so neither is passed
+// through: only the byte offset, the field path and the Go type are.
+func jsonError(err error) error {
+	var syn *json.SyntaxError
+	var typ *json.UnmarshalTypeError
+	switch {
+	case errors.As(err, &syn):
+		return fmt.Errorf("not valid JSON at byte %d", syn.Offset)
+	case errors.As(err, &typ):
+		return fmt.Errorf("not OTLP/JSON: field %q does not hold a %s (byte %d)", typ.Field, typ.Type, typ.Offset)
+	}
+	return errors.New("not OTLP/JSON")
 }

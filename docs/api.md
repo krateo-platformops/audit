@@ -63,10 +63,10 @@ const MetricIncomplete = "krateo.audit.records.incomplete" // {marker=...}; mark
 | `AffectedUser` | `krateo.audit.affected_user.name` | the user the action was done to, when that is not the actor |
 | `Action` | `krateo.action` | the emit site's literal |
 | `Verb` | `krateo.audit.verb` | the apiserver's verb, or the lowercase method |
-| `HTTPMethod` | `http.request.method` | a method semconv does not name becomes `_OTHER` |
+| `HTTPMethod` | `http.request.method` (+ `http.request.method_original`) | a method semconv does not name, lowercase included, becomes `_OTHER`, and the method as given is written in `http.request.method_original` |
 | `StatusCode` | `http.response.status_code` | omitted when 0 |
 | `Outcome` | `krateo.audit.outcome` (+ `outcome`) | |
-| `Preview` | `krateo.audit.preview` | `PreviewUnknown` (omitted, and marked for a namespaced object), `PreviewFalse`, `PreviewTrue`; `PreviewOf(bool)` |
+| `Preview` | `krateo.audit.preview` | `PreviewUnknown` (omitted, and marked for any Kubernetes object), `PreviewFalse` (also for a cluster-scoped object), `PreviewTrue`; `PreviewOf(bool)` |
 | `Namespace` | `k8s.namespace.name` | |
 | `Group`, `Version`, `Resource`, `Subresource`, `Kind`, `ObjectName` | `krateo.audit.object_ref.{api_group,api_version,resource,subresource,kind,name}` (+ `k8s.resource.*`) | a Kubernetes object always names its `Resource` |
 | `ObjectUID`, `ObjectGeneration`, `ObjectResourceVersion` | `krateo.audit.object_ref.{uid,generation,resource_version}` (+ `k8s.object.*`) | the join key; generation omitted when 0 |
@@ -159,6 +159,8 @@ go run github.com/krateo-platformops/audit/cmd/auditschema sql
 ```
 
 `check` reads OTLP/JSON (an `ExportLogsServiceRequest`, one LogRecord, or an
-array of them) and prints one line per violation, key and reason only. Exit 1
-when a record breaks the schema, 2 on a usage or input error. `sql` prints the
+array of them) and prints one line per violation, key and reason only. An
+input it cannot decode is reported by position, field or key and a reason,
+never by its value. Exit 1 when a record breaks the schema, 2 on a usage or
+input error. `sql` prints the
 `krateo_audit` conformance queries; see [usage](./usage.md#checking-the-live-table).

@@ -58,8 +58,13 @@ const (
 	// when the method is not recognised.
 	KeyVerb = "krateo.audit.verb"
 	// KeyHTTPMethod is "http.request.method". The HTTP method the writer sent or
-	// proxied; _OTHER for a method semconv does not name.
+	// proxied; _OTHER for a method semconv does not name (lowercase included),
+	// with the method as given in http.request.method_original.
 	KeyHTTPMethod = "http.request.method"
+	// KeyHTTPMethodOriginal is "http.request.method_original". The HTTP method
+	// exactly as the writer was given it, when http.request.method records it as
+	// _OTHER. Written only then, so no value a writer passes is lost.
+	KeyHTTPMethodOriginal = "http.request.method_original"
 	// KeyOutcome is "krateo.audit.outcome". What the authority this writer sent to
 	// answered, at the protocol level the writer observes. denied means the writer
 	// itself refused.
@@ -70,8 +75,10 @@ const (
 	// KeyPreview is "krateo.audit.preview". true when the target is a namespaced
 	// Kubernetes object whose Namespace carries the label
 	// krateo.io/purpose=preview-sandbox, read by the writer from apiserver state.
-	// false for any other Kubernetes target. Omitted and marked when the Namespace
-	// could not be read. Not a retention key, not a filter.
+	// false for any other Kubernetes target, a cluster-scoped one included
+	// (installer#716 §2.4). Omitted and marked when the Namespace could not be
+	// read. Not written for an external endpoint alone. Not a retention key, not a
+	// filter.
 	KeyPreview = "krateo.audit.preview"
 	// KeyObjectAPIGroup is "krateo.audit.object_ref.api_group". The object's API
 	// group (objectRef.apiGroup). Omitted for the core group.
@@ -239,9 +246,9 @@ const (
 	// CondK8sTarget: The record names a Kubernetes object: k8s.namespace.name or
 	// any krateo.audit.object_ref.* key is present.
 	CondK8sTarget Condition = "k8s_target"
-	// CondK8sTargetNamespaced: The record names a Kubernetes object and
-	// k8s.namespace.name is present.
-	CondK8sTargetNamespaced Condition = "k8s_target_namespaced"
+	// CondMethodOther: http.request.method is _OTHER: the writer was given a
+	// method semconv does not name.
+	CondMethodOther Condition = "method_other"
 	// CondDelegated: The record carries a delegation: krateo.audit.delegation or
 	// krateo.audit.on_behalf_of.user.name is present.
 	CondDelegated Condition = "delegated"
@@ -252,7 +259,7 @@ const (
 
 var schemaWriters = []Writer{WriterRequest, WriterGateway, WriterAction, WriterController}
 
-var schemaConditions = []Condition{CondK8sTarget, CondK8sTargetNamespaced, CondDelegated, CondImpersonated}
+var schemaConditions = []Condition{CondK8sTarget, CondMethodOther, CondDelegated, CondImpersonated}
 
 var schemaMarkers = []string{"actor", "actor_class", "action", "verb", "method", "preview", "target"}
 
@@ -518,12 +525,31 @@ var schemaKeys = []KeySpec{
 		Asserted:    false,
 		ReplacedBy:  "",
 		DualWrite:   false,
-		Description: "The HTTP method the writer sent or proxied; _OTHER for a method semconv does not name.",
+		Description: "The HTTP method the writer sent or proxied; _OTHER for a method semconv does not name (lowercase included), with the method as given in http.request.method_original.",
 		Writers: map[Writer]Requirement{
 			WriterRequest:    {Level: LevelRequired, Markable: true},
 			WriterGateway:    {Level: LevelRequired, Markable: true},
 			WriterAction:     {Level: LevelConditional, When: "the action was an HTTP request"},
 			WriterController: {Level: LevelConditional, When: "the action was an HTTP request"},
+		},
+	},
+	{
+		Name:        KeyHTTPMethodOriginal,
+		Type:        TypeString,
+		Semconv:     "stable",
+		Values:      nil,
+		Format:      "",
+		Marker:      "",
+		Identity:    false,
+		Asserted:    false,
+		ReplacedBy:  "",
+		DualWrite:   false,
+		Description: "The HTTP method exactly as the writer was given it, when http.request.method records it as _OTHER. Written only then, so no value a writer passes is lost.",
+		Writers: map[Writer]Requirement{
+			WriterRequest:    {Level: LevelConditional, When: "http.request.method is _OTHER", Check: CondMethodOther},
+			WriterGateway:    {Level: LevelConditional, When: "http.request.method is _OTHER", Check: CondMethodOther},
+			WriterAction:     {Level: LevelConditional, When: "http.request.method is _OTHER", Check: CondMethodOther},
+			WriterController: {Level: LevelConditional, When: "http.request.method is _OTHER", Check: CondMethodOther},
 		},
 	},
 	{
@@ -575,12 +601,12 @@ var schemaKeys = []KeySpec{
 		Asserted:    false,
 		ReplacedBy:  "",
 		DualWrite:   false,
-		Description: "true when the target is a namespaced Kubernetes object whose Namespace carries the label krateo.io/purpose=preview-sandbox, read by the writer from apiserver state. false for any other Kubernetes target. Omitted and marked when the Namespace could not be read. Not a retention key, not a filter.",
+		Description: "true when the target is a namespaced Kubernetes object whose Namespace carries the label krateo.io/purpose=preview-sandbox, read by the writer from apiserver state. false for any other Kubernetes target, a cluster-scoped one included (installer#716 §2.4). Omitted and marked when the Namespace could not be read. Not written for an external endpoint alone. Not a retention key, not a filter.",
 		Writers: map[Writer]Requirement{
-			WriterRequest:    {Level: LevelConditional, When: "the target is a namespaced Kubernetes object", Check: CondK8sTargetNamespaced, Markable: true},
+			WriterRequest:    {Level: LevelConditional, When: "the target is a Kubernetes object (false when cluster-scoped)", Check: CondK8sTarget, Markable: true},
 			WriterGateway:    {Level: LevelNotEstablished},
-			WriterAction:     {Level: LevelConditional, When: "the target is a namespaced Kubernetes object", Check: CondK8sTargetNamespaced, Markable: true},
-			WriterController: {Level: LevelConditional, When: "the target is a namespaced Kubernetes object", Check: CondK8sTargetNamespaced, Markable: true},
+			WriterAction:     {Level: LevelConditional, When: "the target is a Kubernetes object (false when cluster-scoped)", Check: CondK8sTarget, Markable: true},
+			WriterController: {Level: LevelConditional, When: "the target is a Kubernetes object (false when cluster-scoped)", Check: CondK8sTarget, Markable: true},
 		},
 	},
 	{

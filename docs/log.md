@@ -34,7 +34,11 @@ timestamp: 2026-11-09T00:00:00Z
   - makes every string valid UTF-8, at any depth (snowplow#1261: one invalid
     string made the OTLP exporter drop the whole batch);
   - writes `user.roles` as a string slice (an OTLP array of strings, as
-    before), and an HTTP method semconv does not name as `_OTHER`.
+    before), and an HTTP method semconv does not name (lowercase included)
+    as `_OTHER`, with the method as given in `http.request.method_original`,
+    so no v0.3 value is lost;
+  - requires `krateo.audit.preview` for every Kubernetes target, `false` for
+    a cluster-scoped one (installer#716 §2.4).
   Every v0.3 field and constant still compiles; `Event.EndUserID` is
   deprecated.
 - **2026-10-29**: requires Go 1.26 (`go 1.26.0`, was 1.25.6), and the module's

@@ -226,8 +226,9 @@ func evalCondition(c Condition, present map[string]attribute.Value) (holds, know
 	switch c {
 	case CondK8sTarget:
 		return k8sTarget(present), true
-	case CondK8sTargetNamespaced:
-		return k8sTarget(present) && has(KeyNamespace), true
+	case CondMethodOther:
+		m, ok := present[KeyHTTPMethod]
+		return ok && m.Type() == attribute.STRING && m.AsString() == "_OTHER", true
 	case CondDelegated:
 		return has(KeyDelegation) || has(KeyOnBehalfOf), true
 	case CondImpersonated:
