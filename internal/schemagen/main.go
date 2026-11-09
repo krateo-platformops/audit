@@ -30,11 +30,13 @@ func main() {
 	flag.Parse()
 
 	src, md, err := generate(*in)
+	// Both outputs are committed, world-readable source files: they hold no
+	// secret, so they get the mode every other source file has.
 	if err == nil {
-		err = os.WriteFile(*out, src, 0o644)
+		err = os.WriteFile(*out, src, 0o644) // #nosec G306 -- generated source file, committed to git
 	}
 	if err == nil {
-		err = os.WriteFile(*doc, md, 0o644)
+		err = os.WriteFile(*doc, md, 0o644) // #nosec G306 -- generated documentation, committed to git
 	}
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "schemagen:", err)
@@ -45,7 +47,7 @@ func main() {
 // generate reads the schema at path, validates it and returns the Go source
 // and the Markdown contract.
 func generate(path string) (src, md []byte, err error) {
-	raw, err := os.ReadFile(path)
+	raw, err := os.ReadFile(path) // #nosec G304,G703 -- the schema file go generate names with -in is this tool's input
 	if err != nil {
 		return nil, nil, err
 	}

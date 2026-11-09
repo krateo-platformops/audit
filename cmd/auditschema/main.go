@@ -71,7 +71,7 @@ func runCheck(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		inputs = append(inputs, input{"stdin", stdin})
 	}
 	for _, p := range fs.Args() {
-		f, err := os.Open(p)
+		f, err := os.Open(p) // #nosec G304,G703 -- the record file the operator names on the command line is this command's input
 		if err != nil {
 			fmt.Fprintln(stderr, "auditschema:", err)
 			return 2
