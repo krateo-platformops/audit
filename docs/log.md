@@ -4,11 +4,55 @@ title: audit — log
 description: Curated history of the audit package.
 resource: github.com/krateo-platformops/audit
 tags: [library, audit, log]
-timestamp: 2026-10-29T13:55:06Z
+timestamp: 2026-11-09T00:00:00Z
 ---
 
 # Log
 
+- **2026-11-09**: audit schema v1 (installer#716), for v0.4.0.
+  `schema/v1.yaml` is the one record contract: every attribute, its type and
+  semconv status, and per writer class (request, gateway, action, controller)
+  whether it is required, conditional, optional, not established or not
+  applicable. `go generate` turns it into the `Key*` constants, the checker's
+  rule table and [schema.md](./schema.md); a test fails when they are stale.
+  New: `Check`/`CheckRecord`/`RequiredKeys`, `ParseClaim`, `Sanitize`,
+  `WithLegacyKeys`, the `audittest` package and `cmd/auditschema`. `Emit` now:
+  - **never drops a record**: one that lacks a key its writer must write is
+    emitted without it, marked in `krateo.audit.incomplete` and counted under
+    `krateo.audit.records.incomplete{marker}`. A record that names no actor is
+    marked `actor`. `WithActor` sets the actor of a controller or tool
+    executor. A caller that only bumps keeps every record and every attribute
+    it emitted on v0.3;
+  - sets the LogRecord EventName and Timestamp, and stamps
+    `krateo.audit.schema_version=1`;
+  - writes the new keys (`krateo.audit.outcome`, `krateo.audit.object_ref.*`,
+    `krateo.audit.actor_class`, `verb`, `preview`, delegation, impersonation,
+    `affected_user`, the request facts) and, during migration window W1, the
+    v0.3 keys beside them with the same value (`outcome`, `k8s.resource.*`,
+    `k8s.object.*`). v0.5.0 removes the v0.3 keys. `enduser.id` is written
+    only when the caller sets `EndUserID`, as in v0.3, and never added;
+  - makes every string valid UTF-8, at any depth (snowplow#1261: one invalid
+    string made the OTLP exporter drop the whole batch);
+  - writes `user.roles` as a string slice (an OTLP array of strings, as
+    before), and an HTTP method semconv does not name (lowercase included)
+    as `_OTHER`, with the method as given in `http.request.method_original`,
+    so no v0.3 value is lost;
+  - requires `krateo.audit.preview` for every Kubernetes target, `false` for
+    a cluster-scoped one (installer#716 §2.4);
+  - writes `krateo.audit.dry_run` (AUDIT-9). It is `true` from `Event.DryRun`,
+    and `false` on the other write records of a declared request or action
+    writer. Never on a read or a controller record, and never added to a v0.3
+    caller's records;
+  - marks the request recorded for the tail sampler,
+    `krateo.audit.recorded=true` on its Server span, once the logger has
+    taken a record. Through a `WithRecordedMarker` holder and
+    `RecordedMiddleware`, or on the active span when no holder is installed
+    and that span records. A marker that reaches no trace (no holder, and no
+    span, an ended one or one that does not record) is counted under
+    `krateo.audit.recorded_marker.unattached{reason}` and logged once per
+    process at WARN; the record is still emitted.
+  Every v0.3 field and constant still compiles; `Event.EndUserID` is
+  deprecated.
 - **2026-10-29**: requires Go 1.26 (`go 1.26.0`, was 1.25.6), and the module's
   own builds use `toolchain go1.26.10`. At go1.25.6, `govulncheck` reports seven
   standard-library vulnerabilities (`net/http`, `crypto/x509`, `net/url`) that a

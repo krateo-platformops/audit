@@ -1,16 +1,33 @@
 ---
 type: Configuration
 title: audit — configuration
-description: The package has no configuration of its own; this is the OTel Logs SDK setup it relies on and where records are sent.
+description: The Emitter's three options and two metrics, and the OTel Logs SDK setup the package relies on.
 resource: github.com/krateo-platformops/audit
 tags: [library, audit, configuration, opentelemetry]
-timestamp: 2026-10-28T00:00:00Z
+timestamp: 2026-11-09T00:00:00Z
 ---
 
 # Configuration
 
-The package itself takes no configuration: `audit.New(logger)` is its only
-input. Where records go is decided by the process's OTel Logs SDK.
+`audit.New(logger, opts...)` takes the logger records are written to and three
+options. Where records go is decided by the process's OTel Logs SDK.
+
+## Options
+
+| option | effect |
+|---|---|
+| `WithActor(username, class)` | the actor of every record whose `Event` names none. A controller passes its ServiceAccount, `system:serviceaccount:<namespace>:<name>`, and `audit.ClassController`; a tool executor its own principal and `audit.ClassAgent`. Without it, an `Event` with no `UserName` is still emitted, marked `krateo.audit.incomplete=actor` |
+| `WithWriter(w)` | the writer class the Emitter records for. `Emit` then marks every gap that class must mark (snowplow, `WriterRequest`, gets `method` marked). Without it, a gap is marked only when every writer class that can write the key would have to. A request or action writer must declare itself, so that its write records carry `krateo.audit.dry_run=false` |
+| `WithMeterProvider(mp)` | where the counter below goes. Default: `otel.GetMeterProvider()` |
+
+## Metrics
+
+| instrument | attribute | counts |
+|---|---|---|
+| `krateo.audit.records.incomplete` | `marker` | records emitted marked `krateo.audit.incomplete`, per marker. `marker="actor"`: emitted with no actor |
+
+`Emit` never drops a record, so there is no refusal count. The attribute names a
+marker, never a value of the record.
 
 ## Sending records to the audit trail
 
@@ -24,6 +41,10 @@ Export OTLP **logs** to the node-local collector agent:
 
 Gate the logs exporter behind a component knob that defaults off. If it's off,
 pass a nil logger (or no `Emitter`) and every `Emit` is a no-op.
+
+Name the logger's instrumentation scope as the schema's `populations` list it
+(see [schema.md](./schema.md)), so the live conformance queries find your rows.
+A new writer adds its scope there.
 
 ## Failure behaviour
 

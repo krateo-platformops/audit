@@ -1,0 +1,753 @@
+# Krateo AuditEvent schema, version 1 (krateo-platformops/installer#716).
+#
+# THE schema: one entry per attribute an audit record may carry. Nothing else
+# may appear on a record (the closed set). Go writers get their key constants
+# and the checker's rules from this file through `go generate` (schema_gen.go);
+# non-Go writers validate against it with cmd/auditschema.
+#
+# Writer classes (who records the event):
+#   request    (H) a person's request, recorded by snowplow
+#   gateway    (G) the agent gateway's hop record (the collector projection)
+#   action     (T) an agent's per-action record, written by whatever performs it
+#   controller (C) a controller reconcile
+#
+# Requirement levels, per writer class:
+#   required          the key is on every record of that writer
+#   conditional       required when `when` holds. With `check`, the checker
+#                     evaluates the condition on the record itself; without it,
+#                     the condition is not visible on the record and the checker
+#                     treats the key as optional, unless `markable`
+#   optional          may be written
+#   not_established   this writer cannot know it: it is never written, and the
+#                     per-action record carries it
+#   not_applicable    the fact does not exist for this writer
+#
+# `markable: true` means a writer that cannot establish the key omits it and
+# names its `marker` in krateo.audit.incomplete. The checker reports such a
+# record as incomplete, not as missing the key. A conditional key that is
+# markable but has no `check` must be either present or marked.
+#
+# `identity: true` keys carry who someone is, on purpose (the audit trail is
+# identity-bearing by design). They never reach a span or an ordinary log line.
+# `asserted: true` keys hold a value a client chose: never identity, never a
+# policy key.
+#
+# `only_when: <condition>` means the key may be written only while that
+# condition holds; the checker reports it, as unexpected, anywhere else.
+#
+# Keys with `replaced_by` are the v0.3 names, written side by side with their
+# replacement during migration window W1 (library v0.4.x) and removed in
+# v0.5.0. Such a key takes its replacement's writer levels, as optional: it is
+# allowed wherever its replacement is, must hold the same value, and is never
+# written without it. Emit adds each one beside its replacement unless the key
+# says `dual_write: false` (enduser.id: written only where it is written
+# today, never added).
+#
+# Emit never drops a record. A record missing a key its writer must write is
+# emitted without it and names the key's marker in krateo.audit.incomplete;
+# Check reports it as incomplete.
+
+updated: "2026-11-09T00:00:00Z" # the generated docs/schema.md timestamp
+schema_version: "1"
+event_name: audit
+
+writers:
+  - id: request
+    code: H
+    go: WriterRequest
+    description: A person's request, recorded by snowplow.
+  - id: gateway
+    code: G
+    go: WriterGateway
+    description: The agent gateway's hop record, projected by the collector.
+  - id: action
+    code: T
+    go: WriterAction
+    description: An agent's per-action record, written by whatever performs the action.
+  - id: controller
+    code: C
+    go: WriterController
+    description: A controller reconcile.
+
+# Conditions the checker evaluates on the record alone.
+conditions:
+  - id: k8s_target
+    go: CondK8sTarget
+    description: >-
+      The record names a Kubernetes object: k8s.namespace.name or any
+      krateo.audit.object_ref.* key is present.
+  - id: write
+    go: CondWrite
+    description: >-
+      krateo.audit.verb is a write: create, update, patch, delete,
+      deletecollection (a Kubernetes object), post or put (anything else).
+  - id: method_other
+    go: CondMethodOther
+    description: >-
+      http.request.method is _OTHER: the writer was given a method semconv
+      does not name.
+  - id: delegated
+    go: CondDelegated
+    description: >-
+      The record carries a delegation: krateo.audit.delegation or
+      krateo.audit.on_behalf_of.user.name is present.
+  - id: impersonated
+    go: CondImpersonated
+    description: >-
+      The record carries an impersonation: either
+      krateo.audit.impersonated_user.* key is present.
+
+# Exactly one target per record: a Kubernetes object or an external endpoint.
+# A controller's record names the object it reconciled in object_ref AND, for
+# an external write, the endpoint in server.address, so it needs at least one.
+target:
+  marker: target
+  keys: [krateo.audit.object_ref.resource, server.address]
+  writers:
+    request: exactly_one
+    gateway: exactly_one
+    action: exactly_one
+    controller: at_least_one
+
+# Where each writer's records land in default.krateo_audit, by the
+# instrumentation scope name of the logger it emits on. Used by
+# `auditschema sql` to build the live conformance queries.
+populations:
+  - scope: github.com/krateo-platformops/snowplow/audit
+    writer: request
+    who: snowplow (H, and T for an agent going through /call)
+  - scope: github.com/krateo-platformops/observability/gateway-audit
+    writer: gateway
+    who: the collector's gateway-audit projection
+  - scope: github.com/krateo-platformops/audit
+    writer: controller
+    who: access-review and identity-lifecycle (split by ServiceName)
+  - scope: rest-dynamic-controller/audit
+    writer: controller
+    who: rest-dynamic-controller
+
+# Rows written before this schema, kept as the positive control of the live
+# query: they carry no krateo.audit.schema_version and no event.name attribute.
+legacy_controls:
+  - scope: request
+    writer: gateway
+    who: the agent gateway's pre-2026-10-22 access-log rows
+
+keys:
+  # --- discriminator and schema -------------------------------------------
+  - name: event.name
+    go: EventName
+    type: string
+    semconv: deprecated
+    values: [audit]
+    description: >-
+      The discriminator the collector partitions on. Also set as the LogRecord
+      EventName; the attribute stays until the collector partitions on
+      EventName and krateo_audit has an EventName column.
+    writers: {request: required, gateway: required, action: required, controller: required}
+
+  - name: krateo.audit.schema_version
+    go: SchemaVersion
+    type: string
+    semconv: none
+    values: ["1"]
+    description: The schema version the record was written to. Tells migrated rows apart.
+    writers: {request: required, gateway: required, action: required, controller: required}
+
+  # --- who -----------------------------------------------------------------
+  - name: user.name
+    go: UserName
+    type: string
+    semconv: development
+    identity: true
+    description: >-
+      The principal performing the action (Kubernetes user.username). On a
+      delegated token, the outermost actor. For a controller,
+      system:serviceaccount:<namespace>:<name>. A writer that names no
+      actor still emits the record, without this key and marked actor: a
+      record is never dropped.
+    marker: actor
+    writers:
+      request: {level: required, markable: true}
+      gateway: {level: required, markable: true}
+      action: {level: required, markable: true}
+      controller: {level: required, markable: true}
+
+  - name: user.roles
+    go: UserRoles
+    type: string[]
+    semconv: development
+    identity: true
+    description: The groups of the principal in user.name (Kubernetes user.groups).
+    writers:
+      request: {level: conditional, when: the token carries groups}
+      gateway: {level: conditional, when: the token carries groups}
+      action: {level: conditional, when: the token carries groups}
+      controller: optional
+
+  - name: krateo.audit.actor_class
+    go: ActorClass
+    type: string
+    semconv: none
+    values: [human, agent, controller, service]
+    marker: actor_class
+    description: >-
+      The class of the principal in user.name, as its credential proves it:
+      authn's signed `principal` claim (UserInfo.ActorPrincipal()). Omitted,
+      never defaulted, when the claim is absent or unknown. Under
+      TOKEN_PASSTHROUGH an agent replays a person's token, so the class is
+      human; only a /delegate token names the agent.
+    writers:
+      request: {level: conditional, when: the token carries a known principal claim, markable: true}
+      gateway: {level: conditional, when: the token carries a known principal claim, markable: true}
+      action: required
+      controller: required
+
+  - name: krateo.audit.on_behalf_of.user.name
+    go: OnBehalfOf
+    type: string
+    semconv: none
+    identity: true
+    description: >-
+      On a delegated token, the person the actor acts for (the token's sub).
+      Read only from a signed act chain, never from baggage.
+    writers:
+      request: {level: conditional, when: the token carries a signed act chain, check: delegated}
+      gateway: {level: conditional, when: the token carries a signed act chain, check: delegated}
+      action: {level: conditional, when: the token carries a signed act chain, check: delegated}
+      controller: optional
+
+  - name: krateo.audit.delegation
+    go: Delegation
+    type: string[]
+    semconv: none
+    identity: true
+    format: delegation_link
+    description: >-
+      The signed act chain, outermost actor first and ending with the subject,
+      each entry <class>:<subject>. A link whose class is unknown is written
+      :<subject>.
+    writers:
+      request: {level: conditional, when: the token carries a signed act chain, check: delegated}
+      gateway: {level: conditional, when: the token carries a signed act chain, check: delegated}
+      action: {level: conditional, when: the token carries a signed act chain, check: delegated}
+      controller: optional
+
+  - name: krateo.audit.impersonated_user.name
+    go: ImpersonatedUser
+    type: string
+    semconv: none
+    identity: true
+    description: The user the writer impersonated (Kubernetes impersonatedUser.username).
+    writers:
+      request: {level: conditional, when: the writer impersonated, check: impersonated}
+      gateway: not_established
+      action: {level: conditional, when: the writer impersonated, check: impersonated}
+      controller: {level: conditional, when: the writer impersonated, check: impersonated}
+
+  - name: krateo.audit.impersonated_user.roles
+    go: ImpersonatedRoles
+    type: string[]
+    semconv: none
+    identity: true
+    description: The groups the writer impersonated (Kubernetes impersonatedUser.groups).
+    writers:
+      request: {level: conditional, when: the writer impersonated with groups}
+      gateway: not_established
+      action: {level: conditional, when: the writer impersonated with groups}
+      controller: {level: conditional, when: the writer impersonated with groups}
+
+  - name: krateo.audit.affected_user.name
+    go: AffectedUser
+    type: string
+    semconv: none
+    identity: true
+    description: >-
+      The user the action was done TO, when that is not the actor: separates
+      "done to alice" from "done by alice". Never equal to user.name.
+    writers:
+      request: not_applicable
+      gateway: not_applicable
+      action: optional
+      controller: {level: conditional, when: the object is about a user}
+
+  # --- what ----------------------------------------------------------------
+  - name: krateo.action
+    go: Action
+    type: string
+    semconv: none
+    marker: action
+    description: >-
+      The emit site's logical action, a literal of the writer (call, export,
+      restaction, rest.write, gateway.<backend type>). Not the verb.
+    writers:
+      request: {level: required, markable: true}
+      gateway: required
+      action: {level: required, markable: true}
+      controller: {level: required, markable: true}
+
+  - name: krateo.audit.verb
+    go: Verb
+    type: string
+    semconv: none
+    values: [get, list, watch, create, update, patch, delete, deletecollection, head, post, put, options]
+    marker: verb
+    description: >-
+      The verb as the apiserver derives it (RequestInfoFactory) for a
+      Kubernetes target; for anything else the lowercase method (the
+      apiserver's non-resource rule). Omitted and marked when the method is
+      not recognised.
+    writers:
+      request: {level: required, markable: true}
+      gateway: {level: required, markable: true}
+      action: {level: required, markable: true}
+      controller: {level: required, markable: true}
+
+  - name: http.request.method
+    go: HTTPMethod
+    type: string
+    semconv: stable
+    values: [CONNECT, DELETE, GET, HEAD, OPTIONS, PATCH, POST, PUT, QUERY, TRACE, _OTHER]
+    marker: method
+    description: >-
+      The HTTP method the writer sent or proxied; _OTHER for a method semconv
+      does not name (lowercase included), with the method as given in
+      http.request.method_original.
+    writers:
+      request: {level: required, markable: true}
+      gateway: {level: required, markable: true}
+      action: {level: conditional, when: the action was an HTTP request}
+      controller: {level: conditional, when: the action was an HTTP request}
+
+  - name: http.request.method_original
+    go: HTTPMethodOriginal
+    type: string
+    semconv: stable
+    description: >-
+      The HTTP method exactly as the writer was given it, when
+      http.request.method records it as _OTHER. Written only then, so no
+      value a writer passes is lost. Semconv also lets a framework that
+      treats methods as case-insensitive pair a canonical method with its
+      original; this schema does not: a method semconv does not name,
+      lowercase included, is _OTHER.
+    only_when: method_other
+    writers:
+      request: {level: conditional, when: http.request.method is _OTHER, check: method_other}
+      gateway: {level: conditional, when: http.request.method is _OTHER, check: method_other}
+      action: {level: conditional, when: http.request.method is _OTHER, check: method_other}
+      controller: {level: conditional, when: http.request.method is _OTHER, check: method_other}
+
+  - name: krateo.audit.dry_run
+    go: DryRun
+    type: bool
+    semconv: none
+    description: >-
+      true when the write was validated and not persisted (Kubernetes
+      dryRun=All, or an endpoint's own dry run), false for a write meant to
+      persist. On every write record of a writer that serves requests or
+      performs actions; never on a read. Readers use this key, not a suffix on
+      krateo.action.
+    only_when: write
+    writers:
+      request: {level: conditional, when: the record is a write, check: write}
+      gateway: not_established
+      action: {level: conditional, when: the record is a write, check: write}
+      controller: not_applicable
+
+  - name: krateo.audit.outcome
+    go: Outcome
+    type: string
+    semconv: none
+    values: [success, failure, denied]
+    description: >-
+      What the authority this writer sent to answered, at the protocol level
+      the writer observes. denied means the writer itself refused.
+    writers: {request: required, gateway: required, action: required, controller: required}
+
+  - name: http.response.status_code
+    go: HTTPStatusCode
+    type: int
+    semconv: stable
+    description: The status code the authority answered (Kubernetes responseStatus.code).
+    writers:
+      request: {level: conditional, when: the authority answered}
+      gateway: {level: conditional, when: the backend answered}
+      action: {level: conditional, when: the authority answered}
+      controller: {level: conditional, when: the action was an HTTP request that was answered}
+
+  - name: krateo.audit.preview
+    go: Preview
+    type: bool
+    semconv: none
+    marker: preview
+    description: >-
+      true when the target is a namespaced Kubernetes object whose Namespace
+      carries the label krateo.io/purpose=preview-sandbox, read by the writer
+      from apiserver state. false for any other Kubernetes target, a
+      cluster-scoped one included (installer#716 §2.4). Omitted and marked
+      when the Namespace could not be read. Not written for an external
+      endpoint alone. Not a retention key, not a filter.
+    writers:
+      request: {level: conditional, when: the target is a Kubernetes object (false when cluster-scoped), check: k8s_target, markable: true}
+      gateway: not_established
+      action: {level: conditional, when: the target is a Kubernetes object (false when cluster-scoped), check: k8s_target, markable: true}
+      controller: {level: conditional, when: the target is a Kubernetes object (false when cluster-scoped), check: k8s_target, markable: true}
+
+  # --- which target: a Kubernetes object ------------------------------------
+  - name: krateo.audit.object_ref.api_group
+    go: ObjectAPIGroup
+    type: string
+    semconv: none
+    description: The object's API group (objectRef.apiGroup). Omitted for the core group.
+    writers:
+      request: {level: conditional, when: Kubernetes target outside the core group}
+      gateway: not_established
+      action: {level: conditional, when: Kubernetes target outside the core group}
+      controller: {level: conditional, when: Kubernetes target outside the core group}
+
+  - name: krateo.audit.object_ref.api_version
+    go: ObjectAPIVersion
+    type: string
+    semconv: none
+    description: The object's API version (objectRef.apiVersion).
+    writers:
+      request: {level: conditional, when: Kubernetes target, check: k8s_target}
+      gateway: not_established
+      action: {level: conditional, when: Kubernetes target, check: k8s_target}
+      controller: {level: conditional, when: Kubernetes target, check: k8s_target}
+
+  - name: krateo.audit.object_ref.resource
+    go: ObjectResource
+    type: string
+    semconv: none
+    description: The object's resource, the plural (objectRef.resource). Every Kubernetes target names it.
+    writers:
+      request: {level: conditional, when: Kubernetes target, check: k8s_target}
+      gateway: not_established
+      action: {level: conditional, when: Kubernetes target, check: k8s_target}
+      controller: {level: conditional, when: Kubernetes target, check: k8s_target}
+
+  - name: krateo.audit.object_ref.subresource
+    go: ObjectSubresource
+    type: string
+    semconv: none
+    description: The addressed subresource (objectRef.subresource), e.g. status.
+    writers:
+      request: {level: conditional, when: a subresource was addressed}
+      gateway: not_established
+      action: {level: conditional, when: a subresource was addressed}
+      controller: {level: conditional, when: a subresource was addressed}
+
+  - name: krateo.audit.object_ref.name
+    go: ObjectName
+    type: string
+    semconv: none
+    description: The object's name (objectRef.name).
+    writers:
+      request: {level: conditional, when: the target is a named object}
+      gateway: not_established
+      action: {level: conditional, when: the target is a named object}
+      controller: {level: conditional, when: the target is a named object}
+
+  - name: k8s.namespace.name
+    go: Namespace
+    type: string
+    semconv: stable
+    description: The object's namespace (objectRef.namespace). sse-proxy scopes tenants by it.
+    writers:
+      request: {level: conditional, when: the target is namespaced}
+      gateway: not_established
+      action: {level: conditional, when: the target is namespaced}
+      controller: {level: conditional, when: the target is namespaced}
+
+  - name: krateo.audit.object_ref.kind
+    go: ObjectKind
+    type: string
+    semconv: none
+    description: The object's kind. Not part of objectRef; never a substitute for resource.
+    writers: {request: optional, gateway: not_established, action: optional, controller: optional}
+
+  - name: krateo.audit.object_ref.uid
+    go: ObjectUID
+    type: string
+    semconv: none
+    description: >-
+      The uid of the object written, as the authority returned it, or of the
+      object a controller acted on. The join key between a write and the
+      reconcile it caused.
+    writers:
+      request: {level: conditional, when: a successful, non-dry-run write}
+      gateway: not_established
+      action: {level: conditional, when: a successful, non-dry-run write}
+      controller: {level: conditional, when: the object is known}
+
+  - name: krateo.audit.object_ref.resource_version
+    go: ObjectResourceVersion
+    type: string
+    semconv: none
+    description: The resourceVersion the authority returned for the write, or the one a controller read.
+    writers:
+      request: {level: conditional, when: a successful, non-dry-run write that is not a DELETE}
+      gateway: not_established
+      action: {level: conditional, when: a successful, non-dry-run write that is not a DELETE}
+      controller: optional
+
+  - name: krateo.audit.object_ref.generation
+    go: ObjectGeneration
+    type: int
+    semconv: none
+    description: The generation the authority returned for the write, or the one a controller acted on.
+    writers:
+      request: {level: conditional, when: a successful, non-dry-run write that is not a DELETE}
+      gateway: not_established
+      action: {level: conditional, when: a successful, non-dry-run write that is not a DELETE}
+      controller: {level: conditional, when: the controller acted on a generation}
+
+  # --- which target: an external endpoint -----------------------------------
+  - name: server.address
+    go: ServerAddress
+    type: string
+    semconv: stable
+    description: The external endpoint the action was sent to, host[:port] only.
+    writers:
+      request: {level: conditional, when: the target is not a Kubernetes object}
+      gateway: required
+      action: {level: conditional, when: the target is not a Kubernetes object}
+      controller: {level: conditional, when: the controller wrote to an external endpoint}
+
+  # --- the request received -------------------------------------------------
+  - name: krateo.request.uri
+    go: RequestURI
+    type: string
+    semconv: none
+    identity: true
+    description: >-
+      The path and query the writer received (Kubernetes requestURI). Never a
+      scheme or host.
+    writers:
+      request: required
+      gateway: {level: conditional, when: the gateway proves no credential reaches the URI}
+      action: {level: conditional, when: the action was a received request}
+      controller: not_applicable
+
+  - name: krateo.request.source_ips
+    go: SourceIPs
+    type: string[]
+    semconv: none
+    identity: true
+    description: >-
+      Kubernetes sourceIPs: forwarded entries, then the TCP peer. Only the
+      last entry is established by the writer.
+    writers:
+      request: required
+      gateway: required
+      action: {level: conditional, when: the action was a received request}
+      controller: not_applicable
+
+  - name: user_agent.original
+    go: UserAgent
+    type: string
+    semconv: stable
+    description: The User-Agent header, cut at 1024 bytes with ...TRUNCATED, as the apiserver does.
+    writers:
+      request: {level: conditional, when: the header was sent}
+      gateway: {level: conditional, when: the header was sent}
+      action: {level: conditional, when: the header was sent}
+      controller: not_applicable
+
+  - name: krateo.request.received_time_unix_nano
+    go: RequestReceivedTime
+    type: int
+    semconv: none
+    description: When the request was received (Kubernetes requestReceivedTimestamp), Unix nanoseconds.
+    writers: {request: optional, gateway: optional, action: optional, controller: not_applicable}
+
+  - name: session.id
+    go: SessionID
+    type: string
+    semconv: development
+    description: >-
+      The business/session correlation id from W3C baggage. A correlation
+      key a client can set: never identity, never a policy key.
+    writers:
+      request: required
+      gateway: {level: conditional, when: inbound baggage carries it}
+      action: {level: conditional, when: inbound baggage carries it}
+      controller: not_applicable
+
+  - name: krateo.restaction.namespace
+    go: RESTActionNamespace
+    type: string
+    semconv: none
+    description: The namespace of the RESTAction whose stage performed the action.
+    writers:
+      request: {level: conditional, when: a RESTAction stage record}
+      gateway: not_applicable
+      action: not_applicable
+      controller: not_applicable
+
+  - name: krateo.restaction.name
+    go: RESTActionName
+    type: string
+    semconv: none
+    description: The name of the RESTAction whose stage performed the action.
+    writers:
+      request: {level: conditional, when: a RESTAction stage record}
+      gateway: not_applicable
+      action: not_applicable
+      controller: not_applicable
+
+  - name: krateo.restaction.stage
+    go: RESTActionStage
+    type: string
+    semconv: none
+    description: The api[] stage of the RESTAction that performed the action.
+    writers:
+      request: {level: conditional, when: a RESTAction stage record}
+      gateway: not_applicable
+      action: not_applicable
+      controller: not_applicable
+
+  # --- record annotations ---------------------------------------------------
+  - name: krateo.audit.incomplete
+    go: Incomplete
+    type: string
+    semconv: none
+    format: marker_list
+    description: >-
+      The comma-separated markers of the facts this record lacks, in a fixed
+      order. A gap is recorded, never hidden.
+    writers:
+      request: {level: conditional, when: the record has a gap}
+      gateway: {level: conditional, when: the record has a gap}
+      action: {level: conditional, when: the record has a gap}
+      controller: {level: conditional, when: the record has a gap}
+
+  - name: krateo.audit.no_trace_context
+    go: NoTraceContext
+    type: bool
+    semconv: none
+    values: ["true"]
+    description: true when the record was emitted with no valid span on its context, so it carries no TraceId.
+    writers:
+      request: {level: conditional, when: no span on the context}
+      gateway: {level: conditional, when: no span on the context}
+      action: {level: conditional, when: no span on the context}
+      controller: {level: conditional, when: no span on the context}
+
+  # --- gateway only ---------------------------------------------------------
+  - name: krateo.audit.gateway.route
+    go: GatewayRoute
+    type: string
+    semconv: none
+    description: The gateway route the request matched (gateway configuration).
+    writers: {request: not_applicable, gateway: required, action: not_applicable, controller: not_applicable}
+
+  - name: krateo.audit.gateway.mcp_tool
+    go: GatewayMCPTool
+    type: string
+    semconv: none
+    description: The MCP tool name of an MCP hop.
+    writers:
+      request: not_applicable
+      gateway: {level: conditional, when: an MCP hop}
+      action: not_applicable
+      controller: not_applicable
+
+  - name: krateo.audit.asserted.agent_host
+    go: AssertedAgentHost
+    type: string
+    semconv: none
+    asserted: true
+    description: >-
+      The client-controlled x-kagent-host header, recorded as an assertion.
+      Never an actor identity, never a policy key.
+    writers:
+      request: not_applicable
+      gateway: {level: conditional, when: the header was present}
+      action: not_applicable
+      controller: not_applicable
+
+  # --- v0.3 names, written side by side during W1, removed in v0.5.0 --------
+  - name: outcome
+    go: LegacyOutcome
+    type: string
+    semconv: none
+    values: [success, failure, denied]
+    replaced_by: krateo.audit.outcome
+    description: The v0.3 name of krateo.audit.outcome.
+
+  - name: enduser.id
+    go: LegacyEndUserID
+    type: string
+    semconv: deprecated
+    identity: true
+    replaced_by: user.name
+    dual_write: false
+    description: >-
+      The v0.3 copy of user.name; deprecated in semconv. Written only by a
+      writer that writes it today (snowplow; a library caller that sets
+      Event.EndUserID): Emit never adds it.
+
+  - name: k8s.resource.group
+    go: LegacyResourceGroup
+    type: string
+    semconv: none
+    replaced_by: krateo.audit.object_ref.api_group
+    description: The v0.3 name of krateo.audit.object_ref.api_group.
+
+  - name: k8s.resource.version
+    go: LegacyResourceVersion
+    type: string
+    semconv: none
+    replaced_by: krateo.audit.object_ref.api_version
+    description: The v0.3 name of krateo.audit.object_ref.api_version.
+
+  - name: k8s.resource.resource
+    go: LegacyResourceResource
+    type: string
+    semconv: none
+    replaced_by: krateo.audit.object_ref.resource
+    description: The v0.3 name of krateo.audit.object_ref.resource.
+
+  - name: k8s.resource.subresource
+    go: LegacyResourceSubresource
+    type: string
+    semconv: none
+    replaced_by: krateo.audit.object_ref.subresource
+    description: The v0.3 name of krateo.audit.object_ref.subresource.
+
+  - name: k8s.resource.kind
+    go: LegacyResourceKind
+    type: string
+    semconv: none
+    replaced_by: krateo.audit.object_ref.kind
+    description: The v0.3 name of krateo.audit.object_ref.kind.
+
+  - name: k8s.resource.name
+    go: LegacyResourceName
+    type: string
+    semconv: none
+    replaced_by: krateo.audit.object_ref.name
+    description: The v0.3 name of krateo.audit.object_ref.name.
+
+  - name: k8s.object.uid
+    go: LegacyObjectUID
+    type: string
+    semconv: none
+    replaced_by: krateo.audit.object_ref.uid
+    description: The v0.3 name of krateo.audit.object_ref.uid.
+
+  - name: k8s.object.generation
+    go: LegacyObjectGeneration
+    type: int
+    semconv: none
+    replaced_by: krateo.audit.object_ref.generation
+    description: The v0.3 name of krateo.audit.object_ref.generation.
+
+  - name: k8s.object.resource_version
+    go: LegacyObjectResourceVersion
+    type: string
+    semconv: none
+    replaced_by: krateo.audit.object_ref.resource_version
+    description: The v0.3 name of krateo.audit.object_ref.resource_version.

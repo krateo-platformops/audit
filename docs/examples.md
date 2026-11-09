@@ -4,7 +4,7 @@ title: audit — examples
 description: Index of the runnable examples for the audit package.
 resource: github.com/krateo-platformops/audit
 tags: [library, audit, examples]
-timestamp: 2026-10-28T00:00:00Z
+timestamp: 2026-11-09T00:00:00Z
 ---
 
 # Examples
