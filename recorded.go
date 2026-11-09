@@ -77,12 +77,16 @@ func MarkRecorded(ctx context.Context, span trace.Span) {
 // holder, runs next, then marks the span that was active when the request
 // reached it. Place it inside the middleware that starts the Server span
 // (otelhttp.NewHandler), so that span is the active one here.
+//
+// The mark is deferred, so it lands whenever next exits, a panic included: a
+// handler that emits and then panics still has its Server span marked, because
+// this defer runs before the outer middleware's deferred span End.
 func RecordedMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ctx := WithRecordedMarker(r.Context())
 		server := trace.SpanFromContext(ctx)
+		defer MarkRecorded(ctx, server)
 		next.ServeHTTP(w, r.WithContext(ctx))
-		MarkRecorded(ctx, server)
 	})
 }
 

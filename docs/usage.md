@@ -130,7 +130,8 @@ the logger has taken a record:
 
   It installs a holder on the request context. Every `Emit` on that context, or
   on one derived from it (a stage's client span included), sets the holder.
-  When the handler returns, it marks the Server span.
+  When the handler exits, by returning or by panicking, it marks the Server
+  span.
 - **A writer whose Server span is started elsewhere** does the same by hand:
   `ctx = audit.WithRecordedMarker(ctx)` where the Server span is active, then
   `audit.MarkRecorded(ctx, serverSpan)` before the span ends.
@@ -143,11 +144,16 @@ the logger has taken a record:
   and calls `audit.MarkRecorded(ctx, rootSpan)` before that span ends. The
   root span must still be recording when the reconcile emits. Emitting after
   the otelhttp client span has ended, with no holder, marks nothing.
-- **A marker that reaches no trace is never silent.** With no holder and no
-  recording span on `ctx` (no span, an ended one, or one that does not
-  record), the record is still emitted, the miss is counted under
-  `krateo.audit.recorded_marker.unattached{reason}` (`no_span` or
+- **What the code guarantees about a marker that may reach no trace.** With
+  no holder and no recording span on `ctx` (no span, an ended one, or one
+  that does not record), the record is still emitted, the miss is counted
+  under `krateo.audit.recorded_marker.unattached{reason}` (`no_span` or
   `not_recording`), and one WARN per process names the key and the reason.
+  With a holder, `RecordedMiddleware` marks the Server span whenever the
+  handler exits, a panic included. A writer that calls `MarkRecorded` by hand
+  gets the same only if it calls it before its span ends on every exit path
+  (a `defer` placed after the span's own deferred `End`); nothing counts a
+  holder that is set and never read.
 
 The marker is a boolean, only ever `true`, and never carries identity.
 

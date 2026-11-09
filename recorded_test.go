@@ -216,6 +216,36 @@ func TestRecordedMiddleware(t *testing.T) {
 	}
 }
 
+// A handler that emits and then panics: otelhttp ends the Server span in a
+// defer, so the span ends on the panic path too, and RecordedMiddleware's mark
+// must land before that End. The test recovers the panic outside the wrapper,
+// as net/http's server would.
+func TestRecordedMiddleware_AHandlerThatEmitsThenPanicsStillMarksTheServerSpan(t *testing.T) {
+	tr, sr := tracer(t)
+	e := recordedEmitter(t)
+	handler := RecordedMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		e.Emit(r.Context(), recordedEvent)
+		panic("handler failed after writing its record")
+	}))
+	// What otelhttp does around it: start the Server span, end it in a defer.
+	outer := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		ctx, server := tr.Start(r.Context(), "server", trace.WithSpanKind(trace.SpanKindServer))
+		defer server.End()
+		handler.ServeHTTP(w, r.WithContext(ctx))
+	})
+	var recovered any
+	func() {
+		defer func() { recovered = recover() }()
+		outer.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodPost, "/call", nil))
+	}()
+	if recovered == nil {
+		t.Fatalf("the handler did not panic: the arm tests nothing")
+	}
+	if v, ok := recordedOn(t, sr, "server"); !ok || !v {
+		t.Errorf("Server span after a panic: %s = %v (present %v), want true: the record was written", SpanKeyRecorded, v, ok)
+	}
+}
+
 // warnCapture is a slog handler that keeps every record at WARN or above.
 type warnCapture struct {
 	mu   sync.Mutex
@@ -320,6 +350,35 @@ func TestRecorded_AnEndedSpanIsNotMarkedButCountedAndWarnedOnce(t *testing.T) {
 	if len(attrs) != 2 || attrs["key"] != SpanKeyRecorded || attrs["reason"] != unattachedNotRecording {
 		t.Errorf("WARN attributes = %v, want exactly key=%s reason=%s (metadata only, no record values)",
 			attrs, SpanKeyRecorded, unattachedNotRecording)
+	}
+}
+
+// The first unattached emits race: N goroutines emit at once on an ended span.
+// Every miss is counted, and the once-per-process WARN is still exactly one.
+func TestRecorded_ConcurrentFirstUnattachedEmitsWarnExactlyOnce(t *testing.T) {
+	warns := captureWarns(t)
+	tr, _ := tracer(t)
+	e, _, reader := newBareEmitter(t, WithActor(testActor, ClassController))
+	ctx, span := tr.Start(context.Background(), "client", trace.WithSpanKind(trace.SpanKindClient))
+	span.End()
+	const n = 64
+	start := make(chan struct{})
+	var wg sync.WaitGroup
+	for i := 0; i < n; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			<-start
+			e.Emit(ctx, recordedEvent)
+		}()
+	}
+	close(start)
+	wg.Wait()
+	if got := unattachedCount(t, reader, unattachedNotRecording); got != n {
+		t.Errorf("%s{reason=%s} = %d, want %d: every concurrent miss counted", MetricRecordedMarkerUnattached, unattachedNotRecording, got, n)
+	}
+	if got := warns.warns(); len(got) != 1 {
+		t.Errorf("%d WARNs across %d concurrent first emits, want exactly 1", len(got), n)
 	}
 }
 
