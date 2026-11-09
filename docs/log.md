@@ -46,7 +46,11 @@ timestamp: 2026-11-09T00:00:00Z
   - marks the request recorded for the tail sampler,
     `krateo.audit.recorded=true` on its Server span, once the logger has
     taken a record. Through a `WithRecordedMarker` holder and
-    `RecordedMiddleware`, or on the active span when no holder is installed.
+    `RecordedMiddleware`, or on the active span when no holder is installed
+    and that span records. A marker that reaches no trace (no holder, and no
+    span, an ended one or one that does not record) is counted under
+    `krateo.audit.recorded_marker.unattached{reason}` and logged once per
+    process at WARN; the record is still emitted.
   Every v0.3 field and constant still compiles; `Event.EndUserID` is
   deprecated.
 - **2026-10-29**: requires Go 1.26 (`go 1.26.0`, was 1.25.6), and the module's

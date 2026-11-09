@@ -135,8 +135,19 @@ the logger has taken a record:
   `ctx = audit.WithRecordedMarker(ctx)` where the Server span is active, then
   `audit.MarkRecorded(ctx, serverSpan)` before the span ends.
 - **With no holder installed**, `Emit` sets the attribute on the span active
-  on its `ctx`. That is right when that span is the Server span, and wrong
-  when it is a client span, which is why the holder exists.
+  on its `ctx`, while that span records. That is right when that span is the
+  Server span, and wrong when it is a client span, which is why the holder
+  exists.
+- **A controller with no Server span** (rest-dynamic-controller) installs the
+  holder at its reconcile's root span, `ctx = audit.WithRecordedMarker(ctx)`,
+  and calls `audit.MarkRecorded(ctx, rootSpan)` before that span ends. The
+  root span must still be recording when the reconcile emits. Emitting after
+  the otelhttp client span has ended, with no holder, marks nothing.
+- **A marker that reaches no trace is never silent.** With no holder and no
+  recording span on `ctx` (no span, an ended one, or one that does not
+  record), the record is still emitted, the miss is counted under
+  `krateo.audit.recorded_marker.unattached{reason}` (`no_span` or
+  `not_recording`), and one WARN per process names the key and the reason.
 
 The marker is a boolean, only ever `true`, and never carries identity.
 

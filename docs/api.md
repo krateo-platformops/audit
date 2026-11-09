@@ -32,6 +32,7 @@ func WithWriter(w Writer) Option                    // which writer class's gaps
 func WithMeterProvider(mp metric.MeterProvider) Option
 
 const MetricIncomplete = "krateo.audit.records.incomplete" // {marker=...}; marker="actor": emitted with no actor
+const MetricRecordedMarkerUnattached = "krateo.audit.recorded_marker.unattached" // {reason=no_span|not_recording}: the recorded marker reached no trace
 ```
 
 `Emit` is the one writer, and **it never drops a record**:
@@ -144,9 +145,17 @@ marks the request:
   at `Emit` time may be a stage's client span. The wrapper then marks the
   Server span from the holder with `MarkRecorded`;
 - **without one**, it sets `SpanKeyRecorded=true` on `trace.SpanFromContext(ctx)`,
-  which is right when the Server span is the active one.
+  but only while that span records (`IsRecording()`). That is right when the
+  Server span is the active one.
+- **with neither** (no span on `ctx`, a span that has already ended, or one
+  that does not record), the marker reaches no trace. The OTel SDK drops
+  attributes set on an ended span without an error, so `Emit` does not try.
+  The record is still emitted. The miss is counted under
+  `MetricRecordedMarkerUnattached`, `{reason="no_span"}` or
+  `{reason="not_recording"}`, and logged once per process at WARN through
+  `slog.Default()`, with the key and the reason only.
 
-A nil Emitter or logger, or a disabled logger, marks nothing. The marker is a
+A nil Emitter or logger, or a disabled logger, marks and counts nothing. The marker is a
 boolean, only ever `true`, and never identity (snowplow#848). It is a span
 attribute, not a record key: `Check` reports it on a record as `not-in-schema`.
 Concurrent `Emit`s on one holder or one span are safe.

@@ -2,6 +2,7 @@ package audit
 
 import (
 	"context"
+	"log/slog"
 	"net/http"
 	"sync/atomic"
 
@@ -9,10 +10,20 @@ import (
 	"go.opentelemetry.io/otel/trace"
 )
 
-// SpanKeyRecorded is the span attribute that says the request's handler wrote
-// an audit record: krateo.audit.recorded=true on the request's Server span.
-// observability's tail sampler keeps such traces whole, with one rule for
-// every writer (span.attributes["krateo.audit.recorded"] == true).
+// SpanKeyRecorded is the span attribute that says a span's work wrote an audit
+// record: krateo.audit.recorded=true. observability's tail sampler keeps such
+// traces whole, with one rule for every writer
+// (span.attributes["krateo.audit.recorded"] == true).
+//
+// The marker reaches a trace only if the caller's ctx carries a holder or a
+// recording span at Emit time. Emit marks the WithRecordedMarker holder when one
+// is installed; otherwise the span active on ctx, whatever its kind (a
+// controller with no Server span has its client span marked), but only while
+// that span records. An ended span drops attributes silently, so Emit does not
+// mark it. When neither target exists, the record is still emitted, never
+// dropped; the miss is counted under MetricRecordedMarkerUnattached{reason}
+// and logged once per process at WARN (slog.Default), naming the key and the
+// reason only.
 //
 // It is a span attribute, not a record attribute: it is not in schema/v1.yaml,
 // and Check reports it on a record as not-in-schema. It is a boolean, only
@@ -37,7 +48,8 @@ type recordedMarkerKey struct{}
 // nested wrappers share one.
 //
 // Without a holder, Emit sets SpanKeyRecorded on trace.SpanFromContext(ctx)
-// itself, which is right when the Server span is the active one.
+// itself, while that span records: right when the Server span is the active
+// one, and the only target for a writer with no Server span.
 func WithRecordedMarker(ctx context.Context) context.Context {
 	if markerFrom(ctx) != nil {
 		return ctx
@@ -74,14 +86,46 @@ func RecordedMiddleware(next http.Handler) http.Handler {
 	})
 }
 
-// markRecorded is Emit's half: the holder when one is installed, else the
-// span active on ctx.
-func markRecorded(ctx context.Context) {
+// Why Emit could not attach the marker (the reason attribute of
+// MetricRecordedMarkerUnattached, and of its one WARN).
+const (
+	unattachedNoSpan       = "no_span"       // no holder, and no span on ctx
+	unattachedNotRecording = "not_recording" // no holder, and the span on ctx has ended or does not record
+)
+
+// markRecorded is Emit's half. It marks the holder when one is installed,
+// else the span active on ctx, of any kind, but only while that span records:
+// an ended span drops attributes silently. It returns "" when the marker is
+// attached, else why not.
+func markRecorded(ctx context.Context) (unattached string) {
 	if m := markerFrom(ctx); m != nil {
 		m.v.Store(true)
+		return ""
+	}
+	span := trace.SpanFromContext(ctx)
+	if !span.IsRecording() {
+		if !span.SpanContext().IsValid() {
+			return unattachedNoSpan
+		}
+		return unattachedNotRecording
+	}
+	span.SetAttributes(attribute.Bool(SpanKeyRecorded, true))
+	return ""
+}
+
+// unattachedWarned makes the WARN about an unattached marker once per
+// process: the counter carries every occurrence, and one log line is enough
+// to point an operator at it.
+var unattachedWarned atomic.Bool
+
+// warnUnattached logs, once per process, that a record's marker reached no
+// trace. Metadata only: the key and the reason, never a value of the record.
+func warnUnattached(reason string) {
+	if !unattachedWarned.CompareAndSwap(false, true) {
 		return
 	}
-	trace.SpanFromContext(ctx).SetAttributes(attribute.Bool(SpanKeyRecorded, true))
+	slog.Warn("audit: the recorded marker reached no trace (no WithRecordedMarker holder and no recording span on ctx); the record itself was emitted, every miss is counted under "+MetricRecordedMarkerUnattached,
+		"key", SpanKeyRecorded, "reason", reason)
 }
 
 func markerFrom(ctx context.Context) *recordedMarker {

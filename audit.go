@@ -184,6 +184,7 @@ type Emitter struct {
 	writer Writer
 
 	incomplete metric.Int64Counter
+	unattached metric.Int64Counter
 }
 
 type principal struct {
@@ -226,6 +227,13 @@ func WithMeterProvider(mp metric.MeterProvider) Option {
 // record.
 const MetricIncomplete = "krateo.audit.records.incomplete"
 
+// MetricRecordedMarkerUnattached counts the records Emit emitted whose
+// krateo.audit.recorded marker reached no trace: no WithRecordedMarker holder
+// on ctx, and no recording span. {reason="no_span"}: no span at all;
+// {reason="not_recording"}: the span on ctx had ended or does not record. The
+// record itself was emitted. No identity in the attribute.
+const MetricRecordedMarkerUnattached = "krateo.audit.recorded_marker.unattached"
+
 const meterName = "github.com/krateo-platformops/audit"
 
 // New returns an Emitter bound to logger, typically
@@ -238,9 +246,12 @@ func New(logger log.Logger, opts ...Option) *Emitter {
 	if o.meters == nil {
 		o.meters = otel.GetMeterProvider()
 	}
-	incomplete, _ := o.meters.Meter(meterName).Int64Counter(MetricIncomplete, metric.WithUnit("{record}"),
+	m := o.meters.Meter(meterName)
+	incomplete, _ := m.Int64Counter(MetricIncomplete, metric.WithUnit("{record}"),
 		metric.WithDescription("Audit records emitted marked krateo.audit.incomplete, by marker. actor: the record named no actor."))
-	return &Emitter{logger: logger, actor: o.actor, writer: o.writer, incomplete: incomplete}
+	unattached, _ := m.Int64Counter(MetricRecordedMarkerUnattached, metric.WithUnit("{record}"),
+		metric.WithDescription("Audit records emitted whose krateo.audit.recorded marker reached no trace: no WithRecordedMarker holder, and no recording span on ctx. by reason: no_span, not_recording."))
+	return &Emitter{logger: logger, actor: o.actor, writer: o.writer, incomplete: incomplete, unattached: unattached}
 }
 
 // Emit writes one canonical AuditEvent. ctx should carry the active span (so the
@@ -260,7 +271,10 @@ func New(logger log.Logger, opts ...Option) *Emitter {
 //   - once the logger has taken the record (it reports itself enabled for
 //     it), it marks the request recorded: on ctx's WithRecordedMarker holder
 //     when one is installed, else SpanKeyRecorded=true on the span active on
-//     ctx. A nil Emitter or logger, or a disabled logger, marks nothing.
+//     ctx while that span records. With neither, the marker reaches no trace:
+//     that is counted under MetricRecordedMarkerUnattached and logged once
+//     per process at WARN, and the record stays emitted. A nil Emitter or
+//     logger, or a disabled logger, marks and counts nothing.
 func (e *Emitter) Emit(ctx context.Context, ev Event) {
 	if e == nil || e.logger == nil {
 		return
@@ -298,11 +312,16 @@ func (e *Emitter) Emit(ctx context.Context, ev Event) {
 	// Emit always hands the record over (a record is never dropped here), and
 	// marks the request recorded only when the logger says it processes the
 	// record: a disabled logger drops it, and a dropped record must not keep a
-	// trace on its behalf.
+	// trace on its behalf. A marker with no target is never silent: it is
+	// counted, and logged once per process.
 	handed := e.logger.Enabled(ctx, log.EnabledParameters{Severity: rec.Severity(), EventName: EventName})
 	e.logger.Emit(ctx, rec)
-	if handed {
-		markRecorded(ctx)
+	if !handed {
+		return
+	}
+	if reason := markRecorded(ctx); reason != "" {
+		e.unattached.Add(ctx, 1, metric.WithAttributes(attribute.String("reason", reason)))
+		warnUnattached(reason)
 	}
 }
 
