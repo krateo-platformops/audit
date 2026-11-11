@@ -152,17 +152,52 @@ func (e *sqlEval) unary(row map[string]string) (bool, error) {
 			}
 		}
 		return false, nil
+	case "has":
+		// has(splitByChar('<sep>', <term>), '<element>'): the marker test.
+		for _, t := range []string{"has", "(", "splitByChar", "("} {
+			if err := e.eat(t); err != nil {
+				return false, err
+			}
+		}
+		sep, err := e.term(row)
+		if err == nil {
+			err = e.eat(",")
+		}
+		var list, elem string
+		if err == nil {
+			list, err = e.term(row)
+		}
+		for _, t := range []string{")", ","} {
+			if err == nil {
+				err = e.eat(t)
+			}
+		}
+		if err == nil {
+			elem, err = e.term(row)
+		}
+		if err == nil {
+			err = e.eat(")")
+		}
+		if err != nil || len(sep) != 1 {
+			return false, fmt.Errorf("has(splitByChar(...)): %v (separator %q)", err, sep)
+		}
+		return slices.Contains(strings.Split(list, sep), elem), nil
 	}
 	left, err := e.term(row)
 	if err != nil {
 		return false, err
 	}
-	switch op := e.peek(); op {
-	case "=", "!=":
+	negate := false
+	if e.peek() == "NOT" && e.pos+1 < len(e.toks) && e.toks[e.pos+1] == "IN" {
+		negate = true
+		e.pos++
+	}
+	switch op := e.peek(); {
+	case !negate && (op == "=" || op == "!="):
 		e.pos++
 		right, err := e.term(row)
 		return (left == right) == (op == "="), err
-	case "IN":
+	case op == "IN":
 		e.pos++
 		if err := e.eat("("); err != nil {
 			return false, err
@@ -179,12 +214,13 @@ func (e *sqlEval) unary(row map[string]string) (bool, error) {
 			}
 			e.pos++
 		}
-		return slices.Contains(set, left), e.eat(")")
+		return slices.Contains(set, left) != negate, e.eat(")")
 	}
 	return false, fmt.Errorf("want a comparison, got %q at token %d", e.peek(), e.pos)
 }
 
-// term is a string: a literal, or LogAttributes['k'] (” when absent).
+// term is a string: a literal, or LogAttributes['k'] (the empty string when
+// the key is absent).
 func (e *sqlEval) term(row map[string]string) (string, error) {
 	t := e.peek()
 	if strings.HasPrefix(t, "'") {
@@ -233,8 +269,15 @@ func rowOf(attrs []attribute.KeyValue) map[string]string {
 // The evaluator itself reads the operators it claims to (positive and
 // negative controls), so a green arm below is not an evaluator that says yes.
 func TestSQLEval_Controls(t *testing.T) {
-	row := map[string]string{"a": "x", "p.q": "1"}
+	row := map[string]string{"a": "x", "p.q": "1", "m": "verb,preview"}
 	for pred, want := range map[string]bool{
+		"LogAttributes['a'] NOT IN ('', 'x')":                           false,
+		"LogAttributes['a'] NOT IN ('', 'y')":                           true,
+		"LogAttributes['b'] NOT IN ('', 'y')":                           false,
+		"has(splitByChar(',', LogAttributes['m']), 'preview')":          true,
+		"has(splitByChar(',', LogAttributes['m']), 'actor')":            false,
+		"has(splitByChar(',', LogAttributes['b']), 'actor')":            false,
+		"NOT has(splitByChar(',', LogAttributes['m']), 'verb')":         false,
 		"LogAttributes['a'] = 'x'":                                      true,
 		"LogAttributes['a'] = 'y'":                                      false,
 		"LogAttributes['a'] != 'x'":                                     false,
@@ -253,8 +296,10 @@ func TestSQLEval_Controls(t *testing.T) {
 			t.Errorf("%s = %v, %v; want %v", pred, got, err, want)
 		}
 	}
-	if _, err := evalSQL("has(splitByChar(',', 'x'), 'y')", row); err == nil {
-		t.Errorf("the evaluator accepted SQL it does not implement")
+	for _, unimplemented := range []string{"length(LogAttributes['a']) = 1", "LogAttributes['a'] NOT = 'x'", "has(splitByChar(', ', LogAttributes['m']), 'verb')"} {
+		if _, err := evalSQL(unimplemented, row); err == nil {
+			t.Errorf("the evaluator accepted SQL it does not implement: %s", unimplemented)
+		}
 	}
 }
 
