@@ -9,6 +9,15 @@ timestamp: 2026-11-11T00:00:00Z
 
 # Log
 
+- **2026-11-11**: [coverage.md](./coverage.md), the cross-component audit
+  inventory (audit#9, AUDIT-4). It has one table per writer class and one row
+  per emit site: owner, scope, writer, `krateo.action`, target, verb,
+  outcomes, and state (done or pending, from merged PRs only, with the link).
+  Seeded with snowplow's `/call`, `/call/dry-run`, export and RESTAction-stage
+  sites, and authn's login, step-up, `/delegate` and background rows (pending
+  authn#123). `TestCoverage_EveryRowHasItsPopulation` fails when a row's scope
+  is not a population of its own writer in `schema/v1.yaml`. Docs and a test
+  only; no code or schema change.
 - **2026-11-11**: schema v1 gains two keys, for v0.5.0 (audit#8, audit#10;
   AUDIT-4, installer#410). Additive: every v0.4.0 record stays valid (a test
   replays records v0.4.0's own `Emit` wrote and expects v0.4.0's own check

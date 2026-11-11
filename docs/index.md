@@ -18,6 +18,7 @@ is built on. It ships no image, no chart and no CRDs.
 
 - [overview](./overview.md): why one shared emitter and schema, and how a record flows
 - [schema](./schema.md): the record contract, key by key, per writer (generated)
+- [coverage](./coverage.md): the cross-component inventory of emit sites, per writer (AUDIT-4)
 - [usage](./usage.md): when to emit, the actor, adopting v0.4 and v0.5, testing a writer, the live check
 - [configuration](./configuration.md): the Emitter's options and metrics, and the OTel Logs SDK setup
 - [api](./api.md): the Go API, audittest and cmd/auditschema
