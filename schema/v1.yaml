@@ -408,11 +408,14 @@ keys:
       value cannot write it.
     only_when: denied
     writers:
-      # authn 0.41.0's name guard; authn owns each value's meaning. name_claimed
-      # includes the write-time race re-check; name_held_legacy is a pre-claims
-      # Secret written by a different strategy (no claim exists, so it is not
-      # name_claimed).
-      request: {level: optional, values: [name_reserved, name_claimed, name_held_legacy, name_provisioned, name_bound, system_group]}
+      # authn's refusals; authn owns each value's meaning. The first six are
+      # authn 0.41.0's name guard: name_claimed includes the write-time race
+      # re-check; name_held_legacy is a pre-claims Secret written by a different
+      # strategy (no claim exists, so it is not name_claimed).
+      # group_not_allowed: an OIDCConfig's allowedGroups refused an identity the
+      # IdP verified, because it is in none of the admitted groups (403
+      # GroupNotAllowed).
+      request: {level: optional, values: [name_reserved, name_claimed, name_held_legacy, name_provisioned, name_bound, system_group, group_not_allowed]}
       gateway: not_applicable
       action: not_applicable
       # kept_resource_policy: helm declined a delete because the object carries

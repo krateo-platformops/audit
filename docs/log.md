@@ -26,9 +26,11 @@ timestamp: 2026-11-11T00:00:00Z
     itself refused, only on a `denied` record (anywhere else `unexpected`),
     from a closed set **per writer class** (`values:` on a writer's
     requirement, `Requirement.Values`, generated `DenialReason*`
-    constants). `request`: authn's name guard (`name_reserved`,
-    `name_claimed`, `name_held_legacy`, `name_provisioned`, `name_bound`,
-    `system_group`); `controller`: `kept_resource_policy`, a delete helm
+    constants). `request`: authn's refusals, its name guard
+    (`name_reserved`, `name_claimed`, `name_held_legacy`,
+    `name_provisioned`, `name_bound`, `system_group`) and its OIDC
+    `allowedGroups` gate (`group_not_allowed`: a verified identity in none
+    of the admitted groups, 403 GroupNotAllowed); `controller`: `kept_resource_policy`, a delete helm
     declined because of `helm.sh/resource-policy: keep` (verb `delete`,
     outcome `denied`). The kept deletion is that key, not a body value:
     `Check` reads attributes only.

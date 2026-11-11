@@ -68,6 +68,10 @@ func TestCheck_CauseRefAndDenialReason(t *testing.T) {
 		{"denied without a reason", WriterController, deniedRecord(child), nil},
 		{"authn refusal", WriterRequest, authnDenied, nil},
 		{"another authn value", WriterRequest, with(authnDenied, attribute.String(KeyDenialReason, DenialReasonSystemGroup)), nil},
+		// authn's OIDC allowedGroups gate: a verified identity in none of the admitted groups.
+		{"authn group gate", WriterRequest, with(authnDenied, attribute.String(KeyDenialReason, DenialReasonGroupNotAllowed)), nil},
+		{"authn group gate on a success", WriterRequest, with(authnDenied, attribute.String(KeyDenialReason, DenialReasonGroupNotAllowed), attribute.String(KeyOutcome, OutcomeSuccess), attribute.String(KeyLegacyOutcome, OutcomeSuccess)), []Violation{v(KeyDenialReason, ReasonUnexpected)}},
+		{"authn group gate on a controller", WriterController, with(kept, attribute.String(KeyDenialReason, DenialReasonGroupNotAllowed)), []Violation{v(KeyDenialReason, ReasonBadEnum)}},
 		{"a reason on a success", WriterController, with(kept, attribute.String(KeyOutcome, OutcomeSuccess), attribute.String(KeyLegacyOutcome, OutcomeSuccess)), []Violation{v(KeyDenialReason, ReasonUnexpected)}},
 		{"a reason on a failure", WriterRequest, with(authnDenied, attribute.String(KeyOutcome, OutcomeFailure), attribute.String(KeyLegacyOutcome, OutcomeFailure)), []Violation{v(KeyDenialReason, ReasonUnexpected)}},
 		{"a reason with no outcome at all", WriterController, without(kept, KeyOutcome, KeyLegacyOutcome), []Violation{v(KeyDenialReason, ReasonUnexpected), v(KeyOutcome, ReasonMissing)}},
@@ -131,7 +135,7 @@ func TestSchema_CauseRefAndDenialReason(t *testing.T) {
 		t.Errorf("denial_reason: %+v", d)
 	}
 	want := map[Writer][]string{
-		WriterRequest:    {"name_reserved", "name_claimed", "name_held_legacy", "name_provisioned", "name_bound", "system_group"},
+		WriterRequest:    {"name_reserved", "name_claimed", "name_held_legacy", "name_provisioned", "name_bound", "system_group", "group_not_allowed"},
 		WriterController: {"kept_resource_policy"},
 	}
 	for _, w := range Writers() {
@@ -147,6 +151,7 @@ func TestSchema_CauseRefAndDenialReason(t *testing.T) {
 		DenialReasonNameReserved: "name_reserved", DenialReasonNameClaimed: "name_claimed",
 		DenialReasonNameHeldLegacy: "name_held_legacy", DenialReasonNameProvisioned: "name_provisioned",
 		DenialReasonNameBound: "name_bound", DenialReasonSystemGroup: "system_group",
+		DenialReasonGroupNotAllowed:    "group_not_allowed",
 		DenialReasonKeptResourcePolicy: "kept_resource_policy",
 	} {
 		if c != v {

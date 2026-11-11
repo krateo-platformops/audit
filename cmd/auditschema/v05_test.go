@@ -117,6 +117,8 @@ func TestCheck_CauseRefAndDenialReasonRules(t *testing.T) {
 		{"pruned child", "controller", controllerRecord, nil},
 		{"kept deletion", "controller", kept, nil},
 		{"authn refusal", "request", authnDenied, nil},
+		{"authn group gate", "request", sub(authnDenied, "name_held_legacy", "group_not_allowed"), nil},
+		{"authn group gate on a controller", "controller", sub(kept, "kept_resource_policy", "group_not_allowed"), []string{"krateo.audit.denial_reason: bad-enum"}},
 		{"a partial cause_ref", "controller", sub(sub(controllerRecord, causeUID, ""), causeVersion, ""),
 			[]string{"krateo.audit.cause_ref.api_version: missing", "krateo.audit.cause_ref.uid: missing"}},
 		{"a cause without its uid", "controller", sub(controllerRecord, causeUID, ""), []string{"krateo.audit.cause_ref.uid: missing"}},
