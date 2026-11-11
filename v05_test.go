@@ -141,7 +141,8 @@ func TestSchema_CauseRefAndDenialReason(t *testing.T) {
 		// group refusal (audit#12).
 		WriterRequest: {"name_reserved", "name_claimed", "name_held_legacy", "name_provisioned", "name_bound", "system_group", "group_not_allowed",
 			"delegation_not_allowed", "delegation_too_deep", "platform_group", "name_missing",
-			"subject_token_expired", "subject_token_invalid"}, // v0.7.0 (audit#18)
+			"subject_token_expired", "subject_token_invalid", // v0.7.0 (audit#18)
+			"stepup_not_enabled", "insufficient_assurance", "stale_authentication", "no_mapping", "ambiguous_mapping", "not_a_service_account"}, // v0.8.0 (audit#20)
 		WriterController: {"kept_resource_policy"},
 	}
 	for _, w := range Writers() {

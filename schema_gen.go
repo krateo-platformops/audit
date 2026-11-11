@@ -353,6 +353,24 @@ const (
 	// DenialReasonSubjectTokenInvalid is "subject_token_invalid", a
 	// krateo.audit.denial_reason value of writer request.
 	DenialReasonSubjectTokenInvalid = "subject_token_invalid"
+	// DenialReasonStepupNotEnabled is "stepup_not_enabled", a
+	// krateo.audit.denial_reason value of writer request.
+	DenialReasonStepupNotEnabled = "stepup_not_enabled"
+	// DenialReasonInsufficientAssurance is "insufficient_assurance", a
+	// krateo.audit.denial_reason value of writer request.
+	DenialReasonInsufficientAssurance = "insufficient_assurance"
+	// DenialReasonStaleAuthentication is "stale_authentication", a
+	// krateo.audit.denial_reason value of writer request.
+	DenialReasonStaleAuthentication = "stale_authentication"
+	// DenialReasonNoMapping is "no_mapping", a krateo.audit.denial_reason value of
+	// writer request.
+	DenialReasonNoMapping = "no_mapping"
+	// DenialReasonAmbiguousMapping is "ambiguous_mapping", a
+	// krateo.audit.denial_reason value of writer request.
+	DenialReasonAmbiguousMapping = "ambiguous_mapping"
+	// DenialReasonNotAServiceAccount is "not_a_service_account", a
+	// krateo.audit.denial_reason value of writer request.
+	DenialReasonNotAServiceAccount = "not_a_service_account"
 	// DenialReasonKeptResourcePolicy is "kept_resource_policy", a
 	// krateo.audit.denial_reason value of writer controller.
 	DenialReasonKeptResourcePolicy = "kept_resource_policy"
@@ -855,7 +873,7 @@ var schemaKeys = []KeySpec{
 		LessThan:       "",
 		Description:    "Why the writer itself refused, on a denied record only: one of the closed values its writer class declares, never free text. The caller's answer can stay opaque while the audit reader gets the reason. Optional: a denied record without it conforms. A writer class with no declared value cannot write it.",
 		Writers: map[Writer]Requirement{
-			WriterRequest:    {Level: LevelOptional, Values: []string{"name_reserved", "name_claimed", "name_held_legacy", "name_provisioned", "name_bound", "system_group", "group_not_allowed", "delegation_not_allowed", "delegation_too_deep", "platform_group", "name_missing", "subject_token_expired", "subject_token_invalid"}},
+			WriterRequest:    {Level: LevelOptional, Values: []string{"name_reserved", "name_claimed", "name_held_legacy", "name_provisioned", "name_bound", "system_group", "group_not_allowed", "delegation_not_allowed", "delegation_too_deep", "platform_group", "name_missing", "subject_token_expired", "subject_token_invalid", "stepup_not_enabled", "insufficient_assurance", "stale_authentication", "no_mapping", "ambiguous_mapping", "not_a_service_account"}},
 			WriterGateway:    {Level: LevelNotApplicable},
 			WriterAction:     {Level: LevelNotApplicable},
 			WriterController: {Level: LevelOptional, Values: []string{"kept_resource_policy"}},
