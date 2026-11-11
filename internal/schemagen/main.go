@@ -353,8 +353,11 @@ func (k *key) validateWriterValues(writers []writer) error {
 	if !declared {
 		return nil
 	}
-	if k.Type != "string" || len(k.Values) > 0 {
-		return fmt.Errorf("key %q: per-writer values need a string key with no key-level values", k.Name)
+	if k.Type != "string" {
+		return fmt.Errorf("key %q: per-writer values need a string key, not %s", k.Name, k.Type)
+	}
+	if len(k.Values) > 0 {
+		return fmt.Errorf("key %q: per-writer values and key-level values exclude each other", k.Name)
 	}
 	for _, w := range writers {
 		r := k.Writers[w.ID]

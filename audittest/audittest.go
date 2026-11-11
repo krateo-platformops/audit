@@ -226,7 +226,12 @@ func AssertEnumsDetected(t testing.TB, w audit.Writer, rec sdklog.Record, opts .
 	if vs := unaccepted(slices.Clone(base), opts); len(vs) > 0 {
 		t.Fatalf("audittest: falsifier needs a conformant record first; it reports %v", vs)
 	}
-	tested := 0
+	var tested []string
+	defer func() {
+		if enumsTested != nil {
+			enumsTested(tested)
+		}
+	}()
 	for i, kv := range attrs {
 		spec, ok := audit.LookupKey(string(kv.Key))
 		if !ok || len(spec.Values)+len(spec.Writers[w].Values) == 0 {
@@ -241,7 +246,7 @@ func AssertEnumsDetected(t testing.TB, w audit.Writer, rec sdklog.Record, opts .
 		default:
 			continue
 		}
-		tested++
+		tested = append(tested, spec.Name)
 		mutated := slices.Clone(attrs)
 		mutated[i] = attribute.KeyValue{Key: kv.Key, Value: bad}
 		related := relatedTo(spec.Name, attrs, mutated)
@@ -258,10 +263,16 @@ func AssertEnumsDetected(t testing.TB, w audit.Writer, rec sdklog.Record, opts .
 			}
 		}
 	}
-	if tested == 0 {
+	if len(tested) == 0 {
 		t.Fatalf("audittest: the record carries no key with a closed set for %s: the falsifier would test nothing", w)
 	}
 }
+
+// enumsTested, when set (by this package's own tests only), receives the keys
+// one AssertEnumsDetected call exercised, so a test can pin which closed sets
+// it covers: a writer's own set (krateo.audit.denial_reason) must not go quiet
+// behind the key-level enums that every record carries.
+var enumsTested func(keys []string)
 
 // AssertRequiredKeysDetected runs AssertRemovalDetected for every key writer
 // w must write on rec that rec carries (audit.RequiredKeys): each one, removed

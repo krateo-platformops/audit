@@ -39,6 +39,9 @@ timestamp: 2026-11-11T00:00:00Z
     refuses a scope listed twice: the live queries judge a scope's rows by
     the one writer it is listed under.
   - `audittest.AssertEnumsDetected`, the falsifier for the closed sets.
+  - Go API: `audit.Requirement` gains `Values []string`, so it is no longer
+    comparable with `==` (a struct holding a slice). No record changes; a
+    caller that compared two `Requirement`s compares their fields instead.
   - [schema.md](./schema.md) shows the kept-deletion and pruned-child
     records as Go literals, copied by the generator from
     `contract_records_test.go`, whose tests emit and check them.
@@ -66,8 +69,9 @@ timestamp: 2026-11-11T00:00:00Z
     `krateo.audit.actor_class`, `verb`, `preview`, delegation, impersonation,
     `affected_user`, the request facts) and, during migration window W1, the
     v0.3 keys beside them with the same value (`outcome`, `k8s.resource.*`,
-    `k8s.object.*`). v0.5.0 removes the v0.3 keys. `enduser.id` is written
-    only when the caller sets `EndUserID`, as in v0.3, and never added;
+    `k8s.object.*`). v0.5.0 removes the v0.3 keys (postponed: see
+    2026-11-11). `enduser.id` is written only when the caller sets
+    `EndUserID`, as in v0.3, and never added;
   - makes every string valid UTF-8, at any depth (snowplow#1261: one invalid
     string made the OTLP exporter drop the whole batch);
   - writes `user.roles` as a string slice (an OTLP array of strings, as
