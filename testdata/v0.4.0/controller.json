@@ -1,0 +1,399 @@
+{
+  "resourceLogs": [
+    {
+      "scopeLogs": [
+        {
+          "logRecords": [
+            {
+              "attributes": [
+                {
+                  "key": "event.name",
+                  "value": {
+                    "stringValue": "audit"
+                  }
+                },
+                {
+                  "key": "krateo.audit.schema_version",
+                  "value": {
+                    "stringValue": "1"
+                  }
+                },
+                {
+                  "key": "user.name",
+                  "value": {
+                    "stringValue": "system:serviceaccount:example-system:example-controller"
+                  }
+                },
+                {
+                  "key": "krateo.audit.actor_class",
+                  "value": {
+                    "stringValue": "controller"
+                  }
+                },
+                {
+                  "key": "krateo.action",
+                  "value": {
+                    "stringValue": "rest.write"
+                  }
+                },
+                {
+                  "key": "krateo.audit.verb",
+                  "value": {
+                    "stringValue": "post"
+                  }
+                },
+                {
+                  "key": "http.request.method",
+                  "value": {
+                    "stringValue": "POST"
+                  }
+                },
+                {
+                  "key": "http.response.status_code",
+                  "value": {
+                    "intValue": "201"
+                  }
+                },
+                {
+                  "key": "krateo.audit.outcome",
+                  "value": {
+                    "stringValue": "success"
+                  }
+                },
+                {
+                  "key": "krateo.audit.preview",
+                  "value": {
+                    "boolValue": false
+                  }
+                },
+                {
+                  "key": "k8s.namespace.name",
+                  "value": {
+                    "stringValue": "example-ns"
+                  }
+                },
+                {
+                  "key": "krateo.audit.object_ref.api_group",
+                  "value": {
+                    "stringValue": "example.krateo.io"
+                  }
+                },
+                {
+                  "key": "krateo.audit.object_ref.api_version",
+                  "value": {
+                    "stringValue": "v1alpha1"
+                  }
+                },
+                {
+                  "key": "krateo.audit.object_ref.resource",
+                  "value": {
+                    "stringValue": "examplerepos"
+                  }
+                },
+                {
+                  "key": "krateo.audit.object_ref.kind",
+                  "value": {
+                    "stringValue": "ExampleRepo"
+                  }
+                },
+                {
+                  "key": "krateo.audit.object_ref.name",
+                  "value": {
+                    "stringValue": "example-repo"
+                  }
+                },
+                {
+                  "key": "krateo.audit.object_ref.uid",
+                  "value": {
+                    "stringValue": "00000000-0000-4000-8000-000000000001"
+                  }
+                },
+                {
+                  "key": "krateo.audit.object_ref.generation",
+                  "value": {
+                    "intValue": "3"
+                  }
+                },
+                {
+                  "key": "krateo.audit.object_ref.resource_version",
+                  "value": {
+                    "stringValue": "12345"
+                  }
+                },
+                {
+                  "key": "server.address",
+                  "value": {
+                    "stringValue": "api.example.com"
+                  }
+                },
+                {
+                  "key": "outcome",
+                  "value": {
+                    "stringValue": "success"
+                  }
+                },
+                {
+                  "key": "k8s.resource.group",
+                  "value": {
+                    "stringValue": "example.krateo.io"
+                  }
+                },
+                {
+                  "key": "k8s.resource.version",
+                  "value": {
+                    "stringValue": "v1alpha1"
+                  }
+                },
+                {
+                  "key": "k8s.resource.resource",
+                  "value": {
+                    "stringValue": "examplerepos"
+                  }
+                },
+                {
+                  "key": "k8s.resource.kind",
+                  "value": {
+                    "stringValue": "ExampleRepo"
+                  }
+                },
+                {
+                  "key": "k8s.resource.name",
+                  "value": {
+                    "stringValue": "example-repo"
+                  }
+                },
+                {
+                  "key": "k8s.object.uid",
+                  "value": {
+                    "stringValue": "00000000-0000-4000-8000-000000000001"
+                  }
+                },
+                {
+                  "key": "k8s.object.generation",
+                  "value": {
+                    "intValue": "3"
+                  }
+                },
+                {
+                  "key": "k8s.object.resource_version",
+                  "value": {
+                    "stringValue": "12345"
+                  }
+                }
+              ],
+              "body": {
+                "stringValue": "external write succeeded"
+              },
+              "eventName": "audit"
+            },
+            {
+              "attributes": [
+                {
+                  "key": "event.name",
+                  "value": {
+                    "stringValue": "audit"
+                  }
+                },
+                {
+                  "key": "krateo.audit.schema_version",
+                  "value": {
+                    "stringValue": "1"
+                  }
+                },
+                {
+                  "key": "user.name",
+                  "value": {
+                    "stringValue": "system:serviceaccount:example-system:example-controller"
+                  }
+                },
+                {
+                  "key": "krateo.audit.actor_class",
+                  "value": {
+                    "stringValue": "controller"
+                  }
+                },
+                {
+                  "key": "krateo.audit.affected_user.name",
+                  "value": {
+                    "stringValue": "example-user"
+                  }
+                },
+                {
+                  "key": "krateo.action",
+                  "value": {
+                    "stringValue": "revoke"
+                  }
+                },
+                {
+                  "key": "krateo.audit.verb",
+                  "value": {
+                    "stringValue": "delete"
+                  }
+                },
+                {
+                  "key": "krateo.audit.outcome",
+                  "value": {
+                    "stringValue": "success"
+                  }
+                },
+                {
+                  "key": "krateo.audit.preview",
+                  "value": {
+                    "boolValue": false
+                  }
+                },
+                {
+                  "key": "k8s.namespace.name",
+                  "value": {
+                    "stringValue": "example-ns"
+                  }
+                },
+                {
+                  "key": "krateo.audit.object_ref.api_group",
+                  "value": {
+                    "stringValue": "rbac.authorization.k8s.io"
+                  }
+                },
+                {
+                  "key": "krateo.audit.object_ref.api_version",
+                  "value": {
+                    "stringValue": "v1"
+                  }
+                },
+                {
+                  "key": "krateo.audit.object_ref.resource",
+                  "value": {
+                    "stringValue": "rolebindings"
+                  }
+                },
+                {
+                  "key": "krateo.audit.object_ref.kind",
+                  "value": {
+                    "stringValue": "RoleBinding"
+                  }
+                },
+                {
+                  "key": "krateo.audit.object_ref.name",
+                  "value": {
+                    "stringValue": "example-binding"
+                  }
+                },
+                {
+                  "key": "outcome",
+                  "value": {
+                    "stringValue": "success"
+                  }
+                },
+                {
+                  "key": "k8s.resource.group",
+                  "value": {
+                    "stringValue": "rbac.authorization.k8s.io"
+                  }
+                },
+                {
+                  "key": "k8s.resource.version",
+                  "value": {
+                    "stringValue": "v1"
+                  }
+                },
+                {
+                  "key": "k8s.resource.resource",
+                  "value": {
+                    "stringValue": "rolebindings"
+                  }
+                },
+                {
+                  "key": "k8s.resource.kind",
+                  "value": {
+                    "stringValue": "RoleBinding"
+                  }
+                },
+                {
+                  "key": "k8s.resource.name",
+                  "value": {
+                    "stringValue": "example-binding"
+                  }
+                }
+              ],
+              "body": {
+                "stringValue": "grant revoked"
+              },
+              "eventName": "audit"
+            },
+            {
+              "attributes": [
+                {
+                  "key": "event.name",
+                  "value": {
+                    "stringValue": "audit"
+                  }
+                },
+                {
+                  "key": "krateo.audit.schema_version",
+                  "value": {
+                    "stringValue": "1"
+                  }
+                },
+                {
+                  "key": "user.name",
+                  "value": {
+                    "stringValue": "system:serviceaccount:example-system:example-controller"
+                  }
+                },
+                {
+                  "key": "krateo.audit.actor_class",
+                  "value": {
+                    "stringValue": "controller"
+                  }
+                },
+                {
+                  "key": "krateo.audit.affected_user.name",
+                  "value": {
+                    "stringValue": "example-user"
+                  }
+                },
+                {
+                  "key": "krateo.action",
+                  "value": {
+                    "stringValue": "deactivate"
+                  }
+                },
+                {
+                  "key": "krateo.audit.verb",
+                  "value": {
+                    "stringValue": "post"
+                  }
+                },
+                {
+                  "key": "krateo.audit.outcome",
+                  "value": {
+                    "stringValue": "denied"
+                  }
+                },
+                {
+                  "key": "server.address",
+                  "value": {
+                    "stringValue": "idp.example.com"
+                  }
+                },
+                {
+                  "key": "outcome",
+                  "value": {
+                    "stringValue": "denied"
+                  }
+                }
+              ],
+              "body": {
+                "stringValue": "account disabled"
+              },
+              "eventName": "audit"
+            }
+          ],
+          "scope": {
+            "name": "example/audit"
+          }
+        }
+      ]
+    }
+  ]
+}

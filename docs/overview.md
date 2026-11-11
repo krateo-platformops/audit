@@ -4,7 +4,7 @@ title: audit — overview
 description: Why every writer shares one emitter and one schema, how a record flows to the krateo_audit table, and how the schema file drives the constants, the checker and the live queries.
 resource: github.com/krateo-platformops/audit
 tags: [library, audit, architecture]
-timestamp: 2026-11-09T00:00:00Z
+timestamp: 2026-11-11T00:00:00Z
 ---
 
 # Overview
@@ -58,7 +58,8 @@ other.
 Two keys tie an audit row to everything else:
 
 - **`trace_id`**: the Logs SDK stamps TraceId/SpanId from the span on `ctx`.
-- **Object identity** (`krateo.audit.object_ref.uid` +
-  `krateo.audit.object_ref.generation`): the user's write and the reconcile it
-  caused carry the same pair, so they join without ever mutating the user's
-  object. See [usage](./usage.md).
+- **Object identity**: the user's write records the object's
+  `krateo.audit.object_ref.uid` + `krateo.audit.object_ref.generation`, and
+  the reconcile it caused carries the same pair as
+  `krateo.audit.cause_ref.uid` + `krateo.audit.cause_ref.generation`, so they
+  join without ever mutating the user's object. See [usage](./usage.md).

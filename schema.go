@@ -90,6 +90,10 @@ type Requirement struct {
 	// Markable means a writer that cannot establish the key omits it and names
 	// the key's marker in krateo.audit.incomplete.
 	Markable bool
+	// Values is the closed set of values this writer may write, for a key
+	// whose values depend on the writer (krateo.audit.denial_reason). Such a
+	// key has no KeySpec.Values; Check reports any other value as bad-enum.
+	Values []string
 }
 
 // KeySpec is one attribute of the schema.
@@ -97,7 +101,9 @@ type KeySpec struct {
 	Name    string
 	Type    ValueType
 	Semconv string // stable | development | deprecated | none
-	// Values is the closed set of values, when the key is an enum.
+	// Values is the closed set of values, when the key is an enum whatever
+	// the writer. A key whose values depend on the writer lists them in each
+	// Requirement.Values instead.
 	Values []string
 	// Format names a structural rule on the value: "delegation_link" or
 	// "marker_list".
@@ -110,7 +116,8 @@ type KeySpec struct {
 	// Asserted keys hold a value a client chose: never identity.
 	Asserted bool
 	// ReplacedBy names the replacement of a v0.3 key written side by side
-	// with it during W1 (v0.4.x). Removed in v0.5.0.
+	// with it during migration window W1 (v0.4.x and v0.5.x). The v0.3 keys
+	// are removed by the release that closes W1.
 	ReplacedBy string
 	// DualWrite says Emit adds this v0.3 key beside its replacement. False
 	// for a v0.3 key written only where it is written today (enduser.id).
@@ -203,6 +210,10 @@ func Conditions() []Condition { return slices.Clone(schemaConditions) }
 func (k KeySpec) clone() KeySpec {
 	k.Values = slices.Clone(k.Values)
 	k.Writers = maps.Clone(k.Writers)
+	for w, r := range k.Writers {
+		r.Values = slices.Clone(r.Values)
+		k.Writers[w] = r
+	}
 	return k
 }
 

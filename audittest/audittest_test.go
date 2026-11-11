@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"runtime"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -88,6 +89,43 @@ func TestWriters_ConformAndEveryRequiredKeyIsDetected(t *testing.T) {
 				RequestURI: "/call", SourceIPs: []string{"10.0.0.1"}},
 			allow: []string{audit.KeyActorClass},
 		},
+		// v0.5.0: a controller names the object it reconciled in Cause.
+		{
+			name: "external write caused by a CR (v0.5: the CR in cause_ref)", w: audit.WriterController,
+			opts: []audit.Option{audit.WithActor(sa, audit.ClassController), audit.WithWriter(audit.WriterController)}, ctx: spanCtx,
+			ev: audit.Event{Action: "rest.write", Verb: "post", HTTPMethod: "POST", StatusCode: 201, Outcome: audit.OutcomeSuccess,
+				ServerAddress: "api.example.com",
+				Cause: audit.CauseRef{Group: "example.krateo.io", Version: "v1alpha1", Resource: "examplerepos", Namespace: "example-ns",
+					Name: "example-repo", UID: "uid-r", Generation: 3}},
+		},
+		{
+			name: "status write of the reconciled CR itself", w: audit.WriterController,
+			opts: []audit.Option{audit.WithActor(sa, audit.ClassController), audit.WithWriter(audit.WriterController)}, ctx: spanCtx,
+			ev: audit.Event{Action: "status.update", Verb: "update", Outcome: audit.OutcomeSuccess,
+				Namespace: "example-ns", Group: "example.krateo.io", Version: "v1alpha1", Resource: "examplerepos", Subresource: "status",
+				ObjectName: "example-repo", ObjectUID: "uid-r", Preview: audit.PreviewFalse,
+				Cause: audit.CauseRef{Group: "example.krateo.io", Version: "v1alpha1", Resource: "examplerepos", Namespace: "example-ns",
+					Name: "example-repo", UID: "uid-r", Generation: 3}},
+		},
+		// authn, a request writer: a login writes the credential Secret; a refused name is denied with its reason.
+		{
+			name: "authn login", w: audit.WriterRequest,
+			opts: []audit.Option{audit.WithWriter(audit.WriterRequest)}, ctx: sessionCtx,
+			ev: audit.Event{UserName: "example-user", UserRoles: []string{"example-group"}, ActorClass: audit.ClassHuman,
+				Action: "authn.login.oidc", Verb: "update", HTTPMethod: "PUT", StatusCode: 200, Outcome: audit.OutcomeSuccess,
+				Namespace: "example-system", Version: "v1", Resource: "secrets", ObjectName: "example-user-clientconfig",
+				ObjectUID: "uid-s", ObjectResourceVersion: "42", Preview: audit.PreviewFalse,
+				RequestURI: "/oidc/callback", SourceIPs: []string{"192.0.2.10"}},
+		},
+		{
+			name: "authn login refused: the name is claimed", w: audit.WriterRequest,
+			opts: []audit.Option{audit.WithWriter(audit.WriterRequest)}, ctx: sessionCtx,
+			ev: audit.Event{UserName: "example-user", ActorClass: audit.ClassHuman,
+				Action: "authn.login.oidc", Verb: "update", HTTPMethod: "PUT", Outcome: audit.OutcomeDenied,
+				DenialReason: audit.DenialReasonNameClaimed,
+				Namespace:    "example-system", Version: "v1", Resource: "secrets", ObjectName: "example-user-clientconfig", Preview: audit.PreviewFalse,
+				RequestURI: "/oidc/callback", SourceIPs: []string{"192.0.2.10"}},
+		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			rec := audittest.NewRecorder(t)
@@ -97,8 +135,56 @@ func TestWriters_ConformAndEveryRequiredKeyIsDetected(t *testing.T) {
 			opts := []audittest.Option{audittest.AllowIncomplete(tc.allow...)}
 			audittest.AssertConformant(t, tc.w, r, opts...)
 			audittest.AssertRequiredKeysDetected(t, tc.w, r, opts...)
+			audittest.AssertEnumsDetected(t, tc.w, r, opts...)
 		})
 	}
+}
+
+// The falsifier covers cause_ref where it is required: once a record names a
+// cause, removing its uid, version, resource or name alone is caught.
+func TestAssertRequiredKeysDetected_CoversCauseRef(t *testing.T) {
+	rec, w := controllerRecord(t, audit.Event{Action: "rest.write", Verb: "post", Outcome: audit.OutcomeSuccess, ServerAddress: "api.example.com",
+		Cause: audit.CauseRef{Version: "v1", Resource: "examplerepos", Name: "example-repo", UID: "uid-r", Generation: 3}})
+	r := rec.Only(t)
+	required := audit.RequiredKeys(w, audittest.Attributes(r))
+	for _, k := range []string{audit.KeyCauseAPIVersion, audit.KeyCauseResource, audit.KeyCauseName, audit.KeyCauseUID} {
+		if !slices.Contains(required, k) {
+			t.Errorf("%s is not required of a record that names a cause: %v", k, required)
+		}
+		if msgs := failures(t, func(tb testing.TB) { audittest.AssertRemovalDetected(tb, w, r, k) }); len(msgs) != 0 {
+			t.Errorf("removing %s: %q", k, msgs)
+		}
+	}
+	// generation is required only when the object has one, which the record
+	// cannot show: removing it is not detected, and the falsifier says so.
+	if msgs := failures(t, func(tb testing.TB) { audittest.AssertRemovalDetected(tb, w, r, audit.KeyCauseGeneration) }); len(msgs) == 0 || !strings.Contains(msgs[0], "is not detected") {
+		t.Errorf("removing cause_ref.generation was reported as detected: %q", msgs)
+	}
+}
+
+// AssertEnumsDetected replaces each closed-set value, the writer's own
+// denial reason included, and needs a conformant record to start from.
+func TestAssertEnumsDetected(t *testing.T) {
+	rec, w := controllerRecord(t, audit.Event{Action: "rest.write", Verb: "delete", Outcome: audit.OutcomeDenied,
+		DenialReason: audit.DenialReasonKeptResourcePolicy, ServerAddress: "api.example.com"})
+	r := rec.Only(t)
+	if msgs := failures(t, func(tb testing.TB) { audittest.AssertEnumsDetected(tb, w, r) }); len(msgs) != 0 {
+		t.Errorf("a conformant kept deletion: %q", msgs)
+	}
+	// The same record judged as a request writer's is not conformant.
+	msgs := failures(t, func(tb testing.TB) { audittest.AssertEnumsDetected(tb, audit.WriterRequest, r) })
+	if len(msgs) != 1 || !strings.Contains(msgs[0], "needs a conformant record") {
+		t.Errorf("falsifier on a non-conformant record: %q", msgs)
+	}
+	// A denial reason outside the writer's set is what the falsifier writes:
+	// Check must report it, or the check the falsifier relies on is gone.
+	bad := slices.Clone(audittest.Attributes(r))
+	for i, kv := range bad {
+		if kv.Key == audit.KeyDenialReason {
+			bad[i] = attribute.String(audit.KeyDenialReason, audit.DenialReasonNameClaimed) // authn's value, not the controller's
+		}
+	}
+	audittest.AssertViolation(t, w, bad, audit.KeyDenialReason)
 }
 
 // fakeTB records failures instead of failing, so the helpers' own failures

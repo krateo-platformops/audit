@@ -1,9 +1,9 @@
-# audit — LLM doc index (pinned: v0.4.0)
+# audit — LLM doc index (pinned: v0.5.0)
 # One line per file; regenerate the pin on release.
 docs/index.md: the map of this bundle
 docs/overview.md: why one shared emitter and schema, and how a record flows to krateo_audit
 docs/schema.md: the record contract, key by key, per writer class (generated from schema/v1.yaml)
-docs/usage.md: install, when to emit, the actor, adopting v0.4, testing a writer, the live check
+docs/usage.md: install, when to emit, the actor, adopting v0.4 and v0.5, testing a writer, the live check
 docs/configuration.md: the Emitter's options and metrics, and the OTel Logs SDK setup
 docs/api.md: the Go API, audittest and cmd/auditschema
 docs/examples.md: examples index
@@ -14,6 +14,8 @@ audit.go: the emitter
 check.go: the checker
 schema.go: the schema types and accessors
 schema_gen.go: generated from schema/v1.yaml
+contract_records_test.go: the example records docs/schema.md shows (kept deletion, pruned child), emitted and checked
+testdata/v0.4.0/: records audit v0.4.0 emitted, and v0.4.0's check report on them (the compatibility arm)
 sanitize.go: the UTF-8 sanitiser
 claim.go: the principal claim parser
 legacy.go: the W1 dual-write

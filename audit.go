@@ -11,11 +11,14 @@
 //   - trace_id: the Logs SDK stamps TraceId/SpanId from the span on ctx, joining
 //     the audit row to the traces/logs the action caused.
 //   - the written object's identity: ObjectUID + ObjectGeneration (and
-//     ObjectResourceVersion where known). snowplow records the same three for the
-//     write that created or changed an object, so a controller's audit row for
-//     the reconcile that acted on that generation joins back to the user's
-//     request — and to its session.id — on (uid, generation), without mutating
-//     the object.
+//     ObjectResourceVersion where known). snowplow records them for the write
+//     that created or changed an object; a controller records the same pair,
+//     for the object it reconciled, as Cause.UID + Cause.Generation
+//     (krateo.audit.cause_ref.*), so its row for the reconcile that acted on
+//     that generation joins back to the user's request — and to its
+//     session.id — on (uid, generation), without mutating the object. The
+//     controller's own ObjectUID and ObjectGeneration name the object it
+//     wrote.
 //
 // session.id is read from W3C baggage when present (request-path components);
 // a reconcile has no inbound baggage, which is why the object identity exists.
@@ -113,9 +116,10 @@ type Event struct {
 	UserRoles  []string // user.roles
 	ActorClass Class    // krateo.audit.actor_class; omitted (and marked) unless Known
 
-	// Deprecated: enduser.id is deprecated in semconv and is removed in
-	// v0.5.0. Emit writes it only when it is set here, as v0.3 did, and never
-	// adds it; a value that differs from user.name is a Check violation.
+	// Deprecated: enduser.id is deprecated in semconv and is removed when
+	// migration window W1 closes. Emit writes it only when it is set here, as
+	// v0.3 did, and never adds it; a value that differs from user.name is a
+	// Check violation.
 	EndUserID string
 
 	OnBehalfOf string // krateo.audit.on_behalf_of.user.name: a delegated token's sub
@@ -134,7 +138,13 @@ type Event struct {
 	HTTPMethod string // http.request.method; a method semconv does not name becomes _OTHER
 	StatusCode int    // http.response.status_code (0 => omitted)
 	Outcome    string // krateo.audit.outcome: OutcomeSuccess | OutcomeFailure | OutcomeDenied
-	Preview    Preview
+	// DenialReason says why the writer itself refused, on an OutcomeDenied
+	// record only -> krateo.audit.denial_reason. One of the closed values the
+	// writer's class declares (the generated DenialReason* constants), never
+	// free text; Check reports any other value, or the key on a record that is
+	// not denied.
+	DenialReason string
+	Preview      Preview
 	// DryRun marks a write the authority was asked to validate and not
 	// persist (Kubernetes dryRun=All) -> krateo.audit.dry_run=true. A request
 	// or action writer (WithWriter) gets dry_run=false on every other write
@@ -142,8 +152,9 @@ type Event struct {
 	// caller's either way (snowplow writes call.dryRun).
 	DryRun bool
 
-	// The Kubernetes object acted on. During W1 each is also written under its
-	// v0.3 key (k8s.resource.*, k8s.object.*).
+	// The Kubernetes object acted on: for a controller, the object it wrote
+	// (the apiserver's objectRef of that write). During W1 each is also
+	// written under its v0.3 key (k8s.resource.*, k8s.object.*).
 	Namespace   string // k8s.namespace.name
 	Group       string // krateo.audit.object_ref.api_group (omit for the core group)
 	Version     string // krateo.audit.object_ref.api_version
@@ -156,6 +167,14 @@ type Event struct {
 	ObjectUID             string // krateo.audit.object_ref.uid
 	ObjectGeneration      int64  // krateo.audit.object_ref.generation (0 => omitted)
 	ObjectResourceVersion string // krateo.audit.object_ref.resource_version
+
+	// Cause is, for a controller, the object it reconciled: the custom
+	// resource whose reconcile made this write -> krateo.audit.cause_ref.*.
+	// Set it on every record of a reconcile, also when the object written is
+	// that resource itself. Only a controller writes it. Its UID and
+	// Generation join the record to the request that wrote that generation.
+	// It has no v0.3 key.
+	Cause CauseRef
 
 	// server.address — host[:port] of an external endpoint. A URL is accepted:
 	// Emit drops its scheme, userinfo, path, query and fragment. A value with no
@@ -172,6 +191,19 @@ type Event struct {
 	RESTActionNamespace string // krateo.restaction.namespace
 	RESTActionName      string // krateo.restaction.name
 	RESTActionStage     string // krateo.restaction.stage
+}
+
+// CauseRef names the Kubernetes object a controller reconciled, as the
+// apiserver's objectRef names an object (Event.Cause). The zero value names
+// none; an unset field is omitted.
+type CauseRef struct {
+	Group      string // krateo.audit.cause_ref.api_group (omit for the core group)
+	Version    string // krateo.audit.cause_ref.api_version
+	Resource   string // krateo.audit.cause_ref.resource: the plural
+	Namespace  string // krateo.audit.cause_ref.namespace
+	Name       string // krateo.audit.cause_ref.name
+	UID        string // krateo.audit.cause_ref.uid
+	Generation int64  // krateo.audit.cause_ref.generation (0 => omitted)
 }
 
 // Emitter wraps one OTel Logs API Logger. Build it once from the process
@@ -267,7 +299,7 @@ func New(logger log.Logger, opts ...Option) *Emitter {
 //     writer's tests, never a reason not to emit;
 //   - it sets the LogRecord EventName and the event.name attribute, stamps
 //     krateo.audit.schema_version, writes the v0.3 keys beside their
-//     replacements (W1, v0.4.x), and makes every string valid UTF-8 (Sanitize);
+//     replacements (W1), and makes every string valid UTF-8 (Sanitize);
 //   - once the logger has taken the record (it reports itself enabled for
 //     it), it marks the request recorded: on ctx's WithRecordedMarker holder
 //     when one is installed, else SpanKeyRecorded=true on the span active on
@@ -405,6 +437,7 @@ func attributes(ctx context.Context, ev Event, actor principal) []attribute.KeyV
 	add(KeyHTTPMethodOriginal, original)
 	num(KeyHTTPStatusCode, int64(ev.StatusCode))
 	add(KeyOutcome, ev.Outcome)
+	add(KeyDenialReason, ev.DenialReason)
 	if ev.Preview != PreviewUnknown {
 		attrs = append(attrs, attribute.Bool(KeyPreview, ev.Preview == PreviewTrue))
 	}
@@ -419,6 +452,13 @@ func attributes(ctx context.Context, ev Event, actor principal) []attribute.KeyV
 	add(KeyObjectUID, ev.ObjectUID)
 	num(KeyObjectGeneration, ev.ObjectGeneration)
 	add(KeyObjectResourceVersion, ev.ObjectResourceVersion)
+	add(KeyCauseAPIGroup, ev.Cause.Group)
+	add(KeyCauseAPIVersion, ev.Cause.Version)
+	add(KeyCauseResource, ev.Cause.Resource)
+	add(KeyCauseNamespace, ev.Cause.Namespace)
+	add(KeyCauseName, ev.Cause.Name)
+	add(KeyCauseUID, ev.Cause.UID)
+	num(KeyCauseGeneration, ev.Cause.Generation)
 	add(KeyServerAddress, hostPort(ev.ServerAddress))
 
 	add(KeyRequestURI, ev.RequestURI)

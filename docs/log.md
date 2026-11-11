@@ -4,11 +4,48 @@ title: audit — log
 description: Curated history of the audit package.
 resource: github.com/krateo-platformops/audit
 tags: [library, audit, log]
-timestamp: 2026-11-09T00:00:00Z
+timestamp: 2026-11-11T00:00:00Z
 ---
 
 # Log
 
+- **2026-11-11**: schema v1 gains two keys, for v0.5.0 (audit#8, audit#10;
+  AUDIT-4, installer#410). Additive: every v0.4.0 record stays valid (a test
+  replays records v0.4.0's own `Emit` wrote and expects v0.4.0's own check
+  report), and the v0.3 keys are still written beside their replacements: W1
+  now closes in a later release, not in v0.5.0.
+  - `krateo.audit.cause_ref.{api_group,api_version,resource,namespace,name,uid,generation}`
+    (`Event.Cause`, a `CauseRef`): the object a controller **reconciled**,
+    while `object_ref` names the object it **wrote**. Controller only (every
+    other writer: not applicable); optional, and once a row names a cause its
+    `api_version`, `resource`, `name` and `uid` are required. snowplow joins
+    a controller row to the request that caused it on `cause_ref.uid` /
+    `generation` = the request row's `object_ref.uid` / `generation`
+    ([schema.md](./schema.md) has the query).
+  - `krateo.audit.denial_reason` (`Event.DenialReason`): why the writer
+    itself refused, only on a `denied` record (anywhere else `unexpected`),
+    from a closed set **per writer class** (`values:` on a writer's
+    requirement, `Requirement.Values`, generated `DenialReason*`
+    constants). `request`: authn's name guard (`name_reserved`,
+    `name_claimed`, `name_held_legacy`, `name_provisioned`, `name_bound`,
+    `system_group`); `controller`: `kept_resource_policy`, a delete helm
+    declined because of `helm.sh/resource-policy: keep` (verb `delete`,
+    outcome `denied`). The kept deletion is that key, not a body value:
+    `Check` reads attributes only.
+  - authn is a `request` writer (the class now reads "a request a component
+    served for a caller"), on its own scope
+    `github.com/krateo-platformops/authn/audit`, with its background writes
+    on `github.com/krateo-platformops/authn/audit/controller`. The generator
+    refuses a scope listed twice: the live queries judge a scope's rows by
+    the one writer it is listed under.
+  - `audittest.AssertEnumsDetected`, the falsifier for the closed sets.
+  - [schema.md](./schema.md) shows the kept-deletion and pruned-child
+    records as Go literals, copied by the generator from
+    `contract_records_test.go`, whose tests emit and check them.
+  - The generator refuses a requirement field it does not know. That found
+    the `when` texts of three keys, which the YAML had cut at a comma ("a successful,
+    non-dry-run write" read as "a successful"); they are quoted now. The
+    texts are descriptive only: no rule changed.
 - **2026-11-09**: audit schema v1 (installer#716), for v0.4.0.
   `schema/v1.yaml` is the one record contract: every attribute, its type and
   semconv status, and per writer class (request, gateway, action, controller)

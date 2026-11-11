@@ -4,7 +4,7 @@ title: audit — index
 description: The map of the audit documentation bundle, the shared emitter and schema for the canonical Krateo AuditEvent.
 resource: github.com/krateo-platformops/audit
 tags: [library, audit, opentelemetry, logs]
-timestamp: 2026-11-09T00:00:00Z
+timestamp: 2026-11-11T00:00:00Z
 ---
 
 # audit
@@ -18,7 +18,7 @@ is built on. It ships no image, no chart and no CRDs.
 
 - [overview](./overview.md): why one shared emitter and schema, and how a record flows
 - [schema](./schema.md): the record contract, key by key, per writer (generated)
-- [usage](./usage.md): when to emit, the actor, adopting v0.4, testing a writer, the live check
+- [usage](./usage.md): when to emit, the actor, adopting v0.4 and v0.5, testing a writer, the live check
 - [configuration](./configuration.md): the Emitter's options and metrics, and the OTel Logs SDK setup
 - [api](./api.md): the Go API, audittest and cmd/auditschema
 - [examples](./examples.md): runnable examples

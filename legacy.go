@@ -9,8 +9,9 @@ import "go.opentelemetry.io/otel/attribute"
 // krateo.audit.outcome, krateo.audit.object_ref.* and user.name, so readers of
 // the old keys keep working until they move.
 //
-// Emit calls it on every record of v0.4.x. A writer that builds its own
-// attributes calls it too. v0.5.0 removes the v0.3 keys, and this function.
+// Emit calls it on every record during W1 (v0.4.x and v0.5.x). A writer that
+// builds its own attributes calls it too. The release that closes W1 removes
+// the v0.3 keys, and this function.
 func WithLegacyKeys(attrs []attribute.KeyValue) []attribute.KeyValue {
 	have := make(map[attribute.Key]bool, len(attrs))
 	for _, kv := range attrs {

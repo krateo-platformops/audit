@@ -1,0 +1,2 @@
+testdata/v0.4.0/request.json: record 2: krateo.audit.actor_class: incomplete
+1 of 3 record(s) break schema 1 for writer request
