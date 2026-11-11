@@ -81,6 +81,38 @@ func TestCheck_PostVerificationReasons(t *testing.T) {
 	}
 }
 
+// The failures after verification that #20 keeps out of the denial reasons
+// are failure rows. The status code is the authority's answer, never
+// authn's own 500: MappingLookupFailed carries the apiserver's code for the
+// lookup when it answered, and none when nothing answered. StepUpMisconfigured
+// carries none. A failure row never carries a denial reason.
+func TestCheck_PostVerificationFailureRows(t *testing.T) {
+	v := func(k string, r Reason) Violation { return Violation{Key: k, Reason: r} }
+	failed := func(attrs []attribute.KeyValue) []attribute.KeyValue {
+		return with(without(attrs, KeyDenialReason, KeyHTTPStatusCode),
+			attribute.String(KeyOutcome, OutcomeFailure), attribute.String(KeyLegacyOutcome, OutcomeFailure))
+	}
+	lookup := failed(postVerificationRefusal(DenialReasonNoMapping))
+	stepup := failed(postVerificationRefusal(DenialReasonStepupNotEnabled))
+	for _, tc := range []struct {
+		name  string
+		attrs []attribute.KeyValue
+		want  []Violation
+	}{
+		{"mapping lookup failed, the apiserver answered 403", with(lookup, attribute.Int(KeyHTTPStatusCode, 403)), nil},
+		{"mapping lookup failed, the apiserver answered 503", with(lookup, attribute.Int(KeyHTTPStatusCode, 503)), nil},
+		{"mapping lookup failed, nothing answered", lookup, nil},
+		{"step-up misconfigured", stepup, nil},
+		{"a failure row with a denial reason", with(lookup, attribute.String(KeyDenialReason, DenialReasonNoMapping)), []Violation{v(KeyDenialReason, ReasonUnexpected)}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := Check(WriterRequest, tc.attrs); !slices.Equal(got, tc.want) {
+				t.Errorf("Check(request):\n got %v\nwant %v", got, tc.want)
+			}
+		})
+	}
+}
+
 // Emit writes each reason on a denied record that Check accepts, with no
 // status code.
 func TestEmit_PostVerificationRefusal(t *testing.T) {

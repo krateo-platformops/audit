@@ -535,21 +535,40 @@ keys:
       # subject_token_invalid: the token did not verify: a bad signature, an
       # unknown or retired kid (a key retired to revoke tokens included),
       # malformed, a wrong alg, or no exp. Security-relevant.
-      # authn's refusals after the identity verified (audit#20, authn#132):
-      # each is a denied record with no status code.
-      # stepup_not_enabled, insufficient_assurance, stale_authentication: the
-      # step-up after the ID token verified: step-up is not enabled for the
-      # identity, the authentication's assurance is below what is asked, or
-      # the authentication is too old.
-      # no_mapping, ambiguous_mapping: a ServiceAccount login after the
-      # TokenReview passed: no mapping names the ServiceAccount, or more than
-      # one does. The record names the mapping resource without a name, as
-      # name_missing names the Secret resource.
-      # not_a_service_account: the identity verified, but it is not a
-      # ServiceAccount.
-      # Not denial reasons: an audience mismatch is part of verification (a
-      # counted pre-verification failure, no row), and a failed mapping lookup
-      # or a misconfigured step-up is a failure row with its status code.
+      # authn's refusals after the identity verified (audit#20, authn#132),
+      # each a denied record with no status code. The meanings are authn's
+      # own (authn@9e352bde):
+      # POST /oidc/stepup, after the ID token verified (oidc/stepup.go,
+      # checkStepUp):
+      #   stepup_not_enabled (StepUpNotEnabled): "step-up is not enabled for
+      #   this OIDCConfig (spec.stepUp)".
+      #   insufficient_assurance (InsufficientAssurance): the ID token's acr
+      #   "is not one of" the step-up's configured acr values.
+      #   stale_authentication (StaleAuthentication): the "ID token has no
+      #   auth_time, so the authentication's age is unknown", or it
+      #   authenticated longer ago "than the step-up allows" (maxAge).
+      # POST /serviceaccount/login, after the TokenReview authenticated the
+      # caller (serviceaccount/login.go, validate; resolvers/serviceaccount.go):
+      #   not_a_service_account (NotAServiceAccount): the authenticated
+      #   username is not a ServiceAccount's
+      #   (system:serviceaccount:<namespace>:<name>).
+      #   no_mapping (NoMapping): "no ServiceAccount mapping", an allowlist
+      #   miss: no mapping's spec.serviceAccountRef names the ServiceAccount,
+      #   so it may not exchange its token.
+      #   ambiguous_mapping (AmbiguousMapping): "ambiguous ServiceAccount
+      #   mapping": more than one mapping names it.
+      #   The ServiceAccount cases name the mapping resource without a name,
+      #   as name_missing names the Secret resource.
+      # Not denial reasons:
+      #   AudienceMismatch is part of verifying the token, so it is a counted
+      #   pre-verification refusal and never a row.
+      #   MappingLookupFailed is a failure row. Its status code is the
+      #   apiserver's answer to the mapping lookup when it answered (a 403 or
+      #   5xx from the list call), and omitted when nothing answered (a
+      #   timeout, a refused connection).
+      #   StepUpMisconfigured is a failure row with no status code: no
+      #   authority answered. authn's own HTTP status (500) is never
+      #   http.response.status_code.
       request: {level: optional, values: [name_reserved, name_claimed, name_held_legacy, name_provisioned, name_bound, system_group, group_not_allowed, delegation_not_allowed, delegation_too_deep, platform_group, name_missing, subject_token_expired, subject_token_invalid, stepup_not_enabled, insufficient_assurance, stale_authentication, no_mapping, ambiguous_mapping, not_a_service_account]}
       gateway: not_applicable
       action: not_applicable

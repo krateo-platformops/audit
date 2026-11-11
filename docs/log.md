@@ -11,16 +11,26 @@ timestamp: 2026-11-11T00:00:00Z
 
 - **2026-11-11**: v0.8.0 (audit#20, authn#132). The AUDIT-4 lead ruled that
   every refusal of an identity that has already verified gets a row. Six
-  request-writer denial reasons for authn, each denied with no status code:
-  `stepup_not_enabled`, `insufficient_assurance` and `stale_authentication`
-  (the step-up, after the ID token verified); `no_mapping` and
-  `ambiguous_mapping` (a ServiceAccount login, after the TokenReview passed;
-  the record names the mapping resource without a name, like
-  `name_missing`); and `not_a_service_account` (verified, but not a
-  ServiceAccount). Not values: an audience mismatch, which is part of
-  verification and is counted as a pre-verification failure with no row;
-  and a failed mapping lookup or a misconfigured step-up, which are failure
-  rows with their 500. Additive, so a minor version per docs/release.md.
+  request-writer denial reasons for authn, each denied with no status code,
+  with authn's own meanings (authn@9e352bde, quoted in schema/v1.yaml):
+  - the step-up, after the ID token verified: `stepup_not_enabled` (step-up
+    is not enabled for the OIDCConfig, `spec.stepUp`), `insufficient_assurance`
+    (the ID token's acr is not one of the step-up's acr values), and
+    `stale_authentication` (no `auth_time`, or older than the step-up's
+    maxAge);
+  - a ServiceAccount login, after the TokenReview authenticated the caller:
+    `not_a_service_account` (the authenticated username is not a
+    ServiceAccount's), `no_mapping` (no mapping admits the ServiceAccount, an
+    allowlist miss), and `ambiguous_mapping` (more than one does). The two
+    mapping records name the mapping resource without a name, like
+    `name_missing`.
+
+  Not denial reasons: `AudienceMismatch` is part of verification (a counted
+  pre-verification refusal, no row). `MappingLookupFailed` is a failure row
+  carrying the apiserver's code for the lookup when it answered, and none when
+  nothing answered. `StepUpMisconfigured` is a failure row with no status
+  code. `http.response.status_code` is the authority's answer, never authn's
+  own HTTP status. Additive, so a minor version per docs/release.md.
 - **2026-11-11**: v0.7.0 (audit#18). Two request-writer denial reasons for
   authn's `/delegate`, which verifies the actor but refuses the subject
   token. The caller's answer is one cause either way (401

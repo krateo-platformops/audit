@@ -256,16 +256,23 @@ v0.8.0 is additive. Every refusal of an identity that has already verified
 is a denied record with a closed reason and no status code. It adds six,
 for authn:
 
-- the step-up, after the ID token verified: `DenialReasonStepupNotEnabled`,
-  `DenialReasonInsufficientAssurance`, `DenialReasonStaleAuthentication`;
-- a ServiceAccount login, after the TokenReview passed:
-  `DenialReasonNoMapping` and `DenialReasonAmbiguousMapping` (the record
-  names the mapping resource without a name);
-- `DenialReasonNotAServiceAccount`: verified, but not a ServiceAccount.
+- the step-up, after the ID token verified: `DenialReasonStepupNotEnabled`
+  (step-up is not enabled for the OIDCConfig), `DenialReasonInsufficientAssurance`
+  (the ID token's acr is not one of the step-up's acr values) and
+  `DenialReasonStaleAuthentication` (no `auth_time`, or older than the
+  step-up's maxAge);
+- a ServiceAccount login, after the TokenReview authenticated the caller:
+  `DenialReasonNotAServiceAccount` (the username is not a ServiceAccount's),
+  `DenialReasonNoMapping` (no mapping admits the ServiceAccount) and
+  `DenialReasonAmbiguousMapping` (more than one does). The two mapping
+  records name the mapping resource without a name.
 
-An audience mismatch is part of verification, so it is not a row. A failed
-mapping lookup or a misconfigured step-up is a failure row with its status
-code, not a denial.
+An audience mismatch is part of verification, so it never gets a row.
+Failures after verification are `failure` rows, not denials, and their
+status code is the authority's answer, never authn's own HTTP status. A
+failed mapping lookup carries the apiserver's code when the apiserver
+answered, and no code when nothing answered. A misconfigured step-up
+carries no status code.
 
 ## Testing a writer
 
