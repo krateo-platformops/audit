@@ -188,9 +188,46 @@ func TestSQL_CauseRefAndDenialReason(t *testing.T) {
 			t.Errorf("%s: cause_ref is not in not_for_writer", w)
 		}
 	}
-	for _, scope := range []string{"'github.com/krateo-platformops/authn/audit'", "'github.com/krateo-platformops/authn/audit/controller'"} {
-		if !strings.Contains(sql, scope) {
-			t.Errorf("no query reads authn's scope %s", scope)
+}
+
+// authn emits as two writers, each on its own scope, and the live queries
+// judge each scope by its own writer's rules only: logins and /delegate as
+// request rows, the background credential writes as controller rows.
+func TestSQL_AuthnScopesAreTwoWriters(t *testing.T) {
+	const (
+		authnRequest    = "github.com/krateo-platformops/authn/audit"
+		authnController = "github.com/krateo-platformops/authn/audit/controller"
+	)
+	_, sql, _ := runIt(t, "", "sql")
+	// The scope list of every query, by writer: required keys and rules.
+	scopes := map[audit.Writer][]string{}
+	for _, head := range []string{"-- Required keys, writer ", "-- Conditional keys, enums, closed set, target rule and W1 pairs, writer "} {
+		for _, q := range strings.Split(sql, head)[1:] {
+			w, _, _ := strings.Cut(q, ".")
+			m := regexp.MustCompile(`AND ScopeName IN \(([^)]*)\)`).FindStringSubmatch(q[:strings.Index(q, ";")])
+			if m == nil {
+				t.Fatalf("writer %s: a query with no scope list", w)
+			}
+			scopes[audit.Writer(w)] = append(scopes[audit.Writer(w)], m[1])
+		}
+	}
+	for w, want := range map[audit.Writer]string{audit.WriterRequest: authnRequest, audit.WriterController: authnController} {
+		if len(scopes[w]) != 2 {
+			t.Fatalf("writer %s: %d queries, want 2 (required keys, rules)", w, len(scopes[w]))
+		}
+		for _, list := range scopes[w] {
+			if !strings.Contains(list, "'"+want+"'") {
+				t.Errorf("writer %s: a query does not read authn's scope %s: %s", w, want, list)
+			}
+		}
+	}
+	for w, lists := range scopes {
+		for _, list := range lists {
+			for scope, owner := range map[string]audit.Writer{authnRequest: audit.WriterRequest, authnController: audit.WriterController} {
+				if w != owner && strings.Contains(list, "'"+scope+"'") {
+					t.Errorf("writer %s's query reads %s, which belongs to %s", w, scope, owner)
+				}
+			}
 		}
 	}
 }
