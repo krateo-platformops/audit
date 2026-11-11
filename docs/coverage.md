@@ -172,19 +172,25 @@ then a refusal is a `denied` record with no reason, which is valid.
 ## gateway (G)
 
 These rows are written by the observability collector's
-`logs/gateway-audit` projection. It was merged as `4da2a25` in
-otel-collector-daemonset 0.1.27, which is rolling out. It reads the
-access-log facts that agentgateway-policies emits (0.2.28 or later for
-complete records). These rows are placeholders: observability fills in
-their schema columns in a follow-up PR, and [observability#156] tracks the
-remaining test gaps. The live `auditschema sql` check follows the roll.
+`logs/gateway-audit` projection, merged as `4da2a25` in
+otel-collector-daemonset 0.1.27. 0.1.28 (`a73bda4`, [observability#158])
+also counts every gateway record it does not project. The projection reads
+the access-log facts agentgateway-policies emits (0.2.28 or later for
+complete records). `krateo.action` is `gateway.` followed by the protocol (`a2a`, `mcp`, `llm`). The verb is the
+lowercase HTTP method the gateway proxied, and every acting hop on these
+paths is a `post`. A hop the gateway refused before dialing still names its
+target: `server.address` is the route's configured backend. Every row is
+tested in observability's `check-gateway-audit` workflow against the real
+agentgateway's output with `auditschema check -writer gateway`.
+[observability#156] tracks the remaining test gaps. The live
+`auditschema sql` check follows the roll.
 
 | component | path (what changes) | writer class | identity source | status | owner issue | scope | krateo.action | verb | outcomes |
 |---|---|---|---|---|---|---|---|---|---|
-| agent gateway | an A2A call to an agent (a request with an `a2a.method`) | gateway | the token the gateway verified: `principal` and the `act` chain; `user.name` is the outermost actor | audited | [observability#138], [agentgateway-policies#79]; emit: [observability#155] | `github.com/krateo-platformops/observability/gateway-audit` | | | |
-| agent gateway | an MCP `tools/call`, `resources/read` or `prompts/get`, and any MCP method on neither the projected nor the excluded list | gateway | as above | audited | [observability#138], [agentgateway-policies#79]; emit: [observability#155] | `github.com/krateo-platformops/observability/gateway-audit` | | | |
-| agent gateway | an LLM completion | gateway | as above | audited | [observability#138], [agentgateway-policies#79]; emit: [observability#155] | `github.com/krateo-platformops/observability/gateway-audit` | | | |
-| agent gateway | a plain HTTP hop (protocol `http`), such as ui-token-hop's `/api/...` traffic to kagent-controller | gateway | as above | out of scope (not projected, and not counted yet: the counting fix is pending in observability) | [observability#138] | | | | |
+| agent gateway | an A2A call to an agent (a request with an `a2a.method`) | gateway | the token the gateway verified: `principal` and the `act` chain; `user.name` is the outermost actor | audited | [observability#138], [agentgateway-policies#79]; emit: [observability#155] | `github.com/krateo-platformops/observability/gateway-audit` | `gateway.a2a` | the lowercase method proxied (`post` for this path) | `success`, `failure` (the backend answered 4xx/5xx, or the gateway failed to reach it), `denied` (the gateway itself refused: authentication, authorization, rate limit, guardrail) |
+| agent gateway | an MCP `tools/call`, `resources/read` or `prompts/get`, and any MCP method on neither the projected nor the excluded list | gateway | as above | audited | [observability#138], [agentgateway-policies#79]; emit: [observability#155] | `github.com/krateo-platformops/observability/gateway-audit` | `gateway.mcp` | the lowercase method proxied (`post` for this path) | `success`, `failure` (the backend answered 4xx/5xx, or the gateway failed to reach it), `denied` (the gateway itself refused: authentication, authorization, rate limit, guardrail) |
+| agent gateway | an LLM completion | gateway | as above | audited | [observability#138], [agentgateway-policies#79]; emit: [observability#155] | `github.com/krateo-platformops/observability/gateway-audit` | `gateway.llm` | the lowercase method proxied (`post` for this path) | `success`, `failure` (the backend answered 4xx/5xx, or the gateway failed to reach it), `denied` (the gateway itself refused: authentication, authorization, rate limit, guardrail) |
+| agent gateway | a plain HTTP hop (protocol `http`), such as ui-token-hop's `/api/...` traffic to kagent-controller | gateway | as above | out of scope (not projected: the write is audited where it is applied, at kagent; counted in `krateo.gateway_audit.excluded` by protocol, route and method) | [observability#138], [kagent#31]; emit: [observability#158] | | | | |
 | agent gateway | MCP session plumbing, agent-card fetches, model listing, and requests that matched no route | gateway | as above | out of scope (not an acting hop; counted in `krateo.gateway_audit.excluded`) | [observability#138] | | | | |
 
 ## action (T)
@@ -352,6 +358,7 @@ Each open question is asked on its owner's issue; the link goes to the comment. 
 [observability#138]: https://github.com/krateo-platformops/observability/issues/138
 [observability#155]: https://github.com/krateo-platformops/observability/pull/155
 [observability#156]: https://github.com/krateo-platformops/observability/issues/156
+[observability#158]: https://github.com/krateo-platformops/observability/pull/158
 [agentgateway-policies#79]: https://github.com/krateo-agentiko/agentgateway-policies/issues/79
 [kagent#31]: https://github.com/krateo-agentiko/kagent/issues/31
 [agentiko#160]: https://github.com/krateo-agentiko/agentiko/issues/160
