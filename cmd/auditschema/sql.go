@@ -21,16 +21,45 @@ const window = "Timestamp >= {start:DateTime64(9)} AND Timestamp < {end:DateTime
 // row. TestConditionSQLIsTotal fails when the schema gains a condition this
 // map does not name.
 var conditionSQL = map[audit.Condition]string{
-	audit.CondK8sTarget:    k8sTargetSQL,
-	audit.CondMethodOther:  "(" + attr(audit.KeyHTTPMethod) + " = '_OTHER')",
-	audit.CondWrite:        attr(audit.KeyVerb) + " IN " + inList(audit.WriteVerbs()),
-	audit.CondDelegated:    "(" + attr(audit.KeyDelegation) + " != '' OR " + attr(audit.KeyOnBehalfOf) + " != '')",
-	audit.CondImpersonated: "(" + attr(audit.KeyImpersonatedUser) + " != '' OR " + attr(audit.KeyImpersonatedRoles) + " != '')",
-	audit.CondCaused:       "arrayExists(k -> startsWith(k, 'krateo.audit.cause_ref.'), mapKeys(LogAttributes))",
-	audit.CondDenied:       "(" + attr(audit.KeyOutcome) + " = " + lit(audit.OutcomeDenied) + ")",
+	audit.CondK8sTarget:        k8sTargetSQL,
+	audit.CondMethodOther:      "(" + attr(audit.KeyHTTPMethod) + " = '_OTHER')",
+	audit.CondWrite:            attr(audit.KeyVerb) + " IN " + inList(audit.WriteVerbs()),
+	audit.CondDelegated:        "(" + attr(audit.KeyDelegation) + " != '' OR " + attr(audit.KeyOnBehalfOf) + " != '')",
+	audit.CondImpersonated:     "(" + attr(audit.KeyImpersonatedUser) + " != '' OR " + attr(audit.KeyImpersonatedRoles) + " != '')",
+	audit.CondCaused:           "arrayExists(k -> startsWith(k, 'krateo.audit.cause_ref.'), mapKeys(LogAttributes))",
+	audit.CondDenied:           "(" + attr(audit.KeyOutcome) + " = " + lit(audit.OutcomeDenied) + ")",
+	audit.CondContentWrite:     attr(audit.KeyVerb) + " IN " + inList(audit.ContentWriteVerbs()),
+	audit.CondClientRejected:   "(" + attr(audit.KeyClientRejected) + " != '')",
+	audit.CondClientProvenance: clientProvenanceSQL(),
+	audit.CondConfirmedSet:     "arrayExists(k -> startsWith(k, 'krateo.audit.client.confirmed_set.'), mapKeys(LogAttributes))",
 }
 
 var k8sTargetSQL = "(" + attr(audit.KeyNamespace) + " != '' OR arrayExists(k -> startsWith(k, 'krateo.audit.object_ref.'), mapKeys(LogAttributes)))"
+
+// clientProvenanceSQL is condition client_provenance: any client key other
+// than source and rejected, each named, as the schema lists them.
+func clientProvenanceSQL() string {
+	var ors []string
+	for _, k := range audit.Keys() {
+		if strings.HasPrefix(k.Name, "krateo.audit.client.") && k.Name != audit.KeyClientSource && k.Name != audit.KeyClientRejected {
+			ors = append(ors, attr(k.Name)+" != ''")
+		}
+	}
+	return "(" + strings.Join(ors, " OR ") + ")"
+}
+
+// credentialTargetSQL is the record's object_ref naming a credential target.
+func credentialTargetSQL() string {
+	var ors []string
+	for _, c := range audit.CredentialTargets() {
+		p := attr(audit.KeyObjectAPIGroup) + " = " + lit(c.Group) + " AND " + attr(audit.KeyObjectResource) + " = " + lit(c.Resource)
+		if c.Subresource != "" {
+			p += " AND " + attr(audit.KeyObjectSubresource) + " = " + lit(c.Subresource)
+		}
+		ors = append(ors, "("+p+")")
+	}
+	return "(" + strings.Join(ors, " OR ") + ")"
+}
 
 func attr(k string) string { return "LogAttributes[" + lit(k) + "]" }
 
@@ -164,8 +193,16 @@ func rulesSQL(w audit.Writer) string {
 			}
 			add(alias("unmet", k.Name), pred)
 		}
-		if k.OnlyWhen != "" {
+		switch {
+		case k.OnlyWhen != "" && k.NotWhen != "":
+			add(alias("unexpected", k.Name), attr(k.Name)+" != '' AND (NOT "+conditionSQL[k.OnlyWhen]+" OR "+conditionSQL[k.NotWhen]+")")
+		case k.OnlyWhen != "":
 			add(alias("unexpected", k.Name), attr(k.Name)+" != '' AND NOT "+conditionSQL[k.OnlyWhen])
+		case k.NotWhen != "":
+			add(alias("unexpected", k.Name), attr(k.Name)+" != '' AND "+conditionSQL[k.NotWhen])
+		}
+		if k.CredentialFree {
+			add(alias("not_for_target", k.Name), attr(k.Name)+" != '' AND "+credentialTargetSQL())
 		}
 		// The key's enum, or this writer's own closed set: one of them, never
 		// both (schemagen refuses a key with both).

@@ -86,9 +86,44 @@ Every record names its target: `+"`%s`"+` (a Kubernetes object) or `+"`%s`"+`
 		fmt.Fprintf(&b, "| `%s` | %s |\n", w.ID, strings.ReplaceAll(s.Target.Writers[w.ID], "_", " "))
 	}
 
+	b.WriteString(`
+## Credential targets
+
+A key marked **never on a credential target** is not written on a record whose
+Kubernetes target, as ` + "`object_ref`" + ` names it, is one of these; ` + "`Check`" + `
+reports it there as ` + "`not-for-target`" + `. A target with no subresource
+listed matches the resource and every subresource of it.
+
+| api_group | resource | subresource |
+|---|---|---|
+`)
+	for _, c := range s.CredentialTargets {
+		group, sub := "`"+c.APIGroup+"`", "any"
+		if c.APIGroup == "" {
+			group = "core (omitted)"
+		}
+		if c.Subresource != "" {
+			sub = "`" + c.Subresource + "`"
+		}
+		fmt.Fprintf(&b, "| %s | `%s` | %s |\n", group, c.Resource, sub)
+	}
+
 	b.WriteString("\n## Conditions `Check` evaluates\n\n")
 	for _, c := range s.Conditions {
 		fmt.Fprintf(&b, "- `%s`: %s\n", c.ID, c.Description)
+	}
+
+	b.WriteString(`
+## Formats ` + "`Check`" + ` enforces
+
+A value that breaks its key's format is ` + "`bad-format`" + `; an int below its
+minimum, or not below its ` + "`less_than`" + ` key, is ` + "`out-of-range`" + `.
+
+`)
+	for _, f := range formats {
+		if f != "" {
+			fmt.Fprintf(&b, "- `%s`: %s\n", f, formatDocs[f])
+		}
 	}
 
 	if consts := s.valueConsts(); len(consts) > 0 {
@@ -152,6 +187,156 @@ a delete), so a reconcile a delete caused joins on ` + "`uid`" + ` alone. A
 controller row written before v0.5.0 carries no ` + "`cause_ref`" + `: it named the
 object it reconciled in ` + "`object_ref`" + `, so a join that spans those rows reads
 ` + "`cause_ref`" + ` where it is set and ` + "`object_ref`" + ` otherwise.
+`)
+
+	b.WriteString(`
+### Writes a reconcile coalesced: the generation range join
+
+` + "`krateo.audit.cause_ref.generation`" + ` is the generation the controller
+**reconciled**, as it read it. A writer never guesses the generation that
+introduced a change. Writes can coalesce: when two requests write
+generations 4 and 5 before the controller reconciles, its next reconcile acts
+on 5, and no reconcile row carries 4. The equality join above then finds the
+request of generation 5 only. The reconcile at generation *G* covers every
+request write of the object with a generation in (*P*, *G*], where *P* is the
+generation of the same controller's previous reconcile of the object (0 when
+there is none). The range join reads all of them:
+
+` + "```sql" + `
+WITH reconciles AS (
+  SELECT controller, uid, gen,
+         lagInFrame(gen, 1, 0) OVER (PARTITION BY controller, uid ORDER BY gen
+                                     ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS prev_gen
+  FROM (
+    SELECT DISTINCT ScopeName AS controller,
+           LogAttributes['krateo.audit.cause_ref.uid'] AS uid,
+           toInt64(LogAttributes['krateo.audit.cause_ref.generation']) AS gen
+    FROM default.krateo_audit
+    WHERE LogAttributes['krateo.audit.cause_ref.uid'] != ''
+      AND LogAttributes['krateo.audit.cause_ref.generation'] != ''
+  )
+)
+SELECT r.controller, r.uid, r.gen AS reconciled_generation,
+       toInt64(h.LogAttributes['krateo.audit.object_ref.generation']) AS written_generation,
+       h.LogAttributes['user.name']  AS actor,
+       h.LogAttributes['krateo.audit.on_behalf_of.user.name'] AS on_behalf_of,
+       h.LogAttributes['session.id'] AS session
+FROM reconciles AS r
+INNER JOIN default.krateo_audit AS h
+   ON h.LogAttributes['krateo.audit.object_ref.uid'] = r.uid
+WHERE h.ScopeName = 'github.com/krateo-platformops/snowplow/audit'
+  AND h.LogAttributes['krateo.audit.outcome'] = 'success'
+  AND h.LogAttributes['krateo.audit.dry_run'] != 'true'
+  AND h.LogAttributes['krateo.audit.object_ref.generation'] != ''
+  AND toInt64(h.LogAttributes['krateo.audit.object_ref.generation']) > r.prev_gen
+  AND toInt64(h.LogAttributes['krateo.audit.object_ref.generation']) <= r.gen
+` + "```" + `
+
+Each reconcile yields every write in its range, and the reader keeps them
+all; a query never picks one write as "the" cause. A reconcile with no
+write in its range acted on a generation no recorded request wrote, such as
+a write made before the request writer recorded it.
+
+**The decider of a decision.** A controller that acts on a person's decision
+(an access-review Campaign's ` + "`spec.decisions`" + `, acmp's Q6) writes no decider
+key: an unsigned ` + "`reviewedBy`" + ` string is the client's word. The decider is
+the actor (` + "`user.name`" + `, and ` + "`on_behalf_of`" + ` on a delegated token) of
+the request rows the range join returns for the reconcile that acted, each
+signed by the token the request writer verified.
+`)
+
+	b.WriteString(`
+## The content hash
+
+` + "`krateo.audit.object_ref.content_sha256`" + ` is the tamper-evidence anchor of a
+write that creates or replaces content (verb ` + "`create`" + ` or ` + "`update`" + `):
+the SHA-256 of the object's canonical content, computed by the writer from
+the request body it sends. A record pins an object by ` + "`uid`" + ` and
+` + "`resource_version`" + `; the hash also shows what it said, after the object
+is deleted, and lets an exported copy be checked against the trail. It is
+optional, and never written for a credential target (above): a hash of
+low-entropy secret data can be guessed offline.
+
+The value is ` + "`c1:`" + ` and 64 lowercase hex digits. **c1** names the canonical
+form below. The form is fixed: a change to it, however small, is a new
+form, ` + "`c2`" + `, so a hash stored under c1 is always checked with c1. ` + "`Check`" + `
+reports any other prefix as ` + "`bad-format`" + `.
+
+Go writers compute it with
+` + "`audit.ContentSHA256(group, resource, subresource, obj)`" + `, where the target
+is the record's ` + "`object_ref`" + ` and ` + "`obj`" + ` is the request body as sent (a
+typed object, an unstructured map, or its JSON). It refuses a credential
+target (` + "`audit.ErrCredentialTarget`" + `), the same targets ` + "`Check`" + ` refuses.
+Any other writer computes the same bytes.
+
+**Form c1:**
+
+1. **The content, per kind family.** A ConfigMap (core ` + "`configmaps`" + `): its
+   ` + "`data`" + ` and ` + "`binaryData`" + `. Any other object: every top-level field
+   but ` + "`apiVersion`" + `, ` + "`kind`" + `, ` + "`metadata`" + ` and ` + "`status`" + ` (a custom
+   resource's ` + "`spec`" + `; a RoleBinding's ` + "`roleRef`" + ` and ` + "`subjects`" + `).
+2. **Plus the authorization annotations**, for every family:
+   ` + "`metadata.annotations`" + ` kept to the keys below, as
+   ` + "`{\"metadata\":{\"annotations\":{...}}}`" + `, and left out when none of them is
+   set. Authorization reads them, so changing one changes what an identity
+   may do (AUDIT-4). Every other annotation, and every label, is metadata
+   and is not hashed.
+3. **Nulls.** An object member whose value is null is left out, at every
+   depth, so a typed object and its unstructured form (a
+   ` + "`creationTimestamp: null`" + ` in a pod template) hash the same. A null
+   element of an array stays: dropping it would move the others. The content
+   is a JSON object, ` + "`{}`" + ` when nothing is left.
+4. **The bytes.** UTF-8 JSON with no whitespace; object keys sorted by their
+   bytes; strings with only the escapes JSON requires (` + "`\\\"`" + `, ` + "`\\\\`" + `, and
+   each control character as ` + "`\\b`" + ` ` + "`\\f`" + ` ` + "`\\n`" + ` ` + "`\\r`" + ` ` + "`\\t`" + ` or
+   ` + "`\\u00xx`" + `), every other character raw, ` + "`<`" + `, ` + "`>`" + ` and ` + "`&`" + `
+   included; ` + "`binaryData`" + ` values as the base64 strings the object's JSON
+   holds; integers in decimal. A non-integer number has no canonical form,
+   and the object gets no hash.
+5. **The hash.** ` + "`c1:`" + ` and the SHA-256 of those bytes, as 64 lowercase hex
+   digits.
+
+The annotations c1 counts (` + "`audit.AuthorizationAnnotations()`" + `):
+
+`)
+	for _, a := range s.ContentAnnotations {
+		fmt.Fprintf(&b, "- `%s`\n", a)
+	}
+	b.WriteString(`
+They are authn's ` + "`storage.AuthorizationAnnotations`" + `. plumbing's
+` + "`helm/v3/verdicts.go`" + ` declares none: its change verdict counts no annotation.
+
+The test vector (` + "`TestContentSHA256_Vector`" + `): a ConfigMap whose data is
+` + "`k: <é>`" + ` and ` + "`a\"b: line1⏎line2`" + `, whose binaryData is
+` + "`logo: iVBORw==`" + `, and whose annotations are ` + "`authn.krateo.io/groups: devs⏎ops`" + `
+and an undeclared ` + "`example.com/note`" + `, has the content bytes
+
+` + "```json" + `
+` + contentVectorBytes + `
+` + "```" + `
+
+and the value ` + "`" + contentVectorHash + "`" + `.
+`)
+
+	b.WriteString(`
+## Client-asserted provenance
+
+` + "`krateo.audit.client.*`" + ` is what a client asserted about a write, as the
+writer received it after validating it: today the portal's
+` + "`X-Krateo-Provenance`" + ` header on snowplow's ` + "`/call`" + ` (snowplow#1333). These
+keys are **asserted**, kept apart from what the writer verified: none is
+identity, the actor's class, the agent's identity, the outcome or the
+target, which the writer establishes itself, and none is a policy key. They
+are written on a write only (a dry run included), by a request or action
+writer.
+
+- ` + "`source`" + ` is required once any other asserted key is present.
+- ` + "`confirmed_set.count`" + `, ` + "`irreversible`" + `, ` + "`sha256`" + ` and ` + "`op`" + ` come
+  together; ` + "`op`" + ` is below ` + "`count`" + `.
+- When the writer rejected the header, the record carries
+  ` + "`krateo.audit.client.rejected`" + ` (` + "`oversize`" + `, ` + "`encoding`" + `,
+  ` + "`version`" + `, ` + "`schema`" + `) and **no other client key**; ` + "`Check`" + `
+  reports any other one as ` + "`unexpected`" + `. The write itself still ran.
 `)
 
 	b.WriteString(`
@@ -230,7 +415,38 @@ actor: ` + "`actor`" + `). Each marker is counted under
 	for _, p := range s.LegacyControls {
 		fmt.Fprintf(&b, "| `%s` | `%s` | %s (pre-schema, the positive control) |\n", p.Scope, p.Writer, cell(p.Who))
 	}
+	first := true
+	for _, p := range append(slices.Clone(s.Populations), s.LegacyControls...) {
+		if p.Note == "" {
+			continue
+		}
+		if first {
+			b.WriteString("\n")
+			first = false
+		}
+		fmt.Fprintf(&b, "- `%s`: %s\n", p.Scope, strings.TrimSpace(p.Note))
+	}
 	return []byte(b.String())
+}
+
+// The content hash test vector docs/schema.md shows. The audit package's
+// TestContentSHA256_Vector computes the same bytes and hash with
+// audit.ContentSHA256, so the doc cannot drift from the code.
+const (
+	contentVectorBytes = `{"binaryData":{"logo":"iVBORw=="},"data":{"a\"b":"line1\nline2","k":"<é>"},"metadata":{"annotations":{"authn.krateo.io/groups":"devs\nops"}}}`
+	contentVectorHash  = "c1:e8374f859e140054ea17527c08740cd2439bc7bcad48dd777a3e3cc0921d708c"
+)
+
+// formatDocs is what each format of `formats` requires of a value, as Check
+// enforces it. TestFormatsAreDocumented fails on a format without an entry.
+var formatDocs = map[string]string{
+	"delegation_link": "`<class>:<subject>`, the class one of the actor classes or empty, the subject not empty.",
+	"marker_list":     "comma-separated markers of the schema, each at most once.",
+	"sha256_hex":      "64 lowercase hex digits.",
+	"content_hash":    "`c1:` and 64 lowercase hex digits: the content hash in form c1 (below). Any other form prefix is refused: a stored hash is read only with the form that made it.",
+	"uuid":            "a UUID in its canonical textual form, lowercase (8-4-4-4-12 hex digits).",
+	"opaque_id":       "1 to 128 of `[A-Za-z0-9_-]`.",
+	"rfc3339":         "an RFC 3339 timestamp, with or without fractional seconds.",
 }
 
 func levelCell(r requirement) string {
@@ -269,8 +485,23 @@ func keyNotes(k key) string {
 	if k.Asserted {
 		notes = append(notes, "**Asserted** (client-chosen).")
 	}
+	if k.Format != "" {
+		notes = append(notes, "Format `"+k.Format+"`.")
+	}
+	if k.Minimum != nil {
+		notes = append(notes, fmt.Sprintf("At least %d.", *k.Minimum))
+	}
+	if k.LessThan != "" {
+		notes = append(notes, "Less than `"+k.LessThan+"` on the same record.")
+	}
 	if k.OnlyWhen != "" {
 		notes = append(notes, "**Only when** `"+k.OnlyWhen+"` holds; anywhere else `Check` reports it `unexpected`.")
+	}
+	if k.NotWhen != "" {
+		notes = append(notes, "**Never when** `"+k.NotWhen+"` holds; there `Check` reports it `unexpected`.")
+	}
+	if k.CredentialFree {
+		notes = append(notes, "**Never on a credential target**; there `Check` reports it `not-for-target`.")
 	}
 	return k.Description + " " + strings.Join(notes, " ")
 }

@@ -307,3 +307,32 @@ func TestCoverage_TheCheckCanFail(t *testing.T) {
 		}
 	}
 }
+
+// The v0.6.0 controller populations of core-provider's emitters: a coverage
+// row naming either scope is accepted in the controller table and refused
+// in the request table, and Populations lists each as the controller's.
+func TestCoverage_CoreProviderScopesAreController(t *testing.T) {
+	scopes := map[string]Writer{}
+	for _, p := range Populations() {
+		scopes[p.Scope] = p.Writer
+	}
+	defined := map[string]bool{"core-provider#1": true}
+	for _, scope := range []string{
+		"github.com/krateo-platformops/composition-dynamic-controller/audit",
+		"github.com/krateo-platformops/core-provider/audit",
+	} {
+		if scopes[scope] != WriterController {
+			t.Errorf("%s: population writer %q, want controller", scope, scopes[scope])
+		}
+		row := coverageRow{line: 1, table: WriterController, component: "core-provider", path: "a helm write", writer: string(WriterController),
+			identity: "the controller's own ServiceAccount", status: "audited", owner: "[core-provider#1]", scope: scope, action: "`helm.upgrade`"}
+		if p := coverageProblems([]coverageRow{row}, defined); len(p) != 0 {
+			t.Errorf("%s as a controller row: %v", scope, p)
+		}
+		row.table, row.writer = WriterRequest, string(WriterRequest)
+		p := coverageProblems([]coverageRow{row}, defined)
+		if len(p) != 1 || !strings.Contains(p[0], "is writer controller's population, the row says request") {
+			t.Errorf("%s as a request row: %v, want refused as another writer's scope", scope, p)
+		}
+	}
+}

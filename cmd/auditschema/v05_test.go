@@ -14,26 +14,31 @@ import (
 // writer (testdata/v0.4.0/<writer>.json), get exactly the report v0.4.0's
 // auditschema gave them (<writer>.check-v0.4.0.txt, captured with the v0.4.0
 // binary), and the same exit code.
-func TestCheck_V040RecordsStayValid(t *testing.T) {
-	files, err := filepath.Glob("../../testdata/v0.4.0/*.json")
+func TestCheck_V040RecordsStayValid(t *testing.T) { recordsStayValid(t, "v0.4.0") }
+
+// recordsStayValid replays testdata/<version>/<writer>.json, the records that
+// release's own Emit wrote, and expects the report and exit code that
+// release's own auditschema gave (<writer>.check-<version>.txt).
+func recordsStayValid(t *testing.T, version string) {
+	files, err := filepath.Glob("../../testdata/" + version + "/*.json")
 	if err != nil || len(files) < 3 {
-		t.Fatalf("v0.4.0 fixtures: %v, %v", files, err)
+		t.Fatalf("%s fixtures: %v, %v", version, files, err)
 	}
 	for _, f := range files {
 		w := strings.TrimSuffix(filepath.Base(f), ".json")
-		want, err := os.ReadFile(strings.TrimSuffix(f, ".json") + ".check-v0.4.0.txt")
+		want, err := os.ReadFile(strings.TrimSuffix(f, ".json") + ".check-" + version + ".txt")
 		if err != nil {
 			t.Fatal(err)
 		}
 		code, out, errs := runIt(t, "", "check", "-writer", w, f)
-		// The report names the file as the caller spelled it; v0.4.0 was run
-		// from the module root.
+		// The report names the file as the caller spelled it; the release
+		// was run from the module root.
 		out = strings.ReplaceAll(out, "../../", "")
 		if out != string(want) {
-			t.Errorf("%s: v0.5 reports\n%s\nv0.4.0 reported\n%s%s", w, out, want, errs)
+			t.Errorf("%s: this release reports\n%s\n%s reported\n%s%s", w, out, version, want, errs)
 		}
 		if wantCode := map[bool]int{true: 0, false: 1}[strings.HasPrefix(string(want), "0 of ")]; code != wantCode {
-			t.Errorf("%s: exit %d, v0.4.0 exited %d", w, code, wantCode)
+			t.Errorf("%s: exit %d, %s exited %d", w, code, version, wantCode)
 		}
 	}
 }
@@ -130,8 +135,11 @@ func TestCheck_CauseRefAndDenialReasonRules(t *testing.T) {
 		{"the controller's reason on authn", "request", sub(authnDenied, "name_held_legacy", "kept_resource_policy"), []string{"krateo.audit.denial_reason: bad-enum"}},
 		{"authn's reason on a failure", "request", sub(authnDenied, authnOutcome, `{"key":"krateo.audit.outcome","value":{"stringValue":"failure"}},`),
 			[]string{"krateo.audit.denial_reason: unexpected"}},
-		{"a reason on the gateway", "gateway", sub(sub(gatewayRecord, `"krateo.audit.outcome","value":{"stringValue":"success"}`, `"krateo.audit.outcome","value":{"stringValue":"denied"}`),
+		// A denied record carries no status code (v0.6.0, audit#13): the
+		// gateway record's 200 goes with its success.
+		{"a reason on the gateway", "gateway", sub(sub(sub(gatewayRecord, `"krateo.audit.outcome","value":{"stringValue":"success"}`, `"krateo.audit.outcome","value":{"stringValue":"denied"}`),
 			`{"key":"outcome","value":{"stringValue":"success"}},`, `{"key":"outcome","value":{"stringValue":"denied"}},`+authnReason),
+			`{"key":"http.response.status_code","value":{"intValue":"200"}},`, ""),
 			[]string{"krateo.audit.denial_reason: not-for-writer"}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

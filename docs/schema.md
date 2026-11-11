@@ -46,7 +46,7 @@ through the generated `audit.Key*` constants and test their records with
 | `user.roles` | string[] | development | C: the token carries groups | C: the token carries groups | C: the token carries groups | O | The groups of the principal in user.name (Kubernetes user.groups). **Identity.** |
 | `krateo.audit.actor_class` | string | none | C: the token carries a known principal claim (mark) | C: the token carries a known principal claim (mark) | R | R | The class of the principal in user.name, as its credential proves it: authn's signed `principal` claim (UserInfo.ActorPrincipal()). Omitted, never defaulted, when the claim is absent or unknown. Under TOKEN_PASSTHROUGH an agent replays a person's token, so the class is human; only a /delegate token names the agent. One of `human`, `agent`, `controller`, `service`. Marker `actor_class`. |
 | `krateo.audit.on_behalf_of.user.name` | string | none | C: the token carries a signed act chain [checked] | C: the token carries a signed act chain [checked] | C: the token carries a signed act chain [checked] | O | On a delegated token, the person the actor acts for (the token's sub). Read only from a signed act chain, never from baggage. **Identity.** |
-| `krateo.audit.delegation` | string[] | none | C: the token carries a signed act chain [checked] | C: the token carries a signed act chain [checked] | C: the token carries a signed act chain [checked] | O | The signed act chain, outermost actor first and ending with the subject, each entry &lt;class&gt;:&lt;subject&gt;. A link whose class is unknown is written :&lt;subject&gt;. **Identity.** |
+| `krateo.audit.delegation` | string[] | none | C: the token carries a signed act chain [checked] | C: the token carries a signed act chain [checked] | C: the token carries a signed act chain [checked] | O | The signed act chain, outermost actor first and ending with the subject, each entry &lt;class&gt;:&lt;subject&gt;. A link whose class is unknown is written :&lt;subject&gt;. **Identity.** Format `delegation_link`. |
 | `krateo.audit.impersonated_user.name` | string | none | C: the writer impersonated [checked] | NE | C: the writer impersonated [checked] | C: the writer impersonated [checked] | The user the writer impersonated (Kubernetes impersonatedUser.username). **Identity.** |
 | `krateo.audit.impersonated_user.roles` | string[] | none | C: the writer impersonated with groups | NE | C: the writer impersonated with groups | C: the writer impersonated with groups | The groups the writer impersonated (Kubernetes impersonatedUser.groups). **Identity.** |
 | `krateo.audit.affected_user.name` | string | none | — | — | O | C: the object is about a user | The user the action was done TO, when that is not the actor: separates "done to alice" from "done by alice". Never equal to user.name. **Identity.** |
@@ -56,8 +56,8 @@ through the generated `audit.Key*` constants and test their records with
 | `http.request.method_original` | string | stable | C: http.request.method is _OTHER [checked] | C: http.request.method is _OTHER [checked] | C: http.request.method is _OTHER [checked] | C: http.request.method is _OTHER [checked] | The HTTP method exactly as the writer was given it, when http.request.method records it as _OTHER. Written only then, so no value a writer passes is lost. Semconv also lets a framework that treats methods as case-insensitive pair a canonical method with its original; this schema does not: a method semconv does not name, lowercase included, is _OTHER. **Only when** `method_other` holds; anywhere else `Check` reports it `unexpected`. |
 | `krateo.audit.dry_run` | bool | none | C: the record is a write [checked] | NE | C: the record is a write [checked] | — | true when the write was validated and not persisted (Kubernetes dryRun=All, or an endpoint's own dry run), false for a write meant to persist. On every write record of a writer that serves requests or performs actions; never on a read. Readers use this key, not a suffix on krateo.action. **Only when** `write` holds; anywhere else `Check` reports it `unexpected`. |
 | `krateo.audit.outcome` | string | none | R | R | R | R | What the authority this writer sent to answered, at the protocol level the writer observes. denied means the writer itself refused; krateo.audit.denial_reason may say why. One of `success`, `failure`, `denied`. |
-| `krateo.audit.denial_reason` | string | none | O, one of `name_reserved`, `name_claimed`, `name_held_legacy`, `name_provisioned`, `name_bound`, `system_group`, `group_not_allowed` | — | — | O, one of `kept_resource_policy` | Why the writer itself refused, on a denied record only: one of the closed values its writer class declares, never free text. The caller's answer can stay opaque while the audit reader gets the reason. Optional: a denied record without it conforms. A writer class with no declared value cannot write it. **Only when** `denied` holds; anywhere else `Check` reports it `unexpected`. |
-| `http.response.status_code` | int | stable | C: the authority answered | C: the backend answered | C: the authority answered | C: the action was an HTTP request that was answered | The status code the authority answered (Kubernetes responseStatus.code). |
+| `krateo.audit.denial_reason` | string | none | O, one of `name_reserved`, `name_claimed`, `name_held_legacy`, `name_provisioned`, `name_bound`, `system_group`, `group_not_allowed`, `delegation_not_allowed`, `delegation_too_deep`, `platform_group`, `name_missing` | — | — | O, one of `kept_resource_policy` | Why the writer itself refused, on a denied record only: one of the closed values its writer class declares, never free text. The caller's answer can stay opaque while the audit reader gets the reason. Optional: a denied record without it conforms. A writer class with no declared value cannot write it. **Only when** `denied` holds; anywhere else `Check` reports it `unexpected`. |
+| `http.response.status_code` | int | stable | C: the authority answered | C: the backend answered | C: the authority answered | C: the action was an HTTP request that was answered | The status code the authority answered (Kubernetes responseStatus.code). Never on a denied record: denied means the writer itself refused, so no authority answered. **Never when** `denied` holds; there `Check` reports it `unexpected`. |
 | `krateo.audit.preview` | bool | none | C: the target is a Kubernetes object (false when cluster-scoped) [checked] (mark) | NE | C: the target is a Kubernetes object (false when cluster-scoped) [checked] (mark) | C: the target is a Kubernetes object (false when cluster-scoped) [checked] (mark) | true when the target is a namespaced Kubernetes object whose Namespace carries the label krateo.io/purpose=preview-sandbox, read by the writer from apiserver state. false for any other Kubernetes target, a cluster-scoped one included (installer#716 §2.4). Omitted and marked when the Namespace could not be read. Not written for an external endpoint alone. Not a retention key, not a filter. Marker `preview`. |
 | `krateo.audit.object_ref.api_group` | string | none | C: Kubernetes target outside the core group | NE | C: Kubernetes target outside the core group | C: Kubernetes target outside the core group | The object's API group (objectRef.apiGroup). Omitted for the core group. |
 | `krateo.audit.object_ref.api_version` | string | none | C: Kubernetes target [checked] | NE | C: Kubernetes target [checked] | C: Kubernetes target [checked] | The object's API version (objectRef.apiVersion). |
@@ -69,6 +69,7 @@ through the generated `audit.Key*` constants and test their records with
 | `krateo.audit.object_ref.uid` | string | none | C: a successful, non-dry-run write | NE | C: a successful, non-dry-run write | C: the object is known | The uid of the object written, as the authority returned it; for a controller, of the object it wrote or acted on. A request row's object_ref.uid is the join key to the reconciles it caused, whose controller rows carry it as krateo.audit.cause_ref.uid. |
 | `krateo.audit.object_ref.resource_version` | string | none | C: a successful, non-dry-run write that is not a DELETE | NE | C: a successful, non-dry-run write that is not a DELETE | O | The resourceVersion the authority returned for the write, or the one a controller read. |
 | `krateo.audit.object_ref.generation` | int | none | C: a successful, non-dry-run write that is not a DELETE | NE | C: a successful, non-dry-run write that is not a DELETE | C: the controller acted on a generation | The generation the authority returned for the write, or the one a controller acted on. |
+| `krateo.audit.object_ref.content_sha256` | string | none | O | NE | O | O | The tamper-evidence anchor of a write that creates or replaces content: c1:&lt;the lowercase hex SHA-256 of the object's canonical content, form c1&gt; (audit.ContentSHA256, docs/schema.md), computed by the writer from the request body it sends. A later change of the form is c2, so a stored hash is always read with the form that made it. Never on a credential-bearing target: a hash of low-entropy secret data can be guessed offline. Format `content_hash`. **Only when** `content_write` holds; anywhere else `Check` reports it `unexpected`. **Never on a credential target**; there `Check` reports it `not-for-target`. |
 | `krateo.audit.cause_ref.api_group` | string | none | — | — | — | C: the reconciled object is outside the core group | The API group of the object the controller reconciled. Omitted for the core group. |
 | `krateo.audit.cause_ref.api_version` | string | none | — | — | — | C: the record names a reconciled object [checked] | The API version of the object the controller reconciled. |
 | `krateo.audit.cause_ref.resource` | string | none | — | — | — | C: the record names a reconciled object [checked] | The resource, the plural, of the object the controller reconciled. |
@@ -85,11 +86,20 @@ through the generated `audit.Key*` constants and test their records with
 | `krateo.restaction.namespace` | string | none | C: a RESTAction stage record | — | — | — | The namespace of the RESTAction whose stage performed the action. |
 | `krateo.restaction.name` | string | none | C: a RESTAction stage record | — | — | — | The name of the RESTAction whose stage performed the action. |
 | `krateo.restaction.stage` | string | none | C: a RESTAction stage record | — | — | — | The api[] stage of the RESTAction that performed the action. |
-| `krateo.audit.incomplete` | string | none | C: the record has a gap | C: the record has a gap | C: the record has a gap | C: the record has a gap | The comma-separated markers of the facts this record lacks, in a fixed order. A gap is recorded, never hidden. |
+| `krateo.audit.incomplete` | string | none | C: the record has a gap | C: the record has a gap | C: the record has a gap | C: the record has a gap | The comma-separated markers of the facts this record lacks, in a fixed order. A gap is recorded, never hidden. Format `marker_list`. |
 | `krateo.audit.no_trace_context` | bool | none | C: no span on the context | C: no span on the context | C: no span on the context | C: no span on the context | true when the record was emitted with no valid span on its context, so it carries no TraceId. One of `true`. |
 | `krateo.audit.gateway.route` | string | none | — | R | — | — | The gateway route the request matched (gateway configuration). |
 | `krateo.audit.gateway.mcp_tool` | string | none | — | C: an MCP hop | — | — | The MCP tool name of an MCP hop. |
 | `krateo.audit.asserted.agent_host` | string | none | — | C: the header was present | — | — | The client-controlled x-kagent-host header, recorded as an assertion. Never an actor identity, never a policy key. **Asserted** (client-chosen). |
+| `krateo.audit.client.source` | string | none | C: the record carries client provenance [checked] | — | C: the record carries client provenance [checked] | — | The client that sent the provenance header. One of `portal`. **Asserted** (client-chosen). **Only when** `write` holds; anywhere else `Check` reports it `unexpected`. **Never when** `client_rejected` holds; there `Check` reports it `unexpected`. |
+| `krateo.audit.client.agent_session_id` | string | none | O | — | O | — | The Agentiko session the write was made in, for an agent-initiated write: at most 128 of [A-Za-z0-9_-]. An agent's prompt is traced through it in Agentiko's own store; no prompt text is carried. **Asserted** (client-chosen). Format `opaque_id`. **Only when** `write` holds; anywhere else `Check` reports it `unexpected`. **Never when** `client_rejected` holds; there `Check` reports it `unexpected`. |
+| `krateo.audit.client.confirmation_id` | string | none | O | — | O | — | One press of the portal's confirm gate, a lowercase UUID: every write of one confirmed set carries the same id. **Asserted** (client-chosen). Format `uuid`. **Only when** `write` holds; anywhere else `Check` reports it `unexpected`. **Never when** `client_rejected` holds; there `Check` reports it `unexpected`. |
+| `krateo.audit.client.confirmed_set.count` | int | none | C: the record names a confirmed set [checked] | — | C: the record names a confirmed set [checked] | — | How many writes the confirmed set holds. **Asserted** (client-chosen). At least 1. **Only when** `write` holds; anywhere else `Check` reports it `unexpected`. **Never when** `client_rejected` holds; there `Check` reports it `unexpected`. |
+| `krateo.audit.client.confirmed_set.irreversible` | bool | none | C: the record names a confirmed set [checked] | — | C: the record names a confirmed set [checked] | — | true when any write of the confirmed set is irreversible. **Asserted** (client-chosen). **Only when** `write` holds; anywhere else `Check` reports it `unexpected`. **Never when** `client_rejected` holds; there `Check` reports it `unexpected`. |
+| `krateo.audit.client.confirmed_set.sha256` | string | none | C: the record names a confirmed set [checked] | — | C: the record names a confirmed set [checked] | — | The lowercase hex SHA-256 of the canonical confirmed set (snowplow#1333): the blast radius the person confirmed, not its diffs. **Asserted** (client-chosen). Format `sha256_hex`. **Only when** `write` holds; anywhere else `Check` reports it `unexpected`. **Never when** `client_rejected` holds; there `Check` reports it `unexpected`. |
+| `krateo.audit.client.confirmed_set.op` | int | none | C: the record names a confirmed set [checked] | — | C: the record names a confirmed set [checked] | — | The index of this write in the confirmed set, from 0. **Asserted** (client-chosen). At least 0. Less than `krateo.audit.client.confirmed_set.count` on the same record. **Only when** `write` holds; anywhere else `Check` reports it `unexpected`. **Never when** `client_rejected` holds; there `Check` reports it `unexpected`. |
+| `krateo.audit.client.requested_at` | string | none | O | — | O | — | When the client says the person confirmed, an RFC 3339 timestamp from the browser's clock. Never the event time. **Asserted** (client-chosen). Format `rfc3339`. **Only when** `write` holds; anywhere else `Check` reports it `unexpected`. **Never when** `client_rejected` holds; there `Check` reports it `unexpected`. |
+| `krateo.audit.client.rejected` | string | none | O | — | O | — | The writer rejected the client's provenance header, and why: the header was too long, not base64url JSON, of another version, or broke the closed schema. The write itself still ran. The record then carries no other client key. One of `oversize`, `encoding`, `version`, `schema`. **Asserted** (client-chosen). **Only when** `write` holds; anywhere else `Check` reports it `unexpected`. |
 
 ## The target rule
 
@@ -103,6 +113,19 @@ Every record names its target: `krateo.audit.object_ref.resource` (a Kubernetes 
 | `action` | exactly one |
 | `controller` | at least one |
 
+## Credential targets
+
+A key marked **never on a credential target** is not written on a record whose
+Kubernetes target, as `object_ref` names it, is one of these; `Check`
+reports it there as `not-for-target`. A target with no subresource
+listed matches the resource and every subresource of it.
+
+| api_group | resource | subresource |
+|---|---|---|
+| core (omitted) | `secrets` | any |
+| core (omitted) | `serviceaccounts` | `token` |
+| `authentication.k8s.io` | `tokenreviews` | any |
+
 ## Conditions `Check` evaluates
 
 - `k8s_target`: The record names a Kubernetes object: k8s.namespace.name or any krateo.audit.object_ref.* key is present.
@@ -112,6 +135,23 @@ Every record names its target: `krateo.audit.object_ref.resource` (a Kubernetes 
 - `impersonated`: The record carries an impersonation: either krateo.audit.impersonated_user.* key is present.
 - `caused`: The record names the object a controller reconciled: any krateo.audit.cause_ref.* key is present.
 - `denied`: krateo.audit.outcome is denied: the writer itself refused.
+- `content_write`: krateo.audit.verb creates or replaces an object's content: create or update.
+- `client_rejected`: The writer rejected the client's provenance header: krateo.audit.client.rejected is present.
+- `client_provenance`: The record carries provenance the client asserted: a krateo.audit.client.* key other than source and rejected is present.
+- `confirmed_set`: The record names the confirmed set its write belongs to: any krateo.audit.client.confirmed_set.* key is present.
+
+## Formats `Check` enforces
+
+A value that breaks its key's format is `bad-format`; an int below its
+minimum, or not below its `less_than` key, is `out-of-range`.
+
+- `delegation_link`: `<class>:<subject>`, the class one of the actor classes or empty, the subject not empty.
+- `marker_list`: comma-separated markers of the schema, each at most once.
+- `sha256_hex`: 64 lowercase hex digits.
+- `content_hash`: `c1:` and 64 lowercase hex digits: the content hash in form c1 (below). Any other form prefix is refused: a stored hash is read only with the form that made it.
+- `uuid`: a UUID in its canonical textual form, lowercase (8-4-4-4-12 hex digits).
+- `opaque_id`: 1 to 128 of `[A-Za-z0-9_-]`.
+- `rfc3339`: an RFC 3339 timestamp, with or without fractional seconds.
 
 ## Closed values per writer
 
@@ -130,6 +170,10 @@ through its generated constant.
 | `krateo.audit.denial_reason` | `name_bound` | `request` | `audit.DenialReasonNameBound` |
 | `krateo.audit.denial_reason` | `system_group` | `request` | `audit.DenialReasonSystemGroup` |
 | `krateo.audit.denial_reason` | `group_not_allowed` | `request` | `audit.DenialReasonGroupNotAllowed` |
+| `krateo.audit.denial_reason` | `delegation_not_allowed` | `request` | `audit.DenialReasonDelegationNotAllowed` |
+| `krateo.audit.denial_reason` | `delegation_too_deep` | `request` | `audit.DenialReasonDelegationTooDeep` |
+| `krateo.audit.denial_reason` | `platform_group` | `request` | `audit.DenialReasonPlatformGroup` |
+| `krateo.audit.denial_reason` | `name_missing` | `request` | `audit.DenialReasonNameMissing` |
 | `krateo.audit.denial_reason` | `kept_resource_policy` | `controller` | `audit.DenialReasonKeptResourcePolicy` |
 
 ## A controller row: the object written and the object reconciled
@@ -174,6 +218,148 @@ a delete), so a reconcile a delete caused joins on `uid` alone. A
 controller row written before v0.5.0 carries no `cause_ref`: it named the
 object it reconciled in `object_ref`, so a join that spans those rows reads
 `cause_ref` where it is set and `object_ref` otherwise.
+
+### Writes a reconcile coalesced: the generation range join
+
+`krateo.audit.cause_ref.generation` is the generation the controller
+**reconciled**, as it read it. A writer never guesses the generation that
+introduced a change. Writes can coalesce: when two requests write
+generations 4 and 5 before the controller reconciles, its next reconcile acts
+on 5, and no reconcile row carries 4. The equality join above then finds the
+request of generation 5 only. The reconcile at generation *G* covers every
+request write of the object with a generation in (*P*, *G*], where *P* is the
+generation of the same controller's previous reconcile of the object (0 when
+there is none). The range join reads all of them:
+
+```sql
+WITH reconciles AS (
+  SELECT controller, uid, gen,
+         lagInFrame(gen, 1, 0) OVER (PARTITION BY controller, uid ORDER BY gen
+                                     ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS prev_gen
+  FROM (
+    SELECT DISTINCT ScopeName AS controller,
+           LogAttributes['krateo.audit.cause_ref.uid'] AS uid,
+           toInt64(LogAttributes['krateo.audit.cause_ref.generation']) AS gen
+    FROM default.krateo_audit
+    WHERE LogAttributes['krateo.audit.cause_ref.uid'] != ''
+      AND LogAttributes['krateo.audit.cause_ref.generation'] != ''
+  )
+)
+SELECT r.controller, r.uid, r.gen AS reconciled_generation,
+       toInt64(h.LogAttributes['krateo.audit.object_ref.generation']) AS written_generation,
+       h.LogAttributes['user.name']  AS actor,
+       h.LogAttributes['krateo.audit.on_behalf_of.user.name'] AS on_behalf_of,
+       h.LogAttributes['session.id'] AS session
+FROM reconciles AS r
+INNER JOIN default.krateo_audit AS h
+   ON h.LogAttributes['krateo.audit.object_ref.uid'] = r.uid
+WHERE h.ScopeName = 'github.com/krateo-platformops/snowplow/audit'
+  AND h.LogAttributes['krateo.audit.outcome'] = 'success'
+  AND h.LogAttributes['krateo.audit.dry_run'] != 'true'
+  AND h.LogAttributes['krateo.audit.object_ref.generation'] != ''
+  AND toInt64(h.LogAttributes['krateo.audit.object_ref.generation']) > r.prev_gen
+  AND toInt64(h.LogAttributes['krateo.audit.object_ref.generation']) <= r.gen
+```
+
+Each reconcile yields every write in its range, and the reader keeps them
+all; a query never picks one write as "the" cause. A reconcile with no
+write in its range acted on a generation no recorded request wrote, such as
+a write made before the request writer recorded it.
+
+**The decider of a decision.** A controller that acts on a person's decision
+(an access-review Campaign's `spec.decisions`, acmp's Q6) writes no decider
+key: an unsigned `reviewedBy` string is the client's word. The decider is
+the actor (`user.name`, and `on_behalf_of` on a delegated token) of
+the request rows the range join returns for the reconcile that acted, each
+signed by the token the request writer verified.
+
+## The content hash
+
+`krateo.audit.object_ref.content_sha256` is the tamper-evidence anchor of a
+write that creates or replaces content (verb `create` or `update`):
+the SHA-256 of the object's canonical content, computed by the writer from
+the request body it sends. A record pins an object by `uid` and
+`resource_version`; the hash also shows what it said, after the object
+is deleted, and lets an exported copy be checked against the trail. It is
+optional, and never written for a credential target (above): a hash of
+low-entropy secret data can be guessed offline.
+
+The value is `c1:` and 64 lowercase hex digits. **c1** names the canonical
+form below. The form is fixed: a change to it, however small, is a new
+form, `c2`, so a hash stored under c1 is always checked with c1. `Check`
+reports any other prefix as `bad-format`.
+
+Go writers compute it with
+`audit.ContentSHA256(group, resource, subresource, obj)`, where the target
+is the record's `object_ref` and `obj` is the request body as sent (a
+typed object, an unstructured map, or its JSON). It refuses a credential
+target (`audit.ErrCredentialTarget`), the same targets `Check` refuses.
+Any other writer computes the same bytes.
+
+**Form c1:**
+
+1. **The content, per kind family.** A ConfigMap (core `configmaps`): its
+   `data` and `binaryData`. Any other object: every top-level field
+   but `apiVersion`, `kind`, `metadata` and `status` (a custom
+   resource's `spec`; a RoleBinding's `roleRef` and `subjects`).
+2. **Plus the authorization annotations**, for every family:
+   `metadata.annotations` kept to the keys below, as
+   `{"metadata":{"annotations":{...}}}`, and left out when none of them is
+   set. Authorization reads them, so changing one changes what an identity
+   may do (AUDIT-4). Every other annotation, and every label, is metadata
+   and is not hashed.
+3. **Nulls.** An object member whose value is null is left out, at every
+   depth, so a typed object and its unstructured form (a
+   `creationTimestamp: null` in a pod template) hash the same. A null
+   element of an array stays: dropping it would move the others. The content
+   is a JSON object, `{}` when nothing is left.
+4. **The bytes.** UTF-8 JSON with no whitespace; object keys sorted by their
+   bytes; strings with only the escapes JSON requires (`\"`, `\\`, and
+   each control character as `\b` `\f` `\n` `\r` `\t` or
+   `\u00xx`), every other character raw, `<`, `>` and `&`
+   included; `binaryData` values as the base64 strings the object's JSON
+   holds; integers in decimal. A non-integer number has no canonical form,
+   and the object gets no hash.
+5. **The hash.** `c1:` and the SHA-256 of those bytes, as 64 lowercase hex
+   digits.
+
+The annotations c1 counts (`audit.AuthorizationAnnotations()`):
+
+- `authn.krateo.io/strategy`
+- `authn.krateo.io/groups`
+
+They are authn's `storage.AuthorizationAnnotations`. plumbing's
+`helm/v3/verdicts.go` declares none: its change verdict counts no annotation.
+
+The test vector (`TestContentSHA256_Vector`): a ConfigMap whose data is
+`k: <é>` and `a"b: line1⏎line2`, whose binaryData is
+`logo: iVBORw==`, and whose annotations are `authn.krateo.io/groups: devs⏎ops`
+and an undeclared `example.com/note`, has the content bytes
+
+```json
+{"binaryData":{"logo":"iVBORw=="},"data":{"a\"b":"line1\nline2","k":"<é>"},"metadata":{"annotations":{"authn.krateo.io/groups":"devs\nops"}}}
+```
+
+and the value `c1:e8374f859e140054ea17527c08740cd2439bc7bcad48dd777a3e3cc0921d708c`.
+
+## Client-asserted provenance
+
+`krateo.audit.client.*` is what a client asserted about a write, as the
+writer received it after validating it: today the portal's
+`X-Krateo-Provenance` header on snowplow's `/call` (snowplow#1333). These
+keys are **asserted**, kept apart from what the writer verified: none is
+identity, the actor's class, the agent's identity, the outcome or the
+target, which the writer establishes itself, and none is a policy key. They
+are written on a write only (a dry run included), by a request or action
+writer.
+
+- `source` is required once any other asserted key is present.
+- `confirmed_set.count`, `irreversible`, `sha256` and `op` come
+  together; `op` is below `count`.
+- When the writer rejected the header, the record carries
+  `krateo.audit.client.rejected` (`oversize`, `encoding`,
+  `version`, `schema`) and **no other client key**; `Check`
+  reports any other one as `unexpected`. The write itself still ran.
 
 ## Kept deletions and pruned children
 
@@ -311,6 +497,12 @@ actor: `actor`). Each marker is counted under
 | `github.com/krateo-platformops/authn/audit` | `request` | authn's login and /delegate records |
 | `github.com/krateo-platformops/authn/audit/controller` | `controller` | authn's background credential writes (certificate renewal, the step-up Secret sweep) |
 | `github.com/krateo-platformops/observability/gateway-audit` | `gateway` | the collector's gateway-audit projection |
-| `github.com/krateo-platformops/audit` | `controller` | access-review and identity-lifecycle (split by ServiceName) |
+| `github.com/krateo-platformops/access-review/audit` | `controller` | access-review |
+| `github.com/krateo-platformops/identity-lifecycle/audit` | `controller` | identity-lifecycle |
+| `github.com/krateo-platformops/audit` | `controller` | access-review and identity-lifecycle before each moved to its own scope (split by ServiceName); kept for their historical rows |
 | `rest-dynamic-controller/audit` | `controller` | rest-dynamic-controller |
+| `github.com/krateo-platformops/composition-dynamic-controller/audit` | `controller` | the composition-dynamic-controller's helm writes to a Composition's children (one record per child installed, upgraded, pruned or kept) |
+| `github.com/krateo-platformops/core-provider/audit` | `controller` | core-provider's *.krateo.io spec writes (authn mapping, spoke mirror Compositions, hub delete) and its RBAC and credential-Secret writes |
 | `request` | `gateway` | the agent gateway's pre-2026-10-22 access-log rows (pre-schema, the positive control) |
+
+- `github.com/krateo-platformops/composition-dynamic-controller/audit`: The composition-dynamic-controller runs one Deployment per CompositionDefinition version, each with its own ServiceName, and every one emits on this scope: select its rows by scope, not by ServiceName.

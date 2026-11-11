@@ -168,6 +168,19 @@ type Event struct {
 	ObjectGeneration      int64  // krateo.audit.object_ref.generation (0 => omitted)
 	ObjectResourceVersion string // krateo.audit.object_ref.resource_version
 
+	// ContentSHA256 is the tamper-evidence anchor of a write that creates or
+	// replaces an object's content (Verb create or update) ->
+	// krateo.audit.object_ref.content_sha256. Compute it with the package's
+	// ContentSHA256 before the write, from the object the write sends. It is
+	// never set for a credential target (a Secret): ContentSHA256 refuses
+	// one, and Check reports the key there.
+	ContentSHA256 string
+
+	// Client is the provenance a client asserted about this write, as the
+	// writer validated it (snowplow's X-Krateo-Provenance header) ->
+	// krateo.audit.client.*. Asserted: never identity, outcome or target.
+	Client ClientProvenance
+
 	// Cause is, for a controller, the object it reconciled: the custom
 	// resource whose reconcile made this write -> krateo.audit.cause_ref.*.
 	// Set it on every record of a reconcile, also when the object written is
@@ -452,6 +465,7 @@ func attributes(ctx context.Context, ev Event, actor principal) []attribute.KeyV
 	add(KeyObjectUID, ev.ObjectUID)
 	num(KeyObjectGeneration, ev.ObjectGeneration)
 	add(KeyObjectResourceVersion, ev.ObjectResourceVersion)
+	add(KeyObjectContentSHA256, ev.ContentSHA256)
 	add(KeyCauseAPIGroup, ev.Cause.Group)
 	add(KeyCauseAPIVersion, ev.Cause.Version)
 	add(KeyCauseResource, ev.Cause.Resource)
@@ -473,6 +487,7 @@ func attributes(ctx context.Context, ev Event, actor principal) []attribute.KeyV
 	add(KeyRESTActionNamespace, ev.RESTActionNamespace)
 	add(KeyRESTActionName, ev.RESTActionName)
 	add(KeyRESTActionStage, ev.RESTActionStage)
+	attrs = append(attrs, ev.Client.attributes()...)
 
 	// TraceId/SpanId are LogRecord fields the SDK stamps from ctx, not
 	// attributes. Flag a record emitted with no trace context so it is findable.

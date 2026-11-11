@@ -1,7 +1,7 @@
 ---
 type: Usage
 title: audit — usage
-description: Install the package, when and how to emit, who the actor is, adopting v0.4.0 and v0.5.0, testing a writer against the schema, and checking the live table.
+description: Install the package, when and how to emit, who the actor is, adopting v0.4.0, v0.5.0 and v0.6.0, testing a writer against the schema, and checking the live table.
 resource: github.com/krateo-platformops/audit
 tags: [library, audit, usage]
 timestamp: 2026-11-11T00:00:00Z
@@ -204,6 +204,43 @@ authn writes as a `request` writer on the scope
 `github.com/krateo-platformops/authn/audit`, and its background credential
 writes as a `controller` writer on `github.com/krateo-platformops/authn/audit/controller`,
 so the live queries report each apart.
+
+## Adopting v0.6.0
+
+A v0.5.0 record is still valid (a test replays records v0.5.0's own `Emit`
+wrote and expects v0.5.0's own check report), and a plain bump changes no
+record. One rule is tighter, as the schema already defined it:
+
+1. **No status code on a denied record.** `denied` means the writer itself
+   refused, so no authority answered and there is no
+   `http.response.status_code`. `Check` now reports one there as
+   `unexpected`. Leave `StatusCode` at 0 on an `OutcomeDenied` Event.
+
+What a writer may now set ([schema.md](./schema.md)):
+
+2. **`Event.ContentSHA256`** (`krateo.audit.object_ref.content_sha256`): on a
+   `create` or `update` that writes content, the `c1:<hex>` value
+   `audit.ContentSHA256(group, resource, subresource, obj)` returns for the
+   request body as sent, with the target as `object_ref` names it. Never for
+   a credential target (a Secret, a token request or review):
+   `ContentSHA256` refuses it (`ErrCredentialTarget`) and `Check` reports the
+   key there as `not-for-target`.
+3. **`Event.Client`** (`krateo.audit.client.*`, request and action writers):
+   what the portal asserted in its provenance header, after the writer
+   validated it. Set `Client.Rejected` instead when the header was rejected;
+   `Emit` then writes it alone.
+4. **Four request denial reasons** for authn: `DenialReasonDelegationNotAllowed`
+   and `DenialReasonDelegationTooDeep` for `/delegate`;
+   `DenialReasonPlatformGroup` for an identity source that asserted a
+   `krateo:` group; and `DenialReasonNameMissing` for a verified identity
+   that came back with no username. Each is a denied record with no status
+   code. A `name_missing` record names the Secret resource but no Secret.
+
+access-review and identity-lifecycle each emit on their own scope,
+`github.com/krateo-platformops/access-review/audit` and
+`github.com/krateo-platformops/identity-lifecycle/audit`. The shared scope
+`github.com/krateo-platformops/audit` stays a controller population for the
+rows written before the move.
 
 ## Testing a writer
 

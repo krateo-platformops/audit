@@ -63,6 +63,19 @@ var fixtureValue = map[string]attribute.Value{
 	audit.KeyGatewayRoute:          attribute.StringValue("example/route"),
 	audit.KeyGatewayMCPTool:        attribute.StringValue("example_tool"),
 	audit.KeyAssertedAgentHost:     attribute.StringValue("example-agent-host"),
+	// v0.6.0: the content hash, and the client-asserted provenance (with its
+	// rejection: the rich row breaks the "rejected alone" rule on purpose,
+	// so every unexpected_ client column fires on it).
+	audit.KeyObjectContentSHA256:            attribute.StringValue("c1:2bbf0a0f3ccc266c6ee429376afbd9a20714a80d5b03a753bbb29ec8c1fee232"),
+	audit.KeyClientSource:                   attribute.StringValue("portal"),
+	audit.KeyClientAgentSessionID:           attribute.StringValue("example-agent-session"),
+	audit.KeyClientConfirmationID:           attribute.StringValue("00000000-0000-4000-8000-0000000000aa"),
+	audit.KeyClientConfirmedSetCount:        attribute.Int64Value(3),
+	audit.KeyClientConfirmedSetIrreversible: attribute.BoolValue(true),
+	audit.KeyClientConfirmedSetSHA256:       attribute.StringValue("0a08bb91090b111f15a045b6061bccc4d0b8488d85f99ba57d8632e17061c277"),
+	audit.KeyClientConfirmedSetOp:           attribute.Int64Value(1),
+	audit.KeyClientRequestedAt:              attribute.StringValue("2026-11-11T10:00:00.000Z"),
+	audit.KeyClientRejected:                 attribute.StringValue("schema"),
 }
 
 // fixtureDenialReason is one value of each writer's own closed set.
@@ -189,10 +202,22 @@ func falsified(w audit.Writer, rich []attribute.KeyValue, c audit.Condition) (ro
 //   - each checked condition made false, once with the keys that depend on it
 //     kept (an only_when key is then unexpected) and once correct: without
 //     every key conditional on it and every key written only under it (a read
-//     without dry_run).
+//     without dry_run);
+//   - the rich row's object replaced by each credential target.
 func fixtureRows(t *testing.T, w audit.Writer) []fixtureRow {
 	rich := richRow(t, w)
 	rows := []fixtureRow{{"rich", rich}}
+	for _, c := range audit.CredentialTargets() {
+		row := withoutKeys(rich, map[string]bool{audit.KeyObjectAPIGroup: true, audit.KeyObjectSubresource: true})
+		row = withValue(row, audit.KeyObjectResource, c.Resource)
+		if c.Group != "" {
+			row = withValue(row, audit.KeyObjectAPIGroup, c.Group)
+		}
+		if c.Subresource != "" {
+			row = withValue(row, audit.KeyObjectSubresource, c.Subresource)
+		}
+		rows = append(rows, fixtureRow{"object " + c.Group + "/" + c.Resource + "/" + c.Subresource, row})
+	}
 	for _, kv := range rich {
 		k := string(kv.Key)
 		spec, _ := audit.LookupKey(k)
@@ -236,7 +261,7 @@ func fixtureRows(t *testing.T, w audit.Writer) []fixtureRow {
 }
 
 // columnRe finds a rules query's per-key columns.
-var columnRe = regexp.MustCompile(`\) AS ((unmet|unexpected|bad)_[a-z0-9_]+)\b`)
+var columnRe = regexp.MustCompile(`\) AS ((unmet|unexpected|bad|not_for_target)_[a-z0-9_]+)\b`)
 
 // rulesQuery returns writer w's rules query.
 func rulesQuery(t *testing.T, sql string, w audit.Writer) string {
@@ -254,7 +279,7 @@ func rulesQuery(t *testing.T, sql string, w audit.Writer) string {
 // for the same fact.
 func columnKey(t *testing.T, col string) (string, audit.Reason) {
 	t.Helper()
-	for prefix, reason := range map[string]audit.Reason{"unmet": audit.ReasonMissing, "unexpected": audit.ReasonUnexpected, "bad": audit.ReasonBadEnum} {
+	for prefix, reason := range map[string]audit.Reason{"unmet": audit.ReasonMissing, "unexpected": audit.ReasonUnexpected, "bad": audit.ReasonBadEnum, "not_for_target": audit.ReasonNotForTarget} {
 		for _, k := range audit.Keys() {
 			if alias(prefix, k.Name) == col {
 				return k.Name, reason

@@ -72,15 +72,26 @@ func generate(path, examples string) (src, md []byte, err error) {
 }
 
 type schema struct {
-	Updated        string       `yaml:"updated"`
-	SchemaVersion  string       `yaml:"schema_version"`
-	EventName      string       `yaml:"event_name"`
-	Writers        []writer     `yaml:"writers"`
-	Conditions     []condition  `yaml:"conditions"`
-	Target         target       `yaml:"target"`
-	Populations    []population `yaml:"populations"`
-	LegacyControls []population `yaml:"legacy_controls"`
-	Keys           []key        `yaml:"keys"`
+	Updated           string             `yaml:"updated"`
+	SchemaVersion     string             `yaml:"schema_version"`
+	EventName         string             `yaml:"event_name"`
+	Writers           []writer           `yaml:"writers"`
+	Conditions        []condition        `yaml:"conditions"`
+	Target            target             `yaml:"target"`
+	CredentialTargets []credentialTarget `yaml:"credential_targets"`
+	// ContentAnnotations are the annotations the content hash counts.
+	ContentAnnotations []string     `yaml:"content_annotations"`
+	Populations        []population `yaml:"populations"`
+	LegacyControls     []population `yaml:"legacy_controls"`
+	Keys               []key        `yaml:"keys"`
+}
+
+// credentialTarget is a Kubernetes target that carries a credential: a key
+// marked credential_free is never written on a record naming it.
+type credentialTarget struct {
+	APIGroup    string `yaml:"api_group"`
+	Resource    string `yaml:"resource"`
+	Subresource string `yaml:"subresource"`
 }
 
 type writer struct {
@@ -106,21 +117,32 @@ type population struct {
 	Scope  string `yaml:"scope"`
 	Writer string `yaml:"writer"`
 	Who    string `yaml:"who"`
+	// Note is how a reader selects the population's rows, when that is not
+	// obvious from the scope; docs/schema.md shows it under the table.
+	Note string `yaml:"note"`
 }
 
 type key struct {
-	Name        string                 `yaml:"name"`
-	Go          string                 `yaml:"go"`
-	Type        string                 `yaml:"type"`
-	Semconv     string                 `yaml:"semconv"`
-	Values      []string               `yaml:"values"`
-	Format      string                 `yaml:"format"`
-	Marker      string                 `yaml:"marker"`
-	Identity    bool                   `yaml:"identity"`
-	Asserted    bool                   `yaml:"asserted"`
-	ReplacedBy  string                 `yaml:"replaced_by"`
-	DualWrite   *bool                  `yaml:"dual_write"`
-	OnlyWhen    string                 `yaml:"only_when"`
+	Name       string   `yaml:"name"`
+	Go         string   `yaml:"go"`
+	Type       string   `yaml:"type"`
+	Semconv    string   `yaml:"semconv"`
+	Values     []string `yaml:"values"`
+	Format     string   `yaml:"format"`
+	Marker     string   `yaml:"marker"`
+	Identity   bool     `yaml:"identity"`
+	Asserted   bool     `yaml:"asserted"`
+	ReplacedBy string   `yaml:"replaced_by"`
+	DualWrite  *bool    `yaml:"dual_write"`
+	OnlyWhen   string   `yaml:"only_when"`
+	NotWhen    string   `yaml:"not_when"`
+	// CredentialFree: never written on a record whose Kubernetes target is a
+	// credential target.
+	CredentialFree bool `yaml:"credential_free"`
+	// Minimum and LessThan bound an int key: from below, and by another int
+	// key of the same record.
+	Minimum     *int64                 `yaml:"minimum"`
+	LessThan    string                 `yaml:"less_than"`
 	Description string                 `yaml:"description"`
 	Writers     map[string]requirement `yaml:"writers"`
 }
@@ -167,14 +189,20 @@ func (r *requirement) UnmarshalYAML(n *yaml.Node) error {
 }
 
 var (
-	levels     = map[string]string{"required": "LevelRequired", "conditional": "LevelConditional", "optional": "LevelOptional", "not_established": "LevelNotEstablished", "not_applicable": "LevelNotApplicable"}
-	types      = map[string]string{"string": "TypeString", "string[]": "TypeStringSlice", "bool": "TypeBool", "int": "TypeInt"}
-	semconvs   = []string{"stable", "development", "deprecated", "none"}
-	formats    = []string{"", "delegation_link", "marker_list"}
-	modes      = map[string]string{"exactly_one": "TargetExactlyOne", "at_least_one": "TargetAtLeastOne"}
-	goIdent    = regexp.MustCompile(`^[A-Z][A-Za-z0-9]*$`)
-	markerName = regexp.MustCompile(`^[a-z][a-z_]*$`)
-	valueName  = regexp.MustCompile(`^[a-z][a-z0-9]*(_[a-z0-9]+)*$`)
+	levels   = map[string]string{"required": "LevelRequired", "conditional": "LevelConditional", "optional": "LevelOptional", "not_established": "LevelNotEstablished", "not_applicable": "LevelNotApplicable"}
+	types    = map[string]string{"string": "TypeString", "string[]": "TypeStringSlice", "bool": "TypeBool", "int": "TypeInt"}
+	semconvs = []string{"stable", "development", "deprecated", "none"}
+	formats  = []string{"", "delegation_link", "marker_list", "sha256_hex", "content_hash", "uuid", "opaque_id", "rfc3339"}
+	// annotationKey is a prefixed Kubernetes annotation key: a DNS subdomain,
+	// a slash, a name. Only a prefixed key can be one a component owns.
+	annotationKey = regexp.MustCompile(`^[a-z0-9]([a-z0-9.-]*[a-z0-9])?/[A-Za-z0-9]([A-Za-z0-9._-]*[A-Za-z0-9])?$`)
+	// assertedPrefixes are where the asserted keys live, and only they: a
+	// header the gateway saw, and the provenance a client sent the writer.
+	assertedPrefixes = []string{"krateo.audit.asserted.", "krateo.audit.client."}
+	modes            = map[string]string{"exactly_one": "TargetExactlyOne", "at_least_one": "TargetAtLeastOne"}
+	goIdent          = regexp.MustCompile(`^[A-Z][A-Za-z0-9]*$`)
+	markerName       = regexp.MustCompile(`^[a-z][a-z_]*$`)
+	valueName        = regexp.MustCompile(`^[a-z][a-z0-9]*(_[a-z0-9]+)*$`)
 )
 
 func parse(raw []byte) (*schema, error) {
@@ -236,8 +264,26 @@ func (s *schema) validate() error {
 		if k.Identity && k.Asserted {
 			return fmt.Errorf("key %q: an asserted key is never identity", k.Name)
 		}
-		if k.Asserted != strings.HasPrefix(k.Name, "krateo.audit.asserted.") {
-			return fmt.Errorf("key %q: asserted keys, and only they, live under the krateo.audit.asserted prefix", k.Name)
+		if k.Asserted != slices.ContainsFunc(assertedPrefixes, func(p string) bool { return strings.HasPrefix(k.Name, p) }) {
+			return fmt.Errorf("key %q: asserted keys, and only they, live under the prefixes %v", k.Name, assertedPrefixes)
+		}
+		if k.Asserted && (k.Marker != "" || slices.Contains(s.Target.Keys, k.Name)) {
+			return fmt.Errorf("key %q: an asserted key is never marked and never a target", k.Name)
+		}
+		if k.Format != "" && k.Format != "delegation_link" && k.Type != "string" {
+			return fmt.Errorf("key %q: format %s needs a string key, not %s", k.Name, k.Format, k.Type)
+		}
+		if (k.Minimum != nil || k.LessThan != "") && k.Type != "int" {
+			return fmt.Errorf("key %q: minimum and less_than bound an int key, not %s", k.Name, k.Type)
+		}
+		if k.NotWhen != "" && !condIDs[k.NotWhen] {
+			return fmt.Errorf("key %q: not_when %q is not a declared condition", k.Name, k.NotWhen)
+		}
+		if k.NotWhen != "" && k.NotWhen == k.OnlyWhen {
+			return fmt.Errorf("key %q: only_when and not_when name the same condition, so the key is never allowed", k.Name)
+		}
+		if k.CredentialFree && len(s.CredentialTargets) == 0 {
+			return fmt.Errorf("key %q: credential_free with no credential_targets", k.Name)
 		}
 		if len(k.Values) > 0 && k.Type != "string" && k.Type != "bool" {
 			return fmt.Errorf("key %q: values need a string or bool key", k.Name)
@@ -288,9 +334,17 @@ func (s *schema) validate() error {
 			if r.Markable && r.Level != "required" && r.Level != "conditional" {
 				return fmt.Errorf("key %q, writer %q: only a required or conditional key is markable", k.Name, w.ID)
 			}
+			if k.Asserted && r.Level == "required" {
+				return fmt.Errorf("key %q, writer %q: an asserted key is never required (a client may send nothing)", k.Name, w.ID)
+			}
 		}
 	}
 	for _, k := range s.Keys {
+		if k.LessThan != "" {
+			if o := names[k.LessThan]; o == nil || o.Type != "int" || o.Name == k.Name {
+				return fmt.Errorf("key %q: less_than %q is not another int key", k.Name, k.LessThan)
+			}
+		}
 		if k.ReplacedBy == "" {
 			continue
 		}
@@ -318,6 +372,20 @@ func (s *schema) validate() error {
 		if _, ok := modes[s.Target.Writers[w.ID]]; !ok {
 			return fmt.Errorf("target: writer %q has no mode", w.ID)
 		}
+	}
+	seenTargets := map[credentialTarget]bool{}
+	for _, c := range s.CredentialTargets {
+		if c.Resource == "" || seenTargets[c] {
+			return fmt.Errorf("credential target %+v: a resource is required, and each target is listed once", c)
+		}
+		seenTargets[c] = true
+	}
+	seenAnnotations := map[string]bool{}
+	for _, a := range s.ContentAnnotations {
+		if !annotationKey.MatchString(a) || seenAnnotations[a] {
+			return fmt.Errorf("content annotation %q: a qualified annotation key (prefix/name), listed once", a)
+		}
+		seenAnnotations[a] = true
 	}
 	scopes := map[string]bool{}
 	for _, p := range append(slices.Clone(s.Populations), s.LegacyControls...) {
@@ -467,6 +535,7 @@ func render(s *schema) ([]byte, error) {
 		"strs":     strs,
 		"consts":   s.valueConsts,
 		"join":     strings.Join,
+		"deref":    func(p *int64) int64 { return *p },
 	}
 	t, err := template.New("gen").Funcs(funcs).Parse(tmpl)
 	if err != nil {
@@ -592,6 +661,14 @@ var schemaTarget = TargetRule{
 	},
 }
 
+var schemaCredentialTargets = []CredentialTarget{
+{{- range .CredentialTargets}}
+	{Group: {{q .APIGroup}}, Resource: {{q .Resource}}, Subresource: {{q .Subresource}}},
+{{- end}}
+}
+
+var schemaContentAnnotations = {{strs .ContentAnnotations}}
+
 var schemaPopulations = []Population{
 {{- range .Populations}}
 	{Scope: {{q .Scope}}, Writer: {{writerGo .Writer}}, Who: {{q .Who}}},
@@ -618,6 +695,10 @@ var schemaKeys = []KeySpec{
 		ReplacedBy: {{q .ReplacedBy}},
 		DualWrite: {{.DualWrites}},
 		OnlyWhen: {{if .OnlyWhen}}{{condGo .OnlyWhen}}{{else}}""{{end}},
+		NotWhen: {{if .NotWhen}}{{condGo .NotWhen}}{{else}}""{{end}},
+		CredentialFree: {{.CredentialFree}},
+		Min: {{if .Minimum}}minOf({{deref .Minimum}}){{else}}nil{{end}},
+		LessThan: {{q .LessThan}},
 		Description: {{q .Description}},
 		Writers: map[Writer]Requirement{
 {{- $r := reqs $k}}

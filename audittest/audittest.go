@@ -188,10 +188,13 @@ func AssertRemovalDetected(t testing.TB, w audit.Writer, rec sdklog.Record, key 
 }
 
 // relatedTo is the keys a change to key from attrs to mutated may newly
-// report besides key itself: its v0.3 name, and every key written only under
-// a condition that held on attrs and no longer does (krateo.audit.dry_run once
+// report besides key itself: its v0.3 name, every key written only under a
+// condition that held on attrs and no longer does (krateo.audit.dry_run once
 // krateo.audit.verb is gone, krateo.audit.denial_reason once the outcome is
-// not denied).
+// not denied). A key's not_when condition (http.response.status_code's
+// denied, the client keys' client_rejected) never turns true under these
+// mutations: removing a key or writing a value outside a closed set makes
+// neither an outcome denied nor a header rejected.
 func relatedTo(key string, attrs, mutated []attribute.KeyValue) map[string]bool {
 	related := map[string]bool{key: true}
 	for _, k := range audit.Keys() {

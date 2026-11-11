@@ -41,3 +41,31 @@ func TestAssertEnumsDetected_ExercisesTheWritersOwnSet(t *testing.T) {
 		t.Errorf("AssertEnumsDetected exercised\n %v\nwant\n %v", got, want)
 	}
 }
+
+// The client keys' closed sets are exercised too: source on an accepted
+// header's record, rejected on a rejected one's.
+func TestAssertEnumsDetected_ExercisesTheClientSets(t *testing.T) {
+	var got []string
+	enumsTested = func(keys []string) { got = append(got, keys...) }
+	t.Cleanup(func() { enumsTested = nil })
+
+	tp := sdktrace.NewTracerProvider()
+	t.Cleanup(func() { _ = tp.Shutdown(context.Background()) })
+	ctx, span := tp.Tracer("test").Start(context.Background(), "call")
+	defer span.End()
+
+	for _, c := range []audit.ClientProvenance{
+		{Source: audit.ClientSourcePortal, ConfirmationID: "00000000-0000-4000-8000-0000000000aa"},
+		{Rejected: audit.ClientRejectedVersion},
+	} {
+		rec := NewRecorder(t)
+		audit.New(rec.Logger("test/audit"), audit.WithWriter(audit.WriterAction), audit.WithActor("example-agent", audit.ClassAgent)).
+			Emit(ctx, audit.Event{Action: "tool.call", Verb: "post", Outcome: audit.OutcomeSuccess, ServerAddress: "api.example.com", Client: c})
+		AssertEnumsDetected(t, audit.WriterAction, rec.Only(t))
+	}
+	for _, k := range []string{audit.KeyClientSource, audit.KeyClientRejected} {
+		if !slices.Contains(got, k) {
+			t.Errorf("AssertEnumsDetected did not exercise %s: %v", k, got)
+		}
+	}
+}

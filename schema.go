@@ -124,7 +124,20 @@ type KeySpec struct {
 	DualWrite bool
 	// OnlyWhen, when set, is the condition the key may be written under, and
 	// only under: Check reports the key anywhere else (ReasonUnexpected).
-	OnlyWhen    Condition
+	OnlyWhen Condition
+	// NotWhen, when set, is the condition the key is never written under:
+	// Check reports the key there (ReasonUnexpected), e.g.
+	// http.response.status_code on a denied record.
+	NotWhen Condition
+	// CredentialFree keys are never written on a record whose Kubernetes
+	// target is a credential target (CredentialTargets): Check reports the key
+	// there (ReasonNotForTarget).
+	CredentialFree bool
+	// Min, when set, is the least value of an int key; LessThan names the int
+	// key whose value on the same record this key's value stays below. Check
+	// reports a value outside either bound (ReasonOutOfRange).
+	Min         *int64
+	LessThan    string
 	Description string
 	// Writers holds every writer's requirement.
 	Writers map[Writer]Requirement
@@ -154,6 +167,19 @@ type Population struct {
 	Scope  string
 	Writer Writer
 	Who    string
+}
+
+// CredentialTarget is a Kubernetes target that carries a credential, as a
+// record's object_ref names it: Group "" is the core group. Subresource ""
+// matches the resource and every subresource of it; a set Subresource matches
+// that subresource only.
+type CredentialTarget struct {
+	Group, Resource, Subresource string
+}
+
+// matches reports whether the object (group, resource, subresource) is t.
+func (t CredentialTarget) matches(group, resource, subresource string) bool {
+	return t.Group == group && t.Resource == resource && (t.Subresource == "" || t.Subresource == subresource)
 }
 
 // RuleTarget is the Violation.Key of a breach of the target rule.
@@ -192,6 +218,27 @@ func Target() TargetRule {
 	return t
 }
 
+// CredentialTargets returns the Kubernetes targets that carry a credential,
+// on whose records a CredentialFree key is never written.
+func CredentialTargets() []CredentialTarget { return slices.Clone(schemaCredentialTargets) }
+
+// IsCredentialTarget reports whether the Kubernetes object (group, resource,
+// subresource), as object_ref names it (group "" for the core group), is a
+// credential target.
+func IsCredentialTarget(group, resource, subresource string) bool {
+	return slices.ContainsFunc(schemaCredentialTargets, func(t CredentialTarget) bool {
+		return t.matches(group, resource, subresource)
+	})
+}
+
+// AuthorizationAnnotations returns the annotation keys the content hash counts
+// as content (schema/v1.yaml content_annotations): authorization reads them,
+// so changing one changes what an identity may do (AUDIT-4). It is the one
+// declared list, collected from authn's storage.AuthorizationAnnotations
+// (authn@26c4456d: authn.krateo.io/strategy, authn.krateo.io/groups);
+// plumbing's helm/v3/verdicts.go (plumbing@3a581c7d) declares none.
+func AuthorizationAnnotations() []string { return slices.Clone(schemaContentAnnotations) }
+
 // Populations returns where each writer's records land, by scope name.
 func Populations() []Population { return slices.Clone(schemaPopulations) }
 
@@ -209,6 +256,9 @@ func Conditions() []Condition { return slices.Clone(schemaConditions) }
 
 func (k KeySpec) clone() KeySpec {
 	k.Values = slices.Clone(k.Values)
+	if k.Min != nil {
+		k.Min = minOf(*k.Min)
+	}
 	k.Writers = maps.Clone(k.Writers)
 	for w, r := range k.Writers {
 		r.Values = slices.Clone(r.Values)
@@ -216,6 +266,9 @@ func (k KeySpec) clone() KeySpec {
 	}
 	return k
 }
+
+// minOf is a KeySpec.Min of v.
+func minOf(v int64) *int64 { return &v }
 
 var (
 	schemaIndex = map[string]int{}

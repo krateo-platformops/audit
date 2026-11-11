@@ -336,6 +336,14 @@ func TestConditionSQL_MeansWhatHoldsMeans(t *testing.T) {
 			rows = append(rows, []attribute.KeyValue{s(k, v)})
 		}
 	}
+	// Every client key alone, and source beside one other: the client
+	// conditions decide on which key is present.
+	for _, k := range audit.Keys() {
+		if strings.HasPrefix(k.Name, "krateo.audit.client.") {
+			rows = append(rows, []attribute.KeyValue{{Key: attribute.Key(k.Name), Value: fixtureValue[k.Name]}})
+		}
+	}
+	rows = append(rows, []attribute.KeyValue{s(audit.KeyClientSource, "portal"), s(audit.KeyClientConfirmationID, "00000000-0000-4000-8000-0000000000aa")})
 	for _, c := range audit.Conditions() {
 		pred := conditionSQL[c]
 		trues, falses := 0, 0

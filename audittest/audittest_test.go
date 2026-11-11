@@ -126,6 +126,46 @@ func TestWriters_ConformAndEveryRequiredKeyIsDetected(t *testing.T) {
 				Namespace:    "example-system", Version: "v1", Resource: "secrets", ObjectName: "example-user-clientconfig", Preview: audit.PreviewFalse,
 				RequestURI: "/oidc/callback", SourceIPs: []string{"192.0.2.10"}},
 		},
+		// v0.6.0 (audit#12): authn's /delegate refusals, the portal's
+		// provenance on a /call write, and a content hash.
+		{
+			name: "authn /delegate refused: the chain is too deep", w: audit.WriterRequest,
+			opts: []audit.Option{audit.WithWriter(audit.WriterRequest)}, ctx: sessionCtx,
+			ev: audit.Event{UserName: "example-agent", ActorClass: audit.ClassAgent,
+				Action: "authn.delegate", Verb: "create", HTTPMethod: "POST", Outcome: audit.OutcomeDenied,
+				DenialReason: audit.DenialReasonDelegationTooDeep,
+				Namespace:    "example-system", Group: "authn.krateo.io", Version: "v1alpha1", Resource: "serviceaccounts",
+				ObjectName: "example-agent", Preview: audit.PreviewFalse,
+				RequestURI: "/delegate", SourceIPs: []string{"192.0.2.10"}},
+		},
+		{
+			name: "snowplow /call, the portal's provenance and a content hash", w: audit.WriterRequest,
+			opts: []audit.Option{audit.WithWriter(audit.WriterRequest)}, ctx: sessionCtx,
+			ev: audit.Event{UserName: "alice", ActorClass: audit.ClassHuman, Action: "call", Verb: "create", HTTPMethod: "POST",
+				StatusCode: 201, Outcome: audit.OutcomeSuccess, Namespace: "tenant-a", Version: "v1", Resource: "configmaps",
+				ObjectName: "cm", Preview: audit.PreviewFalse, RequestURI: "/call?name=cm", SourceIPs: []string{"10.0.0.1"},
+				ContentSHA256: "c1:2bbf0a0f3ccc266c6ee429376afbd9a20714a80d5b03a753bbb29ec8c1fee232",
+				Client: audit.ClientProvenance{Source: audit.ClientSourcePortal, ConfirmationID: "00000000-0000-4000-8000-0000000000aa",
+					ConfirmedSet: &audit.ConfirmedSet{Count: 3, Irreversible: true, SHA256: "0a08bb91090b111f15a045b6061bccc4d0b8488d85f99ba57d8632e17061c277", Op: 0}}},
+		},
+		{
+			name: "snowplow /call, the provenance header rejected", w: audit.WriterRequest,
+			opts: []audit.Option{audit.WithWriter(audit.WriterRequest)}, ctx: sessionCtx,
+			ev: audit.Event{UserName: "alice", ActorClass: audit.ClassHuman, Action: "call", Verb: "delete", HTTPMethod: "DELETE",
+				StatusCode: 200, Outcome: audit.OutcomeSuccess, Namespace: "tenant-a", Version: "v1", Resource: "configmaps",
+				ObjectName: "cm", Preview: audit.PreviewFalse, RequestURI: "/call?name=cm", SourceIPs: []string{"10.0.0.1"},
+				Client: audit.ClientProvenance{Rejected: audit.ClientRejectedOversize}},
+		},
+		{
+			name: "access-review evidence ConfigMap, with its content hash", w: audit.WriterController,
+			opts: []audit.Option{audit.WithActor(sa, audit.ClassController), audit.WithWriter(audit.WriterController)}, ctx: spanCtx,
+			ev: audit.Event{Action: "campaign.evidence", Verb: "create", HTTPMethod: "POST", StatusCode: 201, Outcome: audit.OutcomeSuccess,
+				Namespace: "example-ns", Version: "v1", Resource: "configmaps", ObjectName: "example-evidence", ObjectUID: "uid-e",
+				ObjectResourceVersion: "77", Preview: audit.PreviewFalse,
+				ContentSHA256: "c1:2bbf0a0f3ccc266c6ee429376afbd9a20714a80d5b03a753bbb29ec8c1fee232",
+				Cause: audit.CauseRef{Group: "accessreview.krateo.io", Version: "v1alpha1", Resource: "campaigns", Namespace: "example-ns",
+					Name: "example-campaign", UID: "uid-c", Generation: 2}},
+		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			rec := audittest.NewRecorder(t)
@@ -160,6 +200,43 @@ func TestAssertRequiredKeysDetected_CoversCauseRef(t *testing.T) {
 	if msgs := failures(t, func(tb testing.TB) { audittest.AssertRemovalDetected(tb, w, r, audit.KeyCauseGeneration) }); len(msgs) == 0 || !strings.Contains(msgs[0], "is not detected") {
 		t.Errorf("removing cause_ref.generation was reported as detected: %q", msgs)
 	}
+}
+
+// The falsifier covers the client keys where they are required: once a record
+// carries the portal's provenance, removing its source, or any one key of its
+// confirmed set, is caught; and the closed sets of source and rejected are
+// exercised.
+func TestFalsifiers_CoverClientProvenance(t *testing.T) {
+	rec := audittest.NewRecorder(t)
+	e := audit.New(rec.Logger("test/audit"), audit.WithWriter(audit.WriterRequest))
+	base := audit.Event{UserName: "alice", ActorClass: audit.ClassHuman, Action: "call", Verb: "patch", HTTPMethod: "PATCH",
+		StatusCode: 200, Outcome: audit.OutcomeSuccess, Namespace: "tenant-a", Version: "v1", Resource: "configmaps",
+		ObjectName: "cm", Preview: audit.PreviewFalse, RequestURI: "/call?name=cm", SourceIPs: []string{"10.0.0.1"}}
+	accepted := base
+	accepted.Client = audit.ClientProvenance{Source: audit.ClientSourcePortal, AgentSessionID: "example-session",
+		ConfirmedSet: &audit.ConfirmedSet{Count: 2, SHA256: "0a08bb91090b111f15a045b6061bccc4d0b8488d85f99ba57d8632e17061c277", Op: 1}}
+	e.Emit(sessionCtx(t), accepted)
+	r := rec.Only(t)
+	required := audit.RequiredKeys(audit.WriterRequest, audittest.Attributes(r))
+	for _, k := range []string{audit.KeyClientSource, audit.KeyClientConfirmedSetCount, audit.KeyClientConfirmedSetIrreversible,
+		audit.KeyClientConfirmedSetSHA256, audit.KeyClientConfirmedSetOp} {
+		if !slices.Contains(required, k) {
+			t.Errorf("%s is not required of a record that carries the portal's provenance: %v", k, required)
+		}
+		if msgs := failures(t, func(tb testing.TB) { audittest.AssertRemovalDetected(tb, audit.WriterRequest, r, k) }); len(msgs) != 0 {
+			t.Errorf("removing %s: %q", k, msgs)
+		}
+	}
+
+	audittest.AssertEnumsDetected(t, audit.WriterRequest, r)
+	// The rejected header's record: rejected alone, a closed set of its own
+	// (TestAssertEnumsDetected_ExercisesTheClientSets pins that it is tried).
+	rec.Reset()
+	rejected := base
+	rejected.Client = audit.ClientProvenance{Rejected: audit.ClientRejectedSchema}
+	e.Emit(sessionCtx(t), rejected)
+	audittest.AssertConformant(t, audit.WriterRequest, rec.Only(t))
+	audittest.AssertEnumsDetected(t, audit.WriterRequest, rec.Only(t))
 }
 
 // AssertEnumsDetected replaces each closed-set value, the writer's own
