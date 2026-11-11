@@ -123,9 +123,73 @@ func setKey(attrs []attribute.KeyValue, kvs ...attribute.KeyValue) []attribute.K
 	return out
 }
 
-// fixtureRows is the rich row and its variations: each key removed (and,
-// for a markable key, removed and marked), each closed-set value replaced by
-// one outside the set, and each checked condition turned false.
+// closedSet is the values writer w may write for key: the key's enum, or w's
+// own set. A bool enum's values are spelled "true" / "false".
+func closedSet(key string, w audit.Writer) []string {
+	spec, _ := audit.LookupKey(key)
+	return append(slices.Clone(spec.Values), spec.Writers[w].Values...)
+}
+
+// withValue sets key to the closed-set value v, typed as the key is, and its
+// v0.3 twin, if the row carries one, to the same value.
+func withValue(attrs []attribute.KeyValue, key, v string) []attribute.KeyValue {
+	spec, _ := audit.LookupKey(key)
+	val := attribute.StringValue(v)
+	if spec.Type == audit.TypeBool {
+		val = attribute.BoolValue(v == "true")
+	}
+	out := setKey(attrs, attribute.KeyValue{Key: attribute.Key(key), Value: val})
+	if old := audit.LegacyKey(key); old != "" && slices.ContainsFunc(attrs, func(kv attribute.KeyValue) bool { return string(kv.Key) == old }) {
+		out = setKey(out, attribute.KeyValue{Key: attribute.Key(old), Value: val})
+	}
+	return out
+}
+
+// withoutKeys drops keys and the v0.3 twins of every dropped key.
+func withoutKeys(attrs []attribute.KeyValue, keys map[string]bool) []attribute.KeyValue {
+	return dropKeys(attrs, func(k string) bool {
+		spec, _ := audit.LookupKey(k)
+		return keys[k] || keys[spec.ReplacedBy]
+	})
+}
+
+// falsified returns rich with condition c made false, derived from the
+// schema and audit.Holds rather than written per condition: the keys c reads
+// are those a one-key row makes it hold on. Each such key with a closed set
+// takes the first value of its set that leaves c false (verb get, method
+// CONNECT, outcome success); every other one is dropped (a delegation, a
+// cause, an object). ok is false when no such row exists.
+func falsified(w audit.Writer, rich []attribute.KeyValue, c audit.Condition) (row []attribute.KeyValue, ok bool) {
+	row = slices.Clone(rich)
+	for _, kv := range rich {
+		k := string(kv.Key)
+		if !audit.Holds(c, []attribute.KeyValue{kv}) {
+			continue
+		}
+		replaced := false
+		for _, v := range closedSet(k, w) {
+			one := withValue([]attribute.KeyValue{kv}, k, v) // the key alone, with v
+			if !audit.Holds(c, one) {
+				row, replaced = withValue(row, k, v), true
+				break
+			}
+		}
+		if !replaced {
+			row = withoutKeys(row, map[string]bool{k: true})
+		}
+	}
+	return row, !audit.Holds(c, row)
+}
+
+// fixtureRows is the rich row and its variations, every one derived from the
+// schema:
+//   - each key removed, and a markable key removed and marked;
+//   - each closed-set key once per value of its set (every verb, every
+//     outcome, each of the writer's denial reasons, ...), and once outside it;
+//   - each checked condition made false, once with the keys that depend on it
+//     kept (an only_when key is then unexpected) and once correct: without
+//     every key conditional on it and every key written only under it (a read
+//     without dry_run).
 func fixtureRows(t *testing.T, w audit.Writer) []fixtureRow {
 	rich := richRow(t, w)
 	rows := []fixtureRow{{"rich", rich}}
@@ -137,7 +201,13 @@ func fixtureRows(t *testing.T, w audit.Writer) []fixtureRow {
 			rows = append(rows, fixtureRow{"without " + k + ", marked", setKey(dropKeys(rich, func(x string) bool { return x == k }),
 				attribute.String(audit.KeyIncomplete, spec.Marker))})
 		}
-		if len(spec.Values)+len(spec.Writers[w].Values) > 0 {
+		set := closedSet(k, w)
+		if spec.ReplacedBy == "" { // a v0.3 twin gets each value beside its replacement (withValue)
+			for _, v := range set {
+				rows = append(rows, fixtureRow{k + " = " + v, withValue(rich, k, v)})
+			}
+		}
+		if len(set) > 0 {
 			bad := attribute.StringValue("outside-the-closed-set")
 			if kv.Value.Type() == attribute.BOOL {
 				bad = attribute.BoolValue(!kv.Value.AsBool())
@@ -145,21 +215,23 @@ func fixtureRows(t *testing.T, w audit.Writer) []fixtureRow {
 			rows = append(rows, fixtureRow{k + " outside its set", setKey(rich, attribute.KeyValue{Key: kv.Key, Value: bad})})
 		}
 	}
-	has := func(prefix string) func(string) bool {
-		return func(k string) bool { return strings.HasPrefix(k, prefix) }
+	for _, c := range audit.Conditions() {
+		if !audit.Holds(c, rich) {
+			continue // a condition this writer's rows never meet (caused, off the controller)
+		}
+		f, ok := falsified(w, rich, c)
+		if !ok {
+			t.Fatalf("%s: no row derived from the schema makes condition %s false", w, c)
+		}
+		rows = append(rows, fixtureRow{"not " + string(c) + ", dependent keys kept", f})
+		dependent := map[string]bool{}
+		for _, k := range audit.Keys() {
+			if k.Writers[w].Check == c || k.OnlyWhen == c {
+				dependent[k.Name] = true
+			}
+		}
+		rows = append(rows, fixtureRow{"not " + string(c) + ", correct", withoutKeys(f, dependent)})
 	}
-	rows = append(rows,
-		fixtureRow{"not denied: success", setKey(rich, attribute.String(audit.KeyOutcome, "success"), attribute.String(audit.KeyLegacyOutcome, "success"))},
-		fixtureRow{"not denied: failure", setKey(rich, attribute.String(audit.KeyOutcome, "failure"), attribute.String(audit.KeyLegacyOutcome, "failure"))},
-		fixtureRow{"a read", setKey(rich, attribute.String(audit.KeyVerb, "get"))},
-		fixtureRow{"a method semconv names", setKey(rich, attribute.String(audit.KeyHTTPMethod, "POST"))},
-		fixtureRow{"no delegation", dropKeys(rich, func(k string) bool { return k == audit.KeyDelegation || k == audit.KeyOnBehalfOf })},
-		fixtureRow{"no impersonation", dropKeys(rich, has("krateo.audit.impersonated_user."))},
-		fixtureRow{"no Kubernetes target", dropKeys(rich, func(k string) bool {
-			spec, _ := audit.LookupKey(k)
-			return k == audit.KeyNamespace || strings.HasPrefix(k, "krateo.audit.object_ref.") || strings.HasPrefix(spec.ReplacedBy, "krateo.audit.object_ref.")
-		})},
-	)
 	return rows
 }
 
