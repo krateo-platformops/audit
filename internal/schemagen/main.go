@@ -1,6 +1,7 @@
 // Command schemagen generates, from schema/v1.yaml, schema_gen.go (the key
 // constants and the checker's rule table) and docs/schema.md (the record
-// contract, key by key). It runs through `go generate` in the module root;
+// contract, key by key, with the example records it copies from the Go file
+// named by -examples). It runs through `go generate` in the module root;
 // TestGeneratedFilesAreCurrent fails when a committed file is not what this
 // command produces.
 //
@@ -27,9 +28,10 @@ func main() {
 	in := flag.String("in", "schema/v1.yaml", "schema file")
 	out := flag.String("out", "schema_gen.go", "generated Go file")
 	doc := flag.String("doc", "docs/schema.md", "generated record contract")
+	examples := flag.String("examples", "contract_records_test.go", "Go file holding the example records docs/schema.md shows")
 	flag.Parse()
 
-	src, md, err := generate(*in)
+	src, md, err := generate(*in, *examples)
 	// Both outputs are committed, world-readable source files: they hold no
 	// secret, so they get the mode every other source file has.
 	if err == nil {
@@ -44,9 +46,9 @@ func main() {
 	}
 }
 
-// generate reads the schema at path, validates it and returns the Go source
-// and the Markdown contract.
-func generate(path string) (src, md []byte, err error) {
+// generate reads the schema at path and the example records at examples,
+// validates them and returns the Go source and the Markdown contract.
+func generate(path, examples string) (src, md []byte, err error) {
 	raw, err := os.ReadFile(path) // #nosec G304,G703 -- the schema file go generate names with -in is this tool's input
 	if err != nil {
 		return nil, nil, err
@@ -55,10 +57,18 @@ func generate(path string) (src, md []byte, err error) {
 	if err != nil {
 		return nil, nil, err
 	}
+	ex, err := os.ReadFile(examples) // #nosec G304,G703 -- the examples file go generate names with -examples is this tool's input
+	if err != nil {
+		return nil, nil, err
+	}
+	regions, err := exampleRegions(ex)
+	if err != nil {
+		return nil, nil, fmt.Errorf("%s: %w", examples, err)
+	}
 	if src, err = render(s); err != nil {
 		return nil, nil, err
 	}
-	return src, renderDoc(s), nil
+	return src, renderDoc(s, regions), nil
 }
 
 type schema struct {
@@ -120,18 +130,32 @@ type key struct {
 func (k key) DualWrites() bool { return k.ReplacedBy != "" && (k.DualWrite == nil || *k.DualWrite) }
 
 // requirement is a scalar level ("required") or a mapping
-// ({level: conditional, when: ..., check: ..., markable: true}).
+// ({level: conditional, when: ..., check: ..., markable: true, values: [...]}).
 type requirement struct {
-	Level    string `yaml:"level"`
-	When     string `yaml:"when"`
-	Check    string `yaml:"check"`
-	Markable bool   `yaml:"markable"`
+	Level    string   `yaml:"level"`
+	When     string   `yaml:"when"`
+	Check    string   `yaml:"check"`
+	Markable bool     `yaml:"markable"`
+	Values   []string `yaml:"values"`
 }
+
+// requirementFields are the fields a requirement mapping may have. Decoding
+// the mapping by hand loses the decoder's KnownFields, so UnmarshalYAML checks
+// them itself: an unquoted comma in a flow mapping's `when` silently starts a
+// new, unknown field ({when: a, b} is when "a" and a field "b").
+var requirementFields = []string{"level", "when", "check", "markable", "values"}
 
 func (r *requirement) UnmarshalYAML(n *yaml.Node) error {
 	if n.Kind == yaml.ScalarNode {
 		r.Level = n.Value
 		return nil
+	}
+	if n.Kind == yaml.MappingNode {
+		for i := 0; i < len(n.Content); i += 2 {
+			if f := n.Content[i].Value; !slices.Contains(requirementFields, f) {
+				return fmt.Errorf("line %d: requirement field %q is not one of %v (a `when` with a comma must be quoted)", n.Content[i].Line, f, requirementFields)
+			}
+		}
 	}
 	type plain requirement
 	var p plain
@@ -150,6 +174,7 @@ var (
 	modes      = map[string]string{"exactly_one": "TargetExactlyOne", "at_least_one": "TargetAtLeastOne"}
 	goIdent    = regexp.MustCompile(`^[A-Z][A-Za-z0-9]*$`)
 	markerName = regexp.MustCompile(`^[a-z][a-z_]*$`)
+	valueName  = regexp.MustCompile(`^[a-z][a-z0-9]*(_[a-z0-9]+)*$`)
 )
 
 func parse(raw []byte) (*schema, error) {
@@ -235,6 +260,9 @@ func (s *schema) validate() error {
 			}
 			continue
 		}
+		if err := k.validateWriterValues(s.Writers); err != nil {
+			return err
+		}
 		for w := range k.Writers {
 			if !writerIDs[w] {
 				return fmt.Errorf("key %q: unknown writer %q", k.Name, w)
@@ -291,12 +319,100 @@ func (s *schema) validate() error {
 			return fmt.Errorf("target: writer %q has no mode", w.ID)
 		}
 	}
+	scopes := map[string]bool{}
 	for _, p := range append(slices.Clone(s.Populations), s.LegacyControls...) {
 		if p.Scope == "" || !writerIDs[p.Writer] || p.Who == "" {
 			return fmt.Errorf("population %q: scope, a known writer and who are required", p.Scope)
 		}
+		// One writer per scope: the live queries select a writer's rows by
+		// scope, so a shared scope would judge one writer's rows by another's
+		// rules.
+		if scopes[p.Scope] {
+			return fmt.Errorf("population %q: duplicate scope", p.Scope)
+		}
+		scopes[p.Scope] = true
+	}
+	consts := map[string]string{}
+	for _, c := range s.valueConsts() {
+		if v, dup := consts[c.Name]; dup && v != c.Value {
+			return fmt.Errorf("key %q: values %q and %q both make the constant %s", c.Key, v, c.Value, c.Name)
+		}
+		consts[c.Name] = c.Value
 	}
 	return nil
+}
+
+// validateWriterValues checks the per-writer closed sets of k: a string key
+// with no key-level values, declared by every writer that may write the key,
+// and by no other.
+func (k *key) validateWriterValues(writers []writer) error {
+	declared := false
+	for _, r := range k.Writers {
+		declared = declared || r.Values != nil
+	}
+	if !declared {
+		return nil
+	}
+	if k.Type != "string" {
+		return fmt.Errorf("key %q: per-writer values need a string key, not %s", k.Name, k.Type)
+	}
+	if len(k.Values) > 0 {
+		return fmt.Errorf("key %q: per-writer values and key-level values exclude each other", k.Name)
+	}
+	for _, w := range writers {
+		r := k.Writers[w.ID]
+		writes := r.Level != "not_applicable" && r.Level != "not_established"
+		if writes != (len(r.Values) > 0) {
+			return fmt.Errorf("key %q, writer %q: every writer that may write a key with per-writer values declares its own, and no other writer does", k.Name, w.ID)
+		}
+		seen := map[string]bool{}
+		for _, v := range r.Values {
+			if !valueName.MatchString(v) || seen[v] {
+				return fmt.Errorf("key %q, writer %q: value %q is malformed (lower_snake_case) or duplicate", k.Name, w.ID, v)
+			}
+			seen[v] = true
+		}
+	}
+	return nil
+}
+
+// valueConst is one generated constant for a per-writer value.
+type valueConst struct {
+	Name, Value, Key string
+	Writers          []string
+}
+
+// valueConsts is a constant per value of every key with per-writer values,
+// named after the key's Go name and the value (DenialReasonNameReserved), in
+// schema order, each listing the writers that may write it.
+func (s *schema) valueConsts() []valueConst {
+	var out []valueConst
+	for _, k := range s.Keys {
+		at := map[string]int{}
+		for _, w := range s.Writers {
+			for _, v := range k.Writers[w.ID].Values {
+				if i, ok := at[v]; ok {
+					out[i].Writers = append(out[i].Writers, w.ID)
+					continue
+				}
+				at[v] = len(out)
+				out = append(out, valueConst{Name: k.Go + camel(v), Value: v, Key: k.Name, Writers: []string{w.ID}})
+			}
+		}
+	}
+	return out
+}
+
+// camel is a lower_snake_case value in CamelCase: name_reserved is
+// NameReserved.
+func camel(v string) string {
+	var b strings.Builder
+	for _, part := range strings.Split(v, "_") {
+		if part != "" {
+			b.WriteString(strings.ToUpper(part[:1]) + part[1:])
+		}
+	}
+	return b.String()
 }
 
 // markers is every marker, keys first in schema order, then the target rule.
@@ -331,7 +447,7 @@ func (s *schema) requirementsOf(k key) map[string]requirement {
 		case "not_established", "not_applicable":
 			out[w] = requirement{Level: r.Level}
 		default:
-			out[w] = requirement{Level: "optional"}
+			out[w] = requirement{Level: "optional", Values: r.Values}
 		}
 	}
 	return out
@@ -349,6 +465,8 @@ func render(s *schema) ([]byte, error) {
 		"reqs":     s.requirementsOf,
 		"markers":  s.markers,
 		"strs":     strs,
+		"consts":   s.valueConsts,
+		"join":     strings.Join,
 	}
 	t, err := template.New("gen").Funcs(funcs).Parse(tmpl)
 	if err != nil {
@@ -423,12 +541,24 @@ const (
 	{{doc (printf "Key%s is %q." .Go .Name) .Description}}
 {{- if .ReplacedBy}}
 	//
-	// Deprecated: the v0.3 name of {{.ReplacedBy}}, removed in v0.5.0. Read
-	// {{.ReplacedBy}}.
+	// Deprecated: the v0.3 name of {{.ReplacedBy}}, removed when
+	// migration window W1 closes. Read {{.ReplacedBy}}.
 {{- end}}
 	Key{{.Go}} = {{q .Name}}
 {{- end}}
 )
+
+{{- with consts}}
+
+// The closed values of the keys whose values depend on the writer. Check
+// reports any other value, and a value written by a writer it does not list.
+const (
+{{- range .}}
+	{{doc (printf "%s is %q," .Name .Value) (printf "a %s value of writer %s." .Key (join .Writers ", "))}}
+	{{.Name}} = {{q .Value}}
+{{- end}}
+)
+{{- end}}
 
 // The writer classes.
 const (
@@ -496,7 +626,8 @@ var schemaKeys = []KeySpec{
 			{{.Go}}: {Level: {{level $w.Level}}
 				{{- if $w.When}}, When: {{q $w.When}}{{end}}
 				{{- if $w.Check}}, Check: {{condGo $w.Check}}{{end}}
-				{{- if $w.Markable}}, Markable: true{{end}}},
+				{{- if $w.Markable}}, Markable: true{{end}}
+				{{- if $w.Values}}, Values: {{strs $w.Values}}{{end}}},
 {{- end}}
 		},
 	},

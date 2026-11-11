@@ -2,11 +2,14 @@ package main
 
 import (
 	"fmt"
+	"regexp"
+	"slices"
 	"strings"
 )
 
-// renderDoc renders docs/schema.md: the record contract, one row per key.
-func renderDoc(s *schema) []byte {
+// renderDoc renders docs/schema.md: the record contract, one row per key, and
+// the example records (exampleRegions).
+func renderDoc(s *schema, examples map[string]string) []byte {
 	var b strings.Builder
 	fmt.Fprintf(&b, `---
 type: API
@@ -88,12 +91,113 @@ Every record names its target: `+"`%s`"+` (a Kubernetes object) or `+"`%s`"+`
 		fmt.Fprintf(&b, "- `%s`: %s\n", c.ID, c.Description)
 	}
 
+	if consts := s.valueConsts(); len(consts) > 0 {
+		b.WriteString(`
+## Closed values per writer
+
+A key whose values depend on the writer lists them per writer class. ` + "`Check`" + `
+reports any other value as ` + "`bad-enum`" + `, and the key on a writer class that
+declares none as ` + "`not-for-writer`" + `. A writer gains a value in a minor
+release, by adding it to ` + "`schema/v1.yaml`" + `. Go writers spell each value
+through its generated constant.
+
+| key | value | writers | Go constant |
+|---|---|---|---|
+`)
+		for _, c := range consts {
+			fmt.Fprintf(&b, "| `%s` | `%s` | %s | `audit.%s` |\n", c.Key, c.Value, "`"+strings.Join(c.Writers, "`, `")+"`", c.Name)
+		}
+	}
+
+	b.WriteString(`
+## A controller row: the object written and the object reconciled
+
+A controller row has two objects. ` + "`krateo.audit.object_ref.*`" + ` (with
+` + "`k8s.namespace.name`" + `) is the object the controller **wrote**, as the
+apiserver's ` + "`objectRef`" + ` of that write names it. ` + "`krateo.audit.cause_ref.*`" + ` is
+the object it **reconciled**: the custom resource whose reconcile made the
+write. Write ` + "`cause_ref`" + ` on every row of a reconcile, also when the object
+written is the reconciled resource itself (its status, its finalizers), so
+that a reader joins on ` + "`cause_ref`" + ` alone. A write to an external endpoint
+names the endpoint in ` + "`server.address`" + ` and the resource in ` + "`cause_ref`" + `.
+Only a controller writes ` + "`cause_ref`" + `; for every other writer it does not
+apply (` + "`not-for-writer`" + `). Once a row names a cause, its
+` + "`api_version`" + `, ` + "`resource`" + `, ` + "`name`" + ` and ` + "`uid`" + ` are required.
+
+### The snowplow join
+
+A person's write reaches a controller through the object it wrote. snowplow's
+request row carries that object's ` + "`krateo.audit.object_ref.uid`" + ` and
+` + "`krateo.audit.object_ref.generation`" + ` as the apiserver returned them; the
+row of a reconcile of that generation carries the same pair as
+` + "`krateo.audit.cause_ref.uid`" + ` and ` + "`krateo.audit.cause_ref.generation`" + `.
+The join reaches the request's ` + "`session.id`" + ` without touching the object:
+
+` + "```sql" + `
+SELECT h.LogAttributes['session.id']    AS session,
+       c.ScopeName                      AS controller,
+       c.LogAttributes['krateo.action'] AS action,
+       c.LogAttributes['krateo.audit.outcome'] AS outcome
+FROM default.krateo_audit AS c
+INNER JOIN default.krateo_audit AS h
+   ON h.LogAttributes['krateo.audit.object_ref.uid'] = c.LogAttributes['krateo.audit.cause_ref.uid']
+  AND h.LogAttributes['krateo.audit.object_ref.generation'] = c.LogAttributes['krateo.audit.cause_ref.generation']
+WHERE h.ScopeName = 'github.com/krateo-platformops/snowplow/audit'
+  AND c.LogAttributes['krateo.audit.cause_ref.uid'] != ''
+  AND h.LogAttributes['krateo.audit.object_ref.generation'] != ''
+` + "```" + `
+
+A DELETE's request row carries no generation (the apiserver returns none for
+a delete), so a reconcile a delete caused joins on ` + "`uid`" + ` alone. A
+controller row written before v0.5.0 carries no ` + "`cause_ref`" + `: it named the
+object it reconciled in ` + "`object_ref`" + `, so a join that spans those rows reads
+` + "`cause_ref`" + ` where it is set and ` + "`object_ref`" + ` otherwise.
+`)
+
+	b.WriteString(`
+## Kept deletions and pruned children
+
+Two controller rows a helm-based controller writes for the children of the
+resource it reconciles. Both name the child in ` + "`object_ref`" + ` and the
+reconciled resource in ` + "`cause_ref`" + `.
+
+- **Kept deletion.** helm declined to delete a child, on an uninstall or an
+  upgrade that no longer renders it, because it carries
+  ` + "`helm.sh/resource-policy: keep`" + `. Verb ` + "`delete`" + `, outcome ` + "`denied`" + `,
+  ` + "`krateo.audit.denial_reason`" + ` ` + "`kept_resource_policy`" + `. No request was sent:
+  no ` + "`http.request.method`" + `, no status code. The reason is the key, not the
+  LogRecord body: ` + "`Check`" + ` reads attributes only, and a reader filters on
+  the key. The body adds nothing the record needs.
+- **Pruned child.** helm deleted a child the new revision no longer renders.
+  Verb ` + "`delete`" + `, outcome ` + "`success`" + `, no denial reason.
+
+The ` + "`krateo.action`" + ` literal is the emit site's own. The literals below are
+copied from ` + "`contract_records_test.go`" + `, whose tests emit them through the
+real Logs SDK and check the records (` + "`audittest.AssertConformant`" + `,
+` + "`AssertRequiredKeysDetected`" + `, ` + "`AssertEnumsDetected`" + `).
+
+The emitter, built once. ` + "`logger`" + ` is the component's
+` + "`provider.Logger(\"<module>/audit\")`" + `: its scope name is the population the
+live queries select, listed below under "Where each writer's records land".
+
+` + "```go\n" + examples["controller-emitter"] + "```" + `
+
+A kept deletion:
+
+` + "```go\n" + examples["kept-deletion"] + "```" + `
+
+A pruned child:
+
+` + "```go\n" + examples["pruned-child"] + "```" + `
+`)
+
 	b.WriteString(`
 ## v0.3 keys (migration window W1)
 
-Written side by side with their replacement by v0.4.x, with the same value,
-and removed in v0.5.0. Readers ` + "`coalesce`" + ` the two until the last row without
-` + "`krateo.audit.schema_version`" + ` expires. ` + "`Emit`" + ` adds the ones marked
+Written side by side with their replacement by v0.4.x and v0.5.x, with the
+same value, and removed by the release that closes W1, once the data shows no
+row and no reader still needs them. Readers ` + "`coalesce`" + ` the two until the
+last row without ` + "`krateo.audit.schema_version`" + ` expires. ` + "`Emit`" + ` adds the ones marked
 "yes"; the others it writes only when the caller sets them.
 
 | v0.3 key | replaced by | added by ` + "`Emit`" + ` |
@@ -136,15 +240,15 @@ func levelCell(r requirement) string {
 	}
 	switch r.Level {
 	case "required":
-		return "R" + mark
+		return "R" + mark + oneOf(r.Values)
 	case "conditional":
 		checked := ""
 		if r.Check != "" {
 			checked = " [checked]"
 		}
-		return "C: " + cell(r.When) + checked + mark
+		return "C: " + cell(r.When) + checked + mark + oneOf(r.Values)
 	case "optional":
-		return "O"
+		return "O" + oneOf(r.Values)
 	case "not_established":
 		return "NE"
 	}
@@ -173,4 +277,79 @@ func keyNotes(k key) string {
 
 func cell(s string) string {
 	return strings.TrimSpace(strings.NewReplacer("|", `\|`, "<", "&lt;", ">", "&gt;").Replace(s))
+}
+
+// oneOf is a requirement's own closed set, as a level cell suffix.
+func oneOf(values []string) string {
+	if len(values) == 0 {
+		return ""
+	}
+	return ", one of `" + strings.Join(values, "`, `") + "`"
+}
+
+// exampleNames are the regions docs/schema.md shows, each marked in the
+// examples file by a `// schema.md: <name>` line and closed by
+// `// schema.md: end`.
+var exampleNames = []string{"controller-emitter", "kept-deletion", "pruned-child"}
+
+var regionMark = regexp.MustCompile(`^\s*// schema\.md: ([a-z-]+)\s*$`)
+
+// exampleRegions returns each named region of src, its common indentation
+// removed, so the doc shows the very code the examples' tests run.
+func exampleRegions(src []byte) (map[string]string, error) {
+	out := map[string]string{}
+	var name string
+	var lines []string
+	for _, l := range strings.Split(string(src), "\n") {
+		m := regionMark.FindStringSubmatch(l)
+		switch {
+		case m == nil && name != "":
+			lines = append(lines, l)
+		case m == nil:
+		case m[1] == "end" && name != "":
+			out[name] = dedent(lines)
+			name, lines = "", nil
+		case m[1] == "end" || name != "":
+			return nil, fmt.Errorf("region marker %q out of place", m[1])
+		case !slices.Contains(exampleNames, m[1]):
+			return nil, fmt.Errorf("unknown region %q, want one of %v", m[1], exampleNames)
+		case out[m[1]] != "":
+			return nil, fmt.Errorf("region %q: duplicate", m[1])
+		default:
+			name = m[1]
+		}
+	}
+	if name != "" {
+		return nil, fmt.Errorf("region %q is not closed", name)
+	}
+	for _, n := range exampleNames {
+		if strings.TrimSpace(out[n]) == "" {
+			return nil, fmt.Errorf("region %q is missing or empty", n)
+		}
+	}
+	return out, nil
+}
+
+// dedent removes the leading tabs every non-blank line shares, and ends the
+// text with a newline.
+func dedent(lines []string) string {
+	common := -1
+	for _, l := range lines {
+		if strings.TrimSpace(l) == "" {
+			continue
+		}
+		n := len(l) - len(strings.TrimLeft(l, "\t"))
+		if common < 0 || n < common {
+			common = n
+		}
+	}
+	var b strings.Builder
+	for _, l := range lines {
+		if strings.TrimSpace(l) == "" {
+			b.WriteString("\n")
+			continue
+		}
+		b.WriteString(l[common:] + "\n")
+	}
+	return b.String()
 }

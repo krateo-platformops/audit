@@ -6,7 +6,8 @@
 # non-Go writers validate against it with cmd/auditschema.
 #
 # Writer classes (who records the event):
-#   request    (H) a person's request, recorded by snowplow
+#   request    (H) a request a component served for a caller: snowplow's, and
+#                  authn's login and /delegate
 #   gateway    (G) the agent gateway's hop record (the collector projection)
 #   action     (T) an agent's per-action record, written by whatever performs it
 #   controller (C) a controller reconcile
@@ -22,6 +23,12 @@
 #                     per-action record carries it
 #   not_applicable    the fact does not exist for this writer
 #
+# `values: [...]` on a writer's requirement is the closed set of values that
+# writer may write, for a key whose values depend on the writer (the key then
+# has no key-level `values`, and every writer that may write it declares its
+# own). Check reports any other value as bad-enum. A writer gains a value, or
+# a writer gains the key, in a minor release.
+#
 # `markable: true` means a writer that cannot establish the key omits it and
 # names its `marker` in krateo.audit.incomplete. The checker reports such a
 # record as incomplete, not as missing the key. A conditional key that is
@@ -36,18 +43,19 @@
 # condition holds; the checker reports it, as unexpected, anywhere else.
 #
 # Keys with `replaced_by` are the v0.3 names, written side by side with their
-# replacement during migration window W1 (library v0.4.x) and removed in
-# v0.5.0. Such a key takes its replacement's writer levels, as optional: it is
-# allowed wherever its replacement is, must hold the same value, and is never
-# written without it. Emit adds each one beside its replacement unless the key
-# says `dual_write: false` (enduser.id: written only where it is written
-# today, never added).
+# replacement during migration window W1 (library v0.4.x and v0.5.x) and
+# removed by the release that closes W1, once the data shows no row and no
+# reader still needs them. Such a key takes its replacement's writer levels,
+# as optional: it is allowed wherever its replacement is, must hold the same
+# value, and is never written without it. Emit adds each one beside its
+# replacement unless the key says `dual_write: false` (enduser.id: written
+# only where it is written today, never added).
 #
 # Emit never drops a record. A record missing a key its writer must write is
 # emitted without it and names the key's marker in krateo.audit.incomplete;
 # Check reports it as incomplete.
 
-updated: "2026-11-09T00:00:00Z" # the generated docs/schema.md timestamp
+updated: "2026-11-11T00:00:00Z" # the generated docs/schema.md timestamp
 schema_version: "1"
 event_name: audit
 
@@ -55,7 +63,10 @@ writers:
   - id: request
     code: H
     go: WriterRequest
-    description: A person's request, recorded by snowplow.
+    description: >-
+      A request a component served for a caller, recorded by that component:
+      snowplow for a person's or an agent's request, authn for a login and a
+      /delegate token.
   - id: gateway
     code: G
     go: WriterGateway
@@ -96,10 +107,21 @@ conditions:
     description: >-
       The record carries an impersonation: either
       krateo.audit.impersonated_user.* key is present.
+  - id: caused
+    go: CondCaused
+    description: >-
+      The record names the object a controller reconciled: any
+      krateo.audit.cause_ref.* key is present.
+  - id: denied
+    go: CondDenied
+    description: >-
+      krateo.audit.outcome is denied: the writer itself refused.
 
 # Exactly one target per record: a Kubernetes object or an external endpoint.
-# A controller's record names the object it reconciled in object_ref AND, for
-# an external write, the endpoint in server.address, so it needs at least one.
+# A controller's record may name both: the object it wrote in object_ref and
+# the endpoint it wrote to in server.address (a v0.4 controller record named
+# the object it reconciled in object_ref beside the endpoint; v0.5 names that
+# object in cause_ref), so it needs at least one.
 target:
   marker: target
   keys: [krateo.audit.object_ref.resource, server.address]
@@ -111,11 +133,20 @@ target:
 
 # Where each writer's records land in default.krateo_audit, by the
 # instrumentation scope name of the logger it emits on. Used by
-# `auditschema sql` to build the live conformance queries.
+# `auditschema sql` to build the live conformance queries. The generator
+# refuses a scope listed twice: the queries judge a scope's rows by the one
+# writer it is listed under, so a component that writes for two classes, like
+# authn, emits each on its own scope.
 populations:
   - scope: github.com/krateo-platformops/snowplow/audit
     writer: request
     who: snowplow (H, and T for an agent going through /call)
+  - scope: github.com/krateo-platformops/authn/audit
+    writer: request
+    who: authn's login and /delegate records
+  - scope: github.com/krateo-platformops/authn/audit/controller
+    writer: controller
+    who: authn's background credential writes (certificate renewal, the step-up Secret sweep)
   - scope: github.com/krateo-platformops/observability/gateway-audit
     writer: gateway
     who: the collector's gateway-audit projection
@@ -361,8 +392,35 @@ keys:
     values: [success, failure, denied]
     description: >-
       What the authority this writer sent to answered, at the protocol level
-      the writer observes. denied means the writer itself refused.
+      the writer observes. denied means the writer itself refused;
+      krateo.audit.denial_reason may say why.
     writers: {request: required, gateway: required, action: required, controller: required}
+
+  - name: krateo.audit.denial_reason
+    go: DenialReason
+    type: string
+    semconv: none
+    description: >-
+      Why the writer itself refused, on a denied record only: one of the
+      closed values its writer class declares, never free text. The caller's
+      answer can stay opaque while the audit reader gets the reason. Optional:
+      a denied record without it conforms. A writer class with no declared
+      value cannot write it.
+    only_when: denied
+    writers:
+      # authn's refusals; authn owns each value's meaning. The first six are
+      # authn 0.41.0's name guard: name_claimed includes the write-time race
+      # re-check; name_held_legacy is a pre-claims Secret written by a different
+      # strategy (no claim exists, so it is not name_claimed).
+      # group_not_allowed: an OIDCConfig's allowedGroups refused an identity the
+      # IdP verified, because it is in none of the admitted groups (403
+      # GroupNotAllowed).
+      request: {level: optional, values: [name_reserved, name_claimed, name_held_legacy, name_provisioned, name_bound, system_group, group_not_allowed]}
+      gateway: not_applicable
+      action: not_applicable
+      # kept_resource_policy: helm declined a delete because the object carries
+      # helm.sh/resource-policy: keep (verb delete, outcome denied).
+      controller: {level: optional, values: [kept_resource_policy]}
 
   - name: http.response.status_code
     go: HTTPStatusCode
@@ -472,13 +530,14 @@ keys:
     type: string
     semconv: none
     description: >-
-      The uid of the object written, as the authority returned it, or of the
-      object a controller acted on. The join key between a write and the
-      reconcile it caused.
+      The uid of the object written, as the authority returned it; for a
+      controller, of the object it wrote or acted on. A request row's
+      object_ref.uid is the join key to the reconciles it caused, whose
+      controller rows carry it as krateo.audit.cause_ref.uid.
     writers:
-      request: {level: conditional, when: a successful, non-dry-run write}
+      request: {level: conditional, when: "a successful, non-dry-run write"}
       gateway: not_established
-      action: {level: conditional, when: a successful, non-dry-run write}
+      action: {level: conditional, when: "a successful, non-dry-run write"}
       controller: {level: conditional, when: the object is known}
 
   - name: krateo.audit.object_ref.resource_version
@@ -487,9 +546,9 @@ keys:
     semconv: none
     description: The resourceVersion the authority returned for the write, or the one a controller read.
     writers:
-      request: {level: conditional, when: a successful, non-dry-run write that is not a DELETE}
+      request: {level: conditional, when: "a successful, non-dry-run write that is not a DELETE"}
       gateway: not_established
-      action: {level: conditional, when: a successful, non-dry-run write that is not a DELETE}
+      action: {level: conditional, when: "a successful, non-dry-run write that is not a DELETE"}
       controller: optional
 
   - name: krateo.audit.object_ref.generation
@@ -498,10 +557,99 @@ keys:
     semconv: none
     description: The generation the authority returned for the write, or the one a controller acted on.
     writers:
-      request: {level: conditional, when: a successful, non-dry-run write that is not a DELETE}
+      request: {level: conditional, when: "a successful, non-dry-run write that is not a DELETE"}
       gateway: not_established
-      action: {level: conditional, when: a successful, non-dry-run write that is not a DELETE}
+      action: {level: conditional, when: "a successful, non-dry-run write that is not a DELETE"}
       controller: {level: conditional, when: the controller acted on a generation}
+
+  # --- what a controller reconciled -------------------------------------------
+  # A controller row has two objects: object_ref.* is the object it WROTE (the
+  # apiserver's objectRef of that write), cause_ref.* the object it reconciled
+  # (the custom resource whose reconcile made the write). snowplow joins a
+  # controller row to the request that caused it on cause_ref.uid/generation =
+  # the request row's object_ref.uid/generation (docs/schema.md).
+  - name: krateo.audit.cause_ref.api_group
+    go: CauseAPIGroup
+    type: string
+    semconv: none
+    description: The API group of the object the controller reconciled. Omitted for the core group.
+    writers:
+      request: not_applicable
+      gateway: not_applicable
+      action: not_applicable
+      controller: {level: conditional, when: the reconciled object is outside the core group}
+
+  - name: krateo.audit.cause_ref.api_version
+    go: CauseAPIVersion
+    type: string
+    semconv: none
+    description: The API version of the object the controller reconciled.
+    writers:
+      request: not_applicable
+      gateway: not_applicable
+      action: not_applicable
+      controller: {level: conditional, when: the record names a reconciled object, check: caused}
+
+  - name: krateo.audit.cause_ref.resource
+    go: CauseResource
+    type: string
+    semconv: none
+    description: The resource, the plural, of the object the controller reconciled.
+    writers:
+      request: not_applicable
+      gateway: not_applicable
+      action: not_applicable
+      controller: {level: conditional, when: the record names a reconciled object, check: caused}
+
+  - name: krateo.audit.cause_ref.namespace
+    go: CauseNamespace
+    type: string
+    semconv: none
+    description: The namespace of the object the controller reconciled.
+    writers:
+      request: not_applicable
+      gateway: not_applicable
+      action: not_applicable
+      controller: {level: conditional, when: the reconciled object is namespaced}
+
+  - name: krateo.audit.cause_ref.name
+    go: CauseName
+    type: string
+    semconv: none
+    description: The name of the object the controller reconciled.
+    writers:
+      request: not_applicable
+      gateway: not_applicable
+      action: not_applicable
+      controller: {level: conditional, when: the record names a reconciled object, check: caused}
+
+  - name: krateo.audit.cause_ref.uid
+    go: CauseUID
+    type: string
+    semconv: none
+    description: >-
+      The uid of the object the controller reconciled, as it read it. Joins
+      the row to the request whose write it reconciled (that row's
+      krateo.audit.object_ref.uid).
+    writers:
+      request: not_applicable
+      gateway: not_applicable
+      action: not_applicable
+      controller: {level: conditional, when: the record names a reconciled object, check: caused}
+
+  - name: krateo.audit.cause_ref.generation
+    go: CauseGeneration
+    type: int
+    semconv: none
+    description: >-
+      The generation of the object the controller reconciled, the one this
+      reconcile acted on. With cause_ref.uid, joins the row to the request
+      that wrote that generation (that row's krateo.audit.object_ref.generation).
+    writers:
+      request: not_applicable
+      gateway: not_applicable
+      action: not_applicable
+      controller: {level: conditional, when: the reconciled object has a generation (every custom resource has one)}
 
   # --- which target: an external endpoint -----------------------------------
   - name: server.address
@@ -668,7 +816,7 @@ keys:
       action: not_applicable
       controller: not_applicable
 
-  # --- v0.3 names, written side by side during W1, removed in v0.5.0 --------
+  # --- v0.3 names, written side by side during W1, removed when W1 closes ----
   - name: outcome
     go: LegacyOutcome
     type: string

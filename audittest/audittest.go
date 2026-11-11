@@ -8,6 +8,7 @@
 //	r := rec.Only(t)
 //	audittest.AssertConformant(t, audit.WriterController, r)
 //	audittest.AssertRequiredKeysDetected(t, audit.WriterController, r) // the falsifier
+//	audittest.AssertEnumsDetected(t, audit.WriterController, r)        // and for the closed sets
 //
 // Failure messages name keys and reasons, never values: audit values carry
 // identity.
@@ -168,17 +169,7 @@ func AssertRemovalDetected(t testing.TB, w audit.Writer, rec sdklog.Record, key 
 		t.Fatalf("audittest: the record does not carry %s, so removing it proves nothing", key)
 	}
 	removed := Without(attrs, key)
-	related := map[string]bool{key: true}
-	for _, k := range audit.Keys() {
-		if k.ReplacedBy == key {
-			related[k.Name] = true // its v0.3 name, now without its replacement
-		}
-		// A key written only under a condition that removing key turned false
-		// (krateo.audit.dry_run once krateo.audit.verb is gone).
-		if k.OnlyWhen != "" && audit.Holds(k.OnlyWhen, attrs) && !audit.Holds(k.OnlyWhen, removed) {
-			related[k.Name] = true
-		}
-	}
+	related := relatedTo(key, attrs, removed)
 	if slices.Contains(audit.Target().Keys, key) {
 		related[audit.RuleTarget] = true
 	}
@@ -195,6 +186,93 @@ func AssertRemovalDetected(t testing.TB, w audit.Writer, rec sdklog.Record, key 
 		}
 	}
 }
+
+// relatedTo is the keys a change to key from attrs to mutated may newly
+// report besides key itself: its v0.3 name, and every key written only under
+// a condition that held on attrs and no longer does (krateo.audit.dry_run once
+// krateo.audit.verb is gone, krateo.audit.denial_reason once the outcome is
+// not denied).
+func relatedTo(key string, attrs, mutated []attribute.KeyValue) map[string]bool {
+	related := map[string]bool{key: true}
+	for _, k := range audit.Keys() {
+		if k.ReplacedBy == key {
+			related[k.Name] = true
+		}
+		if k.OnlyWhen != "" && audit.Holds(k.OnlyWhen, attrs) && !audit.Holds(k.OnlyWhen, mutated) {
+			related[k.Name] = true
+		}
+	}
+	return related
+}
+
+// outsideTheSet is the value AssertEnumsDetected writes in place of a closed
+// set's value: no schema enum names it.
+const outsideTheSet = "audittest.outside-the-closed-set"
+
+// AssertEnumsDetected is the falsifier for the closed sets: rec must conform
+// (opts as for AssertConformant), and for every key rec carries whose values
+// writer w may only pick from a closed set (the key's enum, or the writer's
+// own set, as for krateo.audit.denial_reason), the same attributes with that
+// value replaced by one outside the set must make audit.Check newly report
+// the key bad-enum. Any other new violation must name the key, its v0.3 name,
+// or a key whose only_when condition the new value turned false.
+//
+// It mutates the checker's input, never its logic, so a green arm shows the
+// check fails when the site writes a value the schema does not allow.
+func AssertEnumsDetected(t testing.TB, w audit.Writer, rec sdklog.Record, opts ...Option) {
+	t.Helper()
+	attrs := Attributes(rec)
+	base := audit.CheckRecord(w, rec.EventName(), attrs)
+	if vs := unaccepted(slices.Clone(base), opts); len(vs) > 0 {
+		t.Fatalf("audittest: falsifier needs a conformant record first; it reports %v", vs)
+	}
+	var tested []string
+	defer func() {
+		if enumsTested != nil {
+			enumsTested(tested)
+		}
+	}()
+	for i, kv := range attrs {
+		spec, ok := audit.LookupKey(string(kv.Key))
+		if !ok || len(spec.Values)+len(spec.Writers[w].Values) == 0 {
+			continue
+		}
+		var bad attribute.Value
+		switch spec.Type {
+		case audit.TypeString:
+			bad = attribute.StringValue(outsideTheSet)
+		case audit.TypeBool:
+			bad = attribute.BoolValue(!kv.Value.AsBool())
+		default:
+			continue
+		}
+		tested = append(tested, spec.Name)
+		mutated := slices.Clone(attrs)
+		mutated[i] = attribute.KeyValue{Key: kv.Key, Value: bad}
+		related := relatedTo(spec.Name, attrs, mutated)
+
+		fresh := slices.DeleteFunc(audit.Check(w, mutated), func(v audit.Violation) bool {
+			return slices.Contains(base, v)
+		})
+		if !slices.Contains(fresh, audit.Violation{Key: spec.Name, Reason: audit.ReasonBadEnum}) {
+			t.Errorf("audittest: a %s value outside the closed set on a %s record is not detected: Check newly reports %v", spec.Name, w, fresh)
+		}
+		for _, v := range fresh {
+			if !related[v.Key] {
+				t.Errorf("audittest: a %s value outside the closed set also reports %s", spec.Name, v)
+			}
+		}
+	}
+	if len(tested) == 0 {
+		t.Fatalf("audittest: the record carries no key with a closed set for %s: the falsifier would test nothing", w)
+	}
+}
+
+// enumsTested, when set (by this package's own tests only), receives the keys
+// one AssertEnumsDetected call exercised, so a test can pin which closed sets
+// it covers: a writer's own set (krateo.audit.denial_reason) must not go quiet
+// behind the key-level enums that every record carries.
+var enumsTested func(keys []string)
 
 // AssertRequiredKeysDetected runs AssertRemovalDetected for every key writer
 // w must write on rec that rec carries (audit.RequiredKeys): each one, removed

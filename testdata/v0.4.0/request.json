@@ -1,0 +1,444 @@
+{
+  "resourceLogs": [
+    {
+      "scopeLogs": [
+        {
+          "logRecords": [
+            {
+              "attributes": [
+                {
+                  "key": "event.name",
+                  "value": {
+                    "stringValue": "audit"
+                  }
+                },
+                {
+                  "key": "krateo.audit.schema_version",
+                  "value": {
+                    "stringValue": "1"
+                  }
+                },
+                {
+                  "key": "user.name",
+                  "value": {
+                    "stringValue": "example-agent"
+                  }
+                },
+                {
+                  "key": "krateo.audit.actor_class",
+                  "value": {
+                    "stringValue": "agent"
+                  }
+                },
+                {
+                  "key": "krateo.audit.on_behalf_of.user.name",
+                  "value": {
+                    "stringValue": "example-user"
+                  }
+                },
+                {
+                  "key": "krateo.audit.delegation",
+                  "value": {
+                    "arrayValue": {
+                      "values": [
+                        {
+                          "stringValue": "agent:example-agent"
+                        },
+                        {
+                          "stringValue": "human:example-user"
+                        }
+                      ]
+                    }
+                  }
+                },
+                {
+                  "key": "krateo.action",
+                  "value": {
+                    "stringValue": "call"
+                  }
+                },
+                {
+                  "key": "krateo.audit.verb",
+                  "value": {
+                    "stringValue": "create"
+                  }
+                },
+                {
+                  "key": "http.request.method",
+                  "value": {
+                    "stringValue": "POST"
+                  }
+                },
+                {
+                  "key": "http.response.status_code",
+                  "value": {
+                    "intValue": "201"
+                  }
+                },
+                {
+                  "key": "krateo.audit.outcome",
+                  "value": {
+                    "stringValue": "success"
+                  }
+                },
+                {
+                  "key": "krateo.audit.preview",
+                  "value": {
+                    "boolValue": false
+                  }
+                },
+                {
+                  "key": "k8s.namespace.name",
+                  "value": {
+                    "stringValue": "example-ns"
+                  }
+                },
+                {
+                  "key": "krateo.audit.object_ref.api_version",
+                  "value": {
+                    "stringValue": "v1"
+                  }
+                },
+                {
+                  "key": "krateo.audit.object_ref.resource",
+                  "value": {
+                    "stringValue": "configmaps"
+                  }
+                },
+                {
+                  "key": "krateo.audit.object_ref.name",
+                  "value": {
+                    "stringValue": "example-cm"
+                  }
+                },
+                {
+                  "key": "krateo.audit.object_ref.uid",
+                  "value": {
+                    "stringValue": "00000000-0000-4000-8000-000000000002"
+                  }
+                },
+                {
+                  "key": "krateo.audit.object_ref.generation",
+                  "value": {
+                    "intValue": "1"
+                  }
+                },
+                {
+                  "key": "krateo.audit.object_ref.resource_version",
+                  "value": {
+                    "stringValue": "678"
+                  }
+                },
+                {
+                  "key": "krateo.request.uri",
+                  "value": {
+                    "stringValue": "/call?name=example-cm"
+                  }
+                },
+                {
+                  "key": "krateo.request.source_ips",
+                  "value": {
+                    "arrayValue": {
+                      "values": [
+                        {
+                          "stringValue": "192.0.2.10"
+                        }
+                      ]
+                    }
+                  }
+                },
+                {
+                  "key": "user_agent.original",
+                  "value": {
+                    "stringValue": "example-portal/1.0"
+                  }
+                },
+                {
+                  "key": "session.id",
+                  "value": {
+                    "stringValue": "example-session"
+                  }
+                },
+                {
+                  "key": "krateo.audit.dry_run",
+                  "value": {
+                    "boolValue": false
+                  }
+                },
+                {
+                  "key": "outcome",
+                  "value": {
+                    "stringValue": "success"
+                  }
+                },
+                {
+                  "key": "k8s.resource.version",
+                  "value": {
+                    "stringValue": "v1"
+                  }
+                },
+                {
+                  "key": "k8s.resource.resource",
+                  "value": {
+                    "stringValue": "configmaps"
+                  }
+                },
+                {
+                  "key": "k8s.resource.name",
+                  "value": {
+                    "stringValue": "example-cm"
+                  }
+                },
+                {
+                  "key": "k8s.object.uid",
+                  "value": {
+                    "stringValue": "00000000-0000-4000-8000-000000000002"
+                  }
+                },
+                {
+                  "key": "k8s.object.generation",
+                  "value": {
+                    "intValue": "1"
+                  }
+                },
+                {
+                  "key": "k8s.object.resource_version",
+                  "value": {
+                    "stringValue": "678"
+                  }
+                }
+              ],
+              "body": {
+                "stringValue": ""
+              },
+              "eventName": "audit"
+            },
+            {
+              "attributes": [
+                {
+                  "key": "event.name",
+                  "value": {
+                    "stringValue": "audit"
+                  }
+                },
+                {
+                  "key": "krateo.audit.schema_version",
+                  "value": {
+                    "stringValue": "1"
+                  }
+                },
+                {
+                  "key": "user.name",
+                  "value": {
+                    "stringValue": "example-user"
+                  }
+                },
+                {
+                  "key": "user.roles",
+                  "value": {
+                    "arrayValue": {
+                      "values": [
+                        {
+                          "stringValue": "example-group"
+                        }
+                      ]
+                    }
+                  }
+                },
+                {
+                  "key": "krateo.audit.actor_class",
+                  "value": {
+                    "stringValue": "human"
+                  }
+                },
+                {
+                  "key": "krateo.action",
+                  "value": {
+                    "stringValue": "call"
+                  }
+                },
+                {
+                  "key": "krateo.audit.verb",
+                  "value": {
+                    "stringValue": "post"
+                  }
+                },
+                {
+                  "key": "http.request.method",
+                  "value": {
+                    "stringValue": "POST"
+                  }
+                },
+                {
+                  "key": "krateo.audit.outcome",
+                  "value": {
+                    "stringValue": "denied"
+                  }
+                },
+                {
+                  "key": "server.address",
+                  "value": {
+                    "stringValue": "api.example.com"
+                  }
+                },
+                {
+                  "key": "krateo.request.uri",
+                  "value": {
+                    "stringValue": "/call"
+                  }
+                },
+                {
+                  "key": "krateo.request.source_ips",
+                  "value": {
+                    "arrayValue": {
+                      "values": [
+                        {
+                          "stringValue": "192.0.2.10"
+                        }
+                      ]
+                    }
+                  }
+                },
+                {
+                  "key": "session.id",
+                  "value": {
+                    "stringValue": "example-session"
+                  }
+                },
+                {
+                  "key": "krateo.audit.dry_run",
+                  "value": {
+                    "boolValue": false
+                  }
+                },
+                {
+                  "key": "outcome",
+                  "value": {
+                    "stringValue": "denied"
+                  }
+                }
+              ],
+              "body": {
+                "stringValue": "not sent: the destination policy refused the address"
+              },
+              "eventName": "audit"
+            },
+            {
+              "attributes": [
+                {
+                  "key": "event.name",
+                  "value": {
+                    "stringValue": "audit"
+                  }
+                },
+                {
+                  "key": "krateo.audit.schema_version",
+                  "value": {
+                    "stringValue": "1"
+                  }
+                },
+                {
+                  "key": "user.name",
+                  "value": {
+                    "stringValue": "example-user"
+                  }
+                },
+                {
+                  "key": "user.roles",
+                  "value": {
+                    "arrayValue": {
+                      "values": [
+                        {
+                          "stringValue": "example-group"
+                        }
+                      ]
+                    }
+                  }
+                },
+                {
+                  "key": "krateo.action",
+                  "value": {
+                    "stringValue": "call"
+                  }
+                },
+                {
+                  "key": "krateo.audit.verb",
+                  "value": {
+                    "stringValue": "get"
+                  }
+                },
+                {
+                  "key": "http.request.method",
+                  "value": {
+                    "stringValue": "GET"
+                  }
+                },
+                {
+                  "key": "http.response.status_code",
+                  "value": {
+                    "intValue": "200"
+                  }
+                },
+                {
+                  "key": "krateo.audit.outcome",
+                  "value": {
+                    "stringValue": "success"
+                  }
+                },
+                {
+                  "key": "server.address",
+                  "value": {
+                    "stringValue": "api.example.com"
+                  }
+                },
+                {
+                  "key": "krateo.request.uri",
+                  "value": {
+                    "stringValue": "/call"
+                  }
+                },
+                {
+                  "key": "krateo.request.source_ips",
+                  "value": {
+                    "arrayValue": {
+                      "values": [
+                        {
+                          "stringValue": "192.0.2.10"
+                        }
+                      ]
+                    }
+                  }
+                },
+                {
+                  "key": "session.id",
+                  "value": {
+                    "stringValue": "example-session"
+                  }
+                },
+                {
+                  "key": "outcome",
+                  "value": {
+                    "stringValue": "success"
+                  }
+                },
+                {
+                  "key": "krateo.audit.incomplete",
+                  "value": {
+                    "stringValue": "actor_class"
+                  }
+                }
+              ],
+              "body": {
+                "stringValue": ""
+              },
+              "eventName": "audit"
+            }
+          ],
+          "scope": {
+            "name": "example/audit"
+          }
+        }
+      ]
+    }
+  ]
+}

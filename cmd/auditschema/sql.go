@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"regexp"
+	"slices"
 	"strings"
 
 	"github.com/krateo-platformops/audit"
@@ -25,6 +26,8 @@ var conditionSQL = map[audit.Condition]string{
 	audit.CondWrite:        attr(audit.KeyVerb) + " IN " + inList(audit.WriteVerbs()),
 	audit.CondDelegated:    "(" + attr(audit.KeyDelegation) + " != '' OR " + attr(audit.KeyOnBehalfOf) + " != '')",
 	audit.CondImpersonated: "(" + attr(audit.KeyImpersonatedUser) + " != '' OR " + attr(audit.KeyImpersonatedRoles) + " != '')",
+	audit.CondCaused:       "arrayExists(k -> startsWith(k, 'krateo.audit.cause_ref.'), mapKeys(LogAttributes))",
+	audit.CondDenied:       "(" + attr(audit.KeyOutcome) + " = " + lit(audit.OutcomeDenied) + ")",
 }
 
 var k8sTargetSQL = "(" + attr(audit.KeyNamespace) + " != '' OR arrayExists(k -> startsWith(k, 'krateo.audit.object_ref.'), mapKeys(LogAttributes)))"
@@ -164,8 +167,10 @@ func rulesSQL(w audit.Writer) string {
 		if k.OnlyWhen != "" {
 			add(alias("unexpected", k.Name), attr(k.Name)+" != '' AND NOT "+conditionSQL[k.OnlyWhen])
 		}
-		if len(k.Values) > 0 {
-			add(alias("bad", k.Name), attr(k.Name)+" NOT IN ("+strings.Join(append([]string{"''"}, quoted(k.Values)...), ", ")+")")
+		// The key's enum, or this writer's own closed set: one of them, never
+		// both (schemagen refuses a key with both).
+		if vs := append(slices.Clone(k.Values), r.Values...); len(vs) > 0 {
+			add(alias("bad", k.Name), attr(k.Name)+" NOT IN ("+strings.Join(append([]string{"''"}, quoted(vs)...), ", ")+")")
 		}
 	}
 	add("not_in_schema", "arrayExists(k -> NOT has("+lits(allKeys)+", k), mapKeys(LogAttributes))")

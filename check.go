@@ -118,7 +118,7 @@ func Check(w Writer, attrs []attribute.KeyValue) []Violation {
 			out = append(out, Violation{Key: k, Reason: ReasonNotForWriter})
 			continue
 		}
-		if r, bad := checkValue(spec, kv.Value); bad {
+		if r, bad := checkValue(spec, spec.Writers[w], kv.Value); bad {
 			out = append(out, Violation{Key: k, Reason: r})
 		}
 	}
@@ -261,11 +261,19 @@ func evalCondition(c Condition, present map[string]attribute.Value) (holds, know
 		return has(KeyDelegation) || has(KeyOnBehalfOf), true
 	case CondImpersonated:
 		return has(KeyImpersonatedUser) || has(KeyImpersonatedRoles), true
+	case CondCaused:
+		return hasPrefix(present, causeRefPrefix), true
+	case CondDenied:
+		o, ok := present[KeyOutcome]
+		return ok && o.Type() == attribute.STRING && o.AsString() == OutcomeDenied, true
 	}
 	return false, false
 }
 
-const objectRefPrefix = "krateo.audit.object_ref."
+const (
+	objectRefPrefix = "krateo.audit.object_ref."
+	causeRefPrefix  = "krateo.audit.cause_ref."
+)
 
 // writeVerbs are the krateo.audit.verb values of a write (condition write):
 // the apiserver's mutating verbs, and the non-resource POST and PUT (a PATCH
@@ -280,8 +288,13 @@ func k8sTarget(present map[string]attribute.Value) bool {
 	if _, ok := present[KeyNamespace]; ok {
 		return true
 	}
+	return hasPrefix(present, objectRefPrefix)
+}
+
+// hasPrefix reports whether the record carries a key under prefix.
+func hasPrefix(present map[string]attribute.Value, prefix string) bool {
 	for k := range present {
-		if strings.HasPrefix(k, objectRefPrefix) {
+		if strings.HasPrefix(k, prefix) {
 			return true
 		}
 	}
@@ -363,8 +376,9 @@ func missingMarkers(ws []Writer, attrs []attribute.KeyValue) []string {
 	return out
 }
 
-// checkValue checks one value against its key's type, enum and format.
-func checkValue(spec *KeySpec, v attribute.Value) (Reason, bool) {
+// checkValue checks one value against its key's type, enum (the key's, or
+// the writer's own closed set r.Values) and format.
+func checkValue(spec *KeySpec, r Requirement, v attribute.Value) (Reason, bool) {
 	if !hasType(spec.Type, v) {
 		return ReasonBadType, true
 	}
@@ -378,6 +392,9 @@ func checkValue(spec *KeySpec, v attribute.Value) (Reason, bool) {
 			return ReasonEmpty, true
 		}
 		if len(spec.Values) > 0 && !slices.Contains(spec.Values, s) {
+			return ReasonBadEnum, true
+		}
+		if len(r.Values) > 0 && !slices.Contains(r.Values, s) {
 			return ReasonBadEnum, true
 		}
 	case TypeBool:

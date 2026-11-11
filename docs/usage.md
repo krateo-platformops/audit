@@ -1,10 +1,10 @@
 ---
 type: Usage
 title: audit — usage
-description: Install the package, when and how to emit, who the actor is, adopting v0.4.0, testing a writer against the schema, and checking the live table.
+description: Install the package, when and how to emit, who the actor is, adopting v0.4.0 and v0.5.0, testing a writer against the schema, and checking the live table.
 resource: github.com/krateo-platformops/audit
 tags: [library, audit, usage]
-timestamp: 2026-11-09T00:00:00Z
+timestamp: 2026-11-11T00:00:00Z
 ---
 
 # Usage
@@ -165,9 +165,9 @@ with every attribute and value v0.3 wrote. On top of that:
 
 1. **New keys are written beside the old ones** (W1): `krateo.audit.outcome`
    beside `outcome`, `krateo.audit.object_ref.*` beside `k8s.resource.*` and
-   `k8s.object.*`. Readers of the old keys keep working. v0.5.0 removes the
-   old keys. `enduser.id` is not added: it stays only where a caller sets
-   `EndUserID`.
+   `k8s.object.*`. Readers of the old keys keep working. The release that
+   closes W1 removes the old keys (v0.5.x still writes them). `enduser.id`
+   is not added: it stays only where a caller sets `EndUserID`.
 2. **Gaps are marked.** A record that lacks what its writer must write is
    emitted marked `krateo.audit.incomplete` (a v0.3 record with no actor:
    `actor`), and counted under `krateo.audit.records.incomplete{marker}`.
@@ -178,6 +178,32 @@ Kubernetes object; set `Preview` for every Kubernetes object (`false` for a
 cluster-scoped one); move an affected
 user to `AffectedUser`; replace an upstream error text in `Message` with a
 closed-set text; and test the site (next section).
+
+## Adopting v0.5.0
+
+v0.5.0 is additive: a v0.4.0 record is still valid, a plain bump changes no
+record, and the v0.3 keys are still written beside their replacements (W1
+continues). It adds two keys a writer may now set
+([schema.md](./schema.md)):
+
+1. **`Event.Cause`** (`krateo.audit.cause_ref.*`, controllers only): the
+   object the controller reconciled, while `Namespace`, `Group`, `Version`,
+   `Resource`, `ObjectName` and `ObjectUID` now name the object it **wrote**.
+   A v0.4 controller named the reconciled object in `object_ref`; move it to
+   `Cause` and put the written object (or, for an external write, only
+   `ServerAddress`) where it was. Set `Cause` on every record of a reconcile,
+   with its `UID` and `Generation`: they are the join key.
+2. **`Event.DenialReason`** (`krateo.audit.denial_reason`): why the writer
+   itself refused, on an `OutcomeDenied` record only, spelled through the
+   generated `audit.DenialReason*` constants. Each writer class has its own
+   closed set: authn's name guard for `request`, `kept_resource_policy` for
+   `controller`. A writer that needs a new value adds it to `schema/v1.yaml`
+   in a minor release, never as free text.
+
+authn writes as a `request` writer on the scope
+`github.com/krateo-platformops/authn/audit`, and its background credential
+writes as a `controller` writer on `github.com/krateo-platformops/authn/audit/controller`,
+so the live queries report each apart.
 
 ## Testing a writer
 
@@ -192,11 +218,15 @@ runTheEmitSite(ctx, e)
 r := rec.Only(t)
 audittest.AssertConformant(t, audit.WriterController, r)
 audittest.AssertRequiredKeysDetected(t, audit.WriterController, r)
+audittest.AssertEnumsDetected(t, audit.WriterController, r)
 ```
 
 `AssertRequiredKeysDetected` removes each key `Check` requires of that record,
-one at a time, and fails unless `Check` then reports it missing. It mutates the
-checker's input, never its logic. A site that legitimately cannot establish a
+one at a time, and fails unless `Check` then reports it missing.
+`AssertEnumsDetected` replaces each value the writer may only pick from a
+closed set (the verb, the outcome, a denial reason) with one outside it, and
+fails unless `Check` then reports it `bad-enum`. Both mutate the checker's
+input, never its logic. A site that legitimately cannot establish a
 key (a token minted before the principal claim) passes
 `audittest.AllowIncomplete(audit.KeyActorClass)`.
 
@@ -228,14 +258,23 @@ The link back to the person is the **object's identity**:
 
 - the write that created or changed the object records its `uid`, `generation`
   and `resourceVersion`;
-- the controller records the `uid` and the `generation` it acted on (the
-  object's `metadata.generation` as read at reconcile start; a status
-  `observedGeneration` is not required).
+- the controller records the `uid` and the `generation` of the object it
+  reconciled in `Event.Cause` (`krateo.audit.cause_ref.uid`,
+  `krateo.audit.cause_ref.generation`: the object's `metadata.generation` as
+  read at reconcile start; a status `observedGeneration` is not required),
+  and the object it wrote in `object_ref`.
 
-Joining the two on `(krateo.audit.object_ref.uid,
-krateo.audit.object_ref.generation)` in `krateo_audit` (or the v0.3
-`k8s.object.uid`, `k8s.object.generation` during W1) ties the external write to
-the user's request and its `session.id`:
+Joining the request row's `(krateo.audit.object_ref.uid,
+krateo.audit.object_ref.generation)` to the controller row's
+`(krateo.audit.cause_ref.uid, krateo.audit.cause_ref.generation)` in
+`krateo_audit` ties the controller's write to the user's request and its
+`session.id` ([schema.md](./schema.md) has the query). A controller row
+written before v0.5.0 named the reconciled object in `object_ref` (or the v0.3
+`k8s.object.uid`, `k8s.object.generation` during W1): a join over those rows
+reads `object_ref` where `cause_ref` is absent.
+
+- a DELETE's request row carries no generation, so a reconcile it caused
+  joins on `uid` alone;
 
 - a `kubectl` or GitOps write produces a generation with no request-side record,
   so it is correctly not attributed to anyone's session;

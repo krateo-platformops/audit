@@ -76,8 +76,14 @@ const (
 	KeyDryRun = "krateo.audit.dry_run"
 	// KeyOutcome is "krateo.audit.outcome". What the authority this writer sent to
 	// answered, at the protocol level the writer observes. denied means the writer
-	// itself refused.
+	// itself refused; krateo.audit.denial_reason may say why.
 	KeyOutcome = "krateo.audit.outcome"
+	// KeyDenialReason is "krateo.audit.denial_reason". Why the writer itself
+	// refused, on a denied record only: one of the closed values its writer class
+	// declares, never free text. The caller's answer can stay opaque while the
+	// audit reader gets the reason. Optional: a denied record without it conforms.
+	// A writer class with no declared value cannot write it.
+	KeyDenialReason = "krateo.audit.denial_reason"
 	// KeyHTTPStatusCode is "http.response.status_code". The status code the
 	// authority answered (Kubernetes responseStatus.code).
 	KeyHTTPStatusCode = "http.response.status_code"
@@ -111,8 +117,10 @@ const (
 	// of objectRef; never a substitute for resource.
 	KeyObjectKind = "krateo.audit.object_ref.kind"
 	// KeyObjectUID is "krateo.audit.object_ref.uid". The uid of the object
-	// written, as the authority returned it, or of the object a controller acted
-	// on. The join key between a write and the reconcile it caused.
+	// written, as the authority returned it; for a controller, of the object it
+	// wrote or acted on. A request row's object_ref.uid is the join key to the
+	// reconciles it caused, whose controller rows carry it as
+	// krateo.audit.cause_ref.uid.
 	KeyObjectUID = "krateo.audit.object_ref.uid"
 	// KeyObjectResourceVersion is "krateo.audit.object_ref.resource_version". The
 	// resourceVersion the authority returned for the write, or the one a
@@ -121,6 +129,30 @@ const (
 	// KeyObjectGeneration is "krateo.audit.object_ref.generation". The generation
 	// the authority returned for the write, or the one a controller acted on.
 	KeyObjectGeneration = "krateo.audit.object_ref.generation"
+	// KeyCauseAPIGroup is "krateo.audit.cause_ref.api_group". The API group of the
+	// object the controller reconciled. Omitted for the core group.
+	KeyCauseAPIGroup = "krateo.audit.cause_ref.api_group"
+	// KeyCauseAPIVersion is "krateo.audit.cause_ref.api_version". The API version
+	// of the object the controller reconciled.
+	KeyCauseAPIVersion = "krateo.audit.cause_ref.api_version"
+	// KeyCauseResource is "krateo.audit.cause_ref.resource". The resource, the
+	// plural, of the object the controller reconciled.
+	KeyCauseResource = "krateo.audit.cause_ref.resource"
+	// KeyCauseNamespace is "krateo.audit.cause_ref.namespace". The namespace of
+	// the object the controller reconciled.
+	KeyCauseNamespace = "krateo.audit.cause_ref.namespace"
+	// KeyCauseName is "krateo.audit.cause_ref.name". The name of the object the
+	// controller reconciled.
+	KeyCauseName = "krateo.audit.cause_ref.name"
+	// KeyCauseUID is "krateo.audit.cause_ref.uid". The uid of the object the
+	// controller reconciled, as it read it. Joins the row to the request whose
+	// write it reconciled (that row's krateo.audit.object_ref.uid).
+	KeyCauseUID = "krateo.audit.cause_ref.uid"
+	// KeyCauseGeneration is "krateo.audit.cause_ref.generation". The generation of
+	// the object the controller reconciled, the one this reconcile acted on. With
+	// cause_ref.uid, joins the row to the request that wrote that generation (that
+	// row's krateo.audit.object_ref.generation).
+	KeyCauseGeneration = "krateo.audit.cause_ref.generation"
 	// KeyServerAddress is "server.address". The external endpoint the action was
 	// sent to, host[:port] only.
 	KeyServerAddress = "server.address"
@@ -170,75 +202,106 @@ const (
 	KeyAssertedAgentHost = "krateo.audit.asserted.agent_host"
 	// KeyLegacyOutcome is "outcome". The v0.3 name of krateo.audit.outcome.
 	//
-	// Deprecated: the v0.3 name of krateo.audit.outcome, removed in v0.5.0. Read
-	// krateo.audit.outcome.
+	// Deprecated: the v0.3 name of krateo.audit.outcome, removed when
+	// migration window W1 closes. Read krateo.audit.outcome.
 	KeyLegacyOutcome = "outcome"
 	// KeyLegacyEndUserID is "enduser.id". The v0.3 copy of user.name; deprecated
 	// in semconv. Written only by a writer that writes it today (snowplow; a
 	// library caller that sets Event.EndUserID): Emit never adds it.
 	//
-	// Deprecated: the v0.3 name of user.name, removed in v0.5.0. Read
-	// user.name.
+	// Deprecated: the v0.3 name of user.name, removed when
+	// migration window W1 closes. Read user.name.
 	KeyLegacyEndUserID = "enduser.id"
 	// KeyLegacyResourceGroup is "k8s.resource.group". The v0.3 name of
 	// krateo.audit.object_ref.api_group.
 	//
-	// Deprecated: the v0.3 name of krateo.audit.object_ref.api_group, removed in v0.5.0. Read
-	// krateo.audit.object_ref.api_group.
+	// Deprecated: the v0.3 name of krateo.audit.object_ref.api_group, removed when
+	// migration window W1 closes. Read krateo.audit.object_ref.api_group.
 	KeyLegacyResourceGroup = "k8s.resource.group"
 	// KeyLegacyResourceVersion is "k8s.resource.version". The v0.3 name of
 	// krateo.audit.object_ref.api_version.
 	//
-	// Deprecated: the v0.3 name of krateo.audit.object_ref.api_version, removed in v0.5.0. Read
-	// krateo.audit.object_ref.api_version.
+	// Deprecated: the v0.3 name of krateo.audit.object_ref.api_version, removed when
+	// migration window W1 closes. Read krateo.audit.object_ref.api_version.
 	KeyLegacyResourceVersion = "k8s.resource.version"
 	// KeyLegacyResourceResource is "k8s.resource.resource". The v0.3 name of
 	// krateo.audit.object_ref.resource.
 	//
-	// Deprecated: the v0.3 name of krateo.audit.object_ref.resource, removed in v0.5.0. Read
-	// krateo.audit.object_ref.resource.
+	// Deprecated: the v0.3 name of krateo.audit.object_ref.resource, removed when
+	// migration window W1 closes. Read krateo.audit.object_ref.resource.
 	KeyLegacyResourceResource = "k8s.resource.resource"
 	// KeyLegacyResourceSubresource is "k8s.resource.subresource". The v0.3 name of
 	// krateo.audit.object_ref.subresource.
 	//
-	// Deprecated: the v0.3 name of krateo.audit.object_ref.subresource, removed in v0.5.0. Read
-	// krateo.audit.object_ref.subresource.
+	// Deprecated: the v0.3 name of krateo.audit.object_ref.subresource, removed when
+	// migration window W1 closes. Read krateo.audit.object_ref.subresource.
 	KeyLegacyResourceSubresource = "k8s.resource.subresource"
 	// KeyLegacyResourceKind is "k8s.resource.kind". The v0.3 name of
 	// krateo.audit.object_ref.kind.
 	//
-	// Deprecated: the v0.3 name of krateo.audit.object_ref.kind, removed in v0.5.0. Read
-	// krateo.audit.object_ref.kind.
+	// Deprecated: the v0.3 name of krateo.audit.object_ref.kind, removed when
+	// migration window W1 closes. Read krateo.audit.object_ref.kind.
 	KeyLegacyResourceKind = "k8s.resource.kind"
 	// KeyLegacyResourceName is "k8s.resource.name". The v0.3 name of
 	// krateo.audit.object_ref.name.
 	//
-	// Deprecated: the v0.3 name of krateo.audit.object_ref.name, removed in v0.5.0. Read
-	// krateo.audit.object_ref.name.
+	// Deprecated: the v0.3 name of krateo.audit.object_ref.name, removed when
+	// migration window W1 closes. Read krateo.audit.object_ref.name.
 	KeyLegacyResourceName = "k8s.resource.name"
 	// KeyLegacyObjectUID is "k8s.object.uid". The v0.3 name of
 	// krateo.audit.object_ref.uid.
 	//
-	// Deprecated: the v0.3 name of krateo.audit.object_ref.uid, removed in v0.5.0. Read
-	// krateo.audit.object_ref.uid.
+	// Deprecated: the v0.3 name of krateo.audit.object_ref.uid, removed when
+	// migration window W1 closes. Read krateo.audit.object_ref.uid.
 	KeyLegacyObjectUID = "k8s.object.uid"
 	// KeyLegacyObjectGeneration is "k8s.object.generation". The v0.3 name of
 	// krateo.audit.object_ref.generation.
 	//
-	// Deprecated: the v0.3 name of krateo.audit.object_ref.generation, removed in v0.5.0. Read
-	// krateo.audit.object_ref.generation.
+	// Deprecated: the v0.3 name of krateo.audit.object_ref.generation, removed when
+	// migration window W1 closes. Read krateo.audit.object_ref.generation.
 	KeyLegacyObjectGeneration = "k8s.object.generation"
 	// KeyLegacyObjectResourceVersion is "k8s.object.resource_version". The v0.3
 	// name of krateo.audit.object_ref.resource_version.
 	//
-	// Deprecated: the v0.3 name of krateo.audit.object_ref.resource_version, removed in v0.5.0. Read
-	// krateo.audit.object_ref.resource_version.
+	// Deprecated: the v0.3 name of krateo.audit.object_ref.resource_version, removed when
+	// migration window W1 closes. Read krateo.audit.object_ref.resource_version.
 	KeyLegacyObjectResourceVersion = "k8s.object.resource_version"
+)
+
+// The closed values of the keys whose values depend on the writer. Check
+// reports any other value, and a value written by a writer it does not list.
+const (
+	// DenialReasonNameReserved is "name_reserved", a krateo.audit.denial_reason
+	// value of writer request.
+	DenialReasonNameReserved = "name_reserved"
+	// DenialReasonNameClaimed is "name_claimed", a krateo.audit.denial_reason
+	// value of writer request.
+	DenialReasonNameClaimed = "name_claimed"
+	// DenialReasonNameHeldLegacy is "name_held_legacy", a
+	// krateo.audit.denial_reason value of writer request.
+	DenialReasonNameHeldLegacy = "name_held_legacy"
+	// DenialReasonNameProvisioned is "name_provisioned", a
+	// krateo.audit.denial_reason value of writer request.
+	DenialReasonNameProvisioned = "name_provisioned"
+	// DenialReasonNameBound is "name_bound", a krateo.audit.denial_reason value of
+	// writer request.
+	DenialReasonNameBound = "name_bound"
+	// DenialReasonSystemGroup is "system_group", a krateo.audit.denial_reason
+	// value of writer request.
+	DenialReasonSystemGroup = "system_group"
+	// DenialReasonGroupNotAllowed is "group_not_allowed", a
+	// krateo.audit.denial_reason value of writer request.
+	DenialReasonGroupNotAllowed = "group_not_allowed"
+	// DenialReasonKeptResourcePolicy is "kept_resource_policy", a
+	// krateo.audit.denial_reason value of writer controller.
+	DenialReasonKeptResourcePolicy = "kept_resource_policy"
 )
 
 // The writer classes.
 const (
-	// WriterRequest (H): A person's request, recorded by snowplow.
+	// WriterRequest (H): A request a component served for a caller, recorded by
+	// that component: snowplow for a person's or an agent's request, authn for a
+	// login and a /delegate token.
 	WriterRequest Writer = "request"
 	// WriterGateway (G): The agent gateway's hop record, projected by the
 	// collector.
@@ -267,11 +330,16 @@ const (
 	// CondImpersonated: The record carries an impersonation: either
 	// krateo.audit.impersonated_user.* key is present.
 	CondImpersonated Condition = "impersonated"
+	// CondCaused: The record names the object a controller reconciled: any
+	// krateo.audit.cause_ref.* key is present.
+	CondCaused Condition = "caused"
+	// CondDenied: krateo.audit.outcome is denied: the writer itself refused.
+	CondDenied Condition = "denied"
 )
 
 var schemaWriters = []Writer{WriterRequest, WriterGateway, WriterAction, WriterController}
 
-var schemaConditions = []Condition{CondK8sTarget, CondWrite, CondMethodOther, CondDelegated, CondImpersonated}
+var schemaConditions = []Condition{CondK8sTarget, CondWrite, CondMethodOther, CondDelegated, CondImpersonated, CondCaused, CondDenied}
 
 var schemaMarkers = []string{"actor", "actor_class", "action", "verb", "method", "preview", "target"}
 
@@ -288,6 +356,8 @@ var schemaTarget = TargetRule{
 
 var schemaPopulations = []Population{
 	{Scope: "github.com/krateo-platformops/snowplow/audit", Writer: WriterRequest, Who: "snowplow (H, and T for an agent going through /call)"},
+	{Scope: "github.com/krateo-platformops/authn/audit", Writer: WriterRequest, Who: "authn's login and /delegate records"},
+	{Scope: "github.com/krateo-platformops/authn/audit/controller", Writer: WriterController, Who: "authn's background credential writes (certificate renewal, the step-up Secret sweep)"},
 	{Scope: "github.com/krateo-platformops/observability/gateway-audit", Writer: WriterGateway, Who: "the collector's gateway-audit projection"},
 	{Scope: "github.com/krateo-platformops/audit", Writer: WriterController, Who: "access-review and identity-lifecycle (split by ServiceName)"},
 	{Scope: "rest-dynamic-controller/audit", Writer: WriterController, Who: "rest-dynamic-controller"},
@@ -610,12 +680,32 @@ var schemaKeys = []KeySpec{
 		ReplacedBy:  "",
 		DualWrite:   false,
 		OnlyWhen:    "",
-		Description: "What the authority this writer sent to answered, at the protocol level the writer observes. denied means the writer itself refused.",
+		Description: "What the authority this writer sent to answered, at the protocol level the writer observes. denied means the writer itself refused; krateo.audit.denial_reason may say why.",
 		Writers: map[Writer]Requirement{
 			WriterRequest:    {Level: LevelRequired},
 			WriterGateway:    {Level: LevelRequired},
 			WriterAction:     {Level: LevelRequired},
 			WriterController: {Level: LevelRequired},
+		},
+	},
+	{
+		Name:        KeyDenialReason,
+		Type:        TypeString,
+		Semconv:     "none",
+		Values:      nil,
+		Format:      "",
+		Marker:      "",
+		Identity:    false,
+		Asserted:    false,
+		ReplacedBy:  "",
+		DualWrite:   false,
+		OnlyWhen:    CondDenied,
+		Description: "Why the writer itself refused, on a denied record only: one of the closed values its writer class declares, never free text. The caller's answer can stay opaque while the audit reader gets the reason. Optional: a denied record without it conforms. A writer class with no declared value cannot write it.",
+		Writers: map[Writer]Requirement{
+			WriterRequest:    {Level: LevelOptional, Values: []string{"name_reserved", "name_claimed", "name_held_legacy", "name_provisioned", "name_bound", "system_group", "group_not_allowed"}},
+			WriterGateway:    {Level: LevelNotApplicable},
+			WriterAction:     {Level: LevelNotApplicable},
+			WriterController: {Level: LevelOptional, Values: []string{"kept_resource_policy"}},
 		},
 	},
 	{
@@ -810,11 +900,11 @@ var schemaKeys = []KeySpec{
 		ReplacedBy:  "",
 		DualWrite:   false,
 		OnlyWhen:    "",
-		Description: "The uid of the object written, as the authority returned it, or of the object a controller acted on. The join key between a write and the reconcile it caused.",
+		Description: "The uid of the object written, as the authority returned it; for a controller, of the object it wrote or acted on. A request row's object_ref.uid is the join key to the reconciles it caused, whose controller rows carry it as krateo.audit.cause_ref.uid.",
 		Writers: map[Writer]Requirement{
-			WriterRequest:    {Level: LevelConditional, When: "a successful"},
+			WriterRequest:    {Level: LevelConditional, When: "a successful, non-dry-run write"},
 			WriterGateway:    {Level: LevelNotEstablished},
-			WriterAction:     {Level: LevelConditional, When: "a successful"},
+			WriterAction:     {Level: LevelConditional, When: "a successful, non-dry-run write"},
 			WriterController: {Level: LevelConditional, When: "the object is known"},
 		},
 	},
@@ -832,9 +922,9 @@ var schemaKeys = []KeySpec{
 		OnlyWhen:    "",
 		Description: "The resourceVersion the authority returned for the write, or the one a controller read.",
 		Writers: map[Writer]Requirement{
-			WriterRequest:    {Level: LevelConditional, When: "a successful"},
+			WriterRequest:    {Level: LevelConditional, When: "a successful, non-dry-run write that is not a DELETE"},
 			WriterGateway:    {Level: LevelNotEstablished},
-			WriterAction:     {Level: LevelConditional, When: "a successful"},
+			WriterAction:     {Level: LevelConditional, When: "a successful, non-dry-run write that is not a DELETE"},
 			WriterController: {Level: LevelOptional},
 		},
 	},
@@ -852,10 +942,150 @@ var schemaKeys = []KeySpec{
 		OnlyWhen:    "",
 		Description: "The generation the authority returned for the write, or the one a controller acted on.",
 		Writers: map[Writer]Requirement{
-			WriterRequest:    {Level: LevelConditional, When: "a successful"},
+			WriterRequest:    {Level: LevelConditional, When: "a successful, non-dry-run write that is not a DELETE"},
 			WriterGateway:    {Level: LevelNotEstablished},
-			WriterAction:     {Level: LevelConditional, When: "a successful"},
+			WriterAction:     {Level: LevelConditional, When: "a successful, non-dry-run write that is not a DELETE"},
 			WriterController: {Level: LevelConditional, When: "the controller acted on a generation"},
+		},
+	},
+	{
+		Name:        KeyCauseAPIGroup,
+		Type:        TypeString,
+		Semconv:     "none",
+		Values:      nil,
+		Format:      "",
+		Marker:      "",
+		Identity:    false,
+		Asserted:    false,
+		ReplacedBy:  "",
+		DualWrite:   false,
+		OnlyWhen:    "",
+		Description: "The API group of the object the controller reconciled. Omitted for the core group.",
+		Writers: map[Writer]Requirement{
+			WriterRequest:    {Level: LevelNotApplicable},
+			WriterGateway:    {Level: LevelNotApplicable},
+			WriterAction:     {Level: LevelNotApplicable},
+			WriterController: {Level: LevelConditional, When: "the reconciled object is outside the core group"},
+		},
+	},
+	{
+		Name:        KeyCauseAPIVersion,
+		Type:        TypeString,
+		Semconv:     "none",
+		Values:      nil,
+		Format:      "",
+		Marker:      "",
+		Identity:    false,
+		Asserted:    false,
+		ReplacedBy:  "",
+		DualWrite:   false,
+		OnlyWhen:    "",
+		Description: "The API version of the object the controller reconciled.",
+		Writers: map[Writer]Requirement{
+			WriterRequest:    {Level: LevelNotApplicable},
+			WriterGateway:    {Level: LevelNotApplicable},
+			WriterAction:     {Level: LevelNotApplicable},
+			WriterController: {Level: LevelConditional, When: "the record names a reconciled object", Check: CondCaused},
+		},
+	},
+	{
+		Name:        KeyCauseResource,
+		Type:        TypeString,
+		Semconv:     "none",
+		Values:      nil,
+		Format:      "",
+		Marker:      "",
+		Identity:    false,
+		Asserted:    false,
+		ReplacedBy:  "",
+		DualWrite:   false,
+		OnlyWhen:    "",
+		Description: "The resource, the plural, of the object the controller reconciled.",
+		Writers: map[Writer]Requirement{
+			WriterRequest:    {Level: LevelNotApplicable},
+			WriterGateway:    {Level: LevelNotApplicable},
+			WriterAction:     {Level: LevelNotApplicable},
+			WriterController: {Level: LevelConditional, When: "the record names a reconciled object", Check: CondCaused},
+		},
+	},
+	{
+		Name:        KeyCauseNamespace,
+		Type:        TypeString,
+		Semconv:     "none",
+		Values:      nil,
+		Format:      "",
+		Marker:      "",
+		Identity:    false,
+		Asserted:    false,
+		ReplacedBy:  "",
+		DualWrite:   false,
+		OnlyWhen:    "",
+		Description: "The namespace of the object the controller reconciled.",
+		Writers: map[Writer]Requirement{
+			WriterRequest:    {Level: LevelNotApplicable},
+			WriterGateway:    {Level: LevelNotApplicable},
+			WriterAction:     {Level: LevelNotApplicable},
+			WriterController: {Level: LevelConditional, When: "the reconciled object is namespaced"},
+		},
+	},
+	{
+		Name:        KeyCauseName,
+		Type:        TypeString,
+		Semconv:     "none",
+		Values:      nil,
+		Format:      "",
+		Marker:      "",
+		Identity:    false,
+		Asserted:    false,
+		ReplacedBy:  "",
+		DualWrite:   false,
+		OnlyWhen:    "",
+		Description: "The name of the object the controller reconciled.",
+		Writers: map[Writer]Requirement{
+			WriterRequest:    {Level: LevelNotApplicable},
+			WriterGateway:    {Level: LevelNotApplicable},
+			WriterAction:     {Level: LevelNotApplicable},
+			WriterController: {Level: LevelConditional, When: "the record names a reconciled object", Check: CondCaused},
+		},
+	},
+	{
+		Name:        KeyCauseUID,
+		Type:        TypeString,
+		Semconv:     "none",
+		Values:      nil,
+		Format:      "",
+		Marker:      "",
+		Identity:    false,
+		Asserted:    false,
+		ReplacedBy:  "",
+		DualWrite:   false,
+		OnlyWhen:    "",
+		Description: "The uid of the object the controller reconciled, as it read it. Joins the row to the request whose write it reconciled (that row's krateo.audit.object_ref.uid).",
+		Writers: map[Writer]Requirement{
+			WriterRequest:    {Level: LevelNotApplicable},
+			WriterGateway:    {Level: LevelNotApplicable},
+			WriterAction:     {Level: LevelNotApplicable},
+			WriterController: {Level: LevelConditional, When: "the record names a reconciled object", Check: CondCaused},
+		},
+	},
+	{
+		Name:        KeyCauseGeneration,
+		Type:        TypeInt,
+		Semconv:     "none",
+		Values:      nil,
+		Format:      "",
+		Marker:      "",
+		Identity:    false,
+		Asserted:    false,
+		ReplacedBy:  "",
+		DualWrite:   false,
+		OnlyWhen:    "",
+		Description: "The generation of the object the controller reconciled, the one this reconcile acted on. With cause_ref.uid, joins the row to the request that wrote that generation (that row's krateo.audit.object_ref.generation).",
+		Writers: map[Writer]Requirement{
+			WriterRequest:    {Level: LevelNotApplicable},
+			WriterGateway:    {Level: LevelNotApplicable},
+			WriterAction:     {Level: LevelNotApplicable},
+			WriterController: {Level: LevelConditional, When: "the reconciled object has a generation (every custom resource has one)"},
 		},
 	},
 	{

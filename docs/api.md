@@ -4,7 +4,7 @@ title: audit — API
 description: The exported Go API of the audit package (emitter, schema, checker, claim parser, sanitiser), audittest, cmd/auditschema, and how each Event field maps to a record attribute.
 resource: github.com/krateo-platformops/audit
 tags: [library, audit, api]
-timestamp: 2026-11-09T00:00:00Z
+timestamp: 2026-11-11T00:00:00Z
 ---
 
 # API
@@ -67,11 +67,13 @@ const MetricRecordedMarkerUnattached = "krateo.audit.recorded_marker.unattached"
 | `HTTPMethod` | `http.request.method` (+ `http.request.method_original`) | a method semconv does not name, lowercase included, becomes `_OTHER`, and the method as given is written in `http.request.method_original` |
 | `StatusCode` | `http.response.status_code` | omitted when 0 |
 | `Outcome` | `krateo.audit.outcome` (+ `outcome`) | |
+| `DenialReason` | `krateo.audit.denial_reason` | on an `OutcomeDenied` record only; one of the writer class's own closed values, spelled through the generated `DenialReason*` constants (`DenialReasonNameClaimed`, `DenialReasonKeptResourcePolicy`, ...). No v0.3 key |
 | `Preview` | `krateo.audit.preview` | `PreviewUnknown` (omitted, and marked for any Kubernetes object), `PreviewFalse` (also for a cluster-scoped object), `PreviewTrue`; `PreviewOf(bool)` |
 | `DryRun` | `krateo.audit.dry_run` | `true` whenever set. `false` only on a write record (`Verb` in `WriteVerbs()`) of an Emitter declared `WithWriter(WriterRequest)` or `WithWriter(WriterAction)`. Never on a read or a controller record, and never added for an Emitter that declares no writer (a v0.3 caller). The `Action` literal is the caller's either way |
 | `Namespace` | `k8s.namespace.name` | |
 | `Group`, `Version`, `Resource`, `Subresource`, `Kind`, `ObjectName` | `krateo.audit.object_ref.{api_group,api_version,resource,subresource,kind,name}` (+ `k8s.resource.*`) | a Kubernetes object always names its `Resource` |
-| `ObjectUID`, `ObjectGeneration`, `ObjectResourceVersion` | `krateo.audit.object_ref.{uid,generation,resource_version}` (+ `k8s.object.*`) | the join key; generation omitted when 0 |
+| `ObjectUID`, `ObjectGeneration`, `ObjectResourceVersion` | `krateo.audit.object_ref.{uid,generation,resource_version}` (+ `k8s.object.*`) | the written object's identity, the request side of the join; generation omitted when 0. For a controller, the object it wrote |
+| `Cause` (`CauseRef{Group, Version, Resource, Namespace, Name, UID, Generation}`) | `krateo.audit.cause_ref.{api_group,api_version,resource,namespace,name,uid,generation}` | controllers only: the object reconciled. `UID` and `Generation` are the controller side of the join; generation omitted when 0. No v0.3 key |
 | `ServerAddress` | `server.address` | **host[:port] only**: `Emit` drops any scheme, userinfo, path, query and fragment, and omits a value with no parseable host |
 | `RequestURI`, `SourceIPs`, `UserAgent`, `ReceivedTime` | `krateo.request.uri`, `krateo.request.source_ips`, `user_agent.original`, `krateo.request.received_time_unix_nano` | what a request-serving writer received; the User-Agent is cut at 1024 bytes on a character |
 | `RESTActionNamespace`, `RESTActionName`, `RESTActionStage` | `krateo.restaction.{namespace,name,stage}` | |
@@ -88,8 +90,18 @@ type Writer string // WriterRequest (H) | WriterGateway (G) | WriterAction (T) |
 type Class string  // ClassHuman | ClassAgent | ClassController | ClassService; (Class).Known()
 type Preview uint8 // PreviewUnknown | PreviewFalse | PreviewTrue
 type Link struct{ Class Class; Subject string }
+type CauseRef struct{ Group, Version, Resource, Namespace, Name, UID string; Generation int64 }
+
+type Requirement struct {
+	Level    Level     // required | conditional | optional | not_established | not_applicable
+	When     string    // for conditional: when the key is required
+	Check    Condition // the condition Check evaluates for When, or ""
+	Markable bool      // omitted and named in krateo.audit.incomplete when not established
+	Values   []string  // this writer's own closed set, for a key whose values depend on the writer
+}
 
 const KeyEventName = "event.name" // ... one Key* constant per key, generated
+const DenialReasonKeptResourcePolicy = "kept_resource_policy" // ... one constant per per-writer value, generated
 
 func Keys() []KeySpec                  // every key: type, semconv status, enum, marker, identity, per-writer Requirement
 func LookupKey(name string) (KeySpec, bool)
@@ -121,7 +133,8 @@ established by, or not applicable to, this writer), `bad-type`, `bad-enum`,
 `bad-format`, `empty`, `invalid-utf8`, `duplicate`, `marked-but-present`,
 `unexpected` (written outside the condition the schema allows it under, its
 `only_when`: `http.request.method_original` with a method other than
-`_OTHER`, or with none), `two-targets`, `legacy-without-replacement`,
+`_OTHER`, or with none; `krateo.audit.denial_reason` on a record that is not
+`denied`), `two-targets`, `legacy-without-replacement`,
 `legacy-disagrees`,
 `affected-user-is-actor`, `unknown-writer`, `bad-event-name`.
 `Violation.Key` is an attribute key, `RuleTarget` (`"target"`) or
@@ -166,7 +179,7 @@ Concurrent `Emit`s on one holder or one span are safe.
 func ParseClaim[P ~string](claim P) (Class, bool) // audit.ParseClaim(ui.ActorPrincipal()); "" or unknown -> ("", false): omit
 func Sanitize(kv attribute.KeyValue) attribute.KeyValue // the key and every string, at any depth, valid UTF-8
 func SanitizeValue(v attribute.Value) attribute.Value
-func WithLegacyKeys(attrs []attribute.KeyValue) []attribute.KeyValue // W1: add each v0.3 twin; removed in v0.5.0
+func WithLegacyKeys(attrs []attribute.KeyValue) []attribute.KeyValue // W1: add each v0.3 twin; removed when W1 closes
 ```
 
 `ParseClaim` takes plumbing's `jwtutil.Principal` as it is (any type whose
@@ -188,6 +201,7 @@ func AssertConformant(t testing.TB, w audit.Writer, rec sdklog.Record, opts ...O
 func AssertViolation(t testing.TB, w audit.Writer, attrs []attribute.KeyValue, key string)
 func AssertRemovalDetected(t testing.TB, w audit.Writer, rec sdklog.Record, key string, opts ...Option) // the falsifier
 func AssertRequiredKeysDetected(t testing.TB, w audit.Writer, rec sdklog.Record, opts ...Option)       // ... for every required key
+func AssertEnumsDetected(t testing.TB, w audit.Writer, rec sdklog.Record, opts ...Option)              // ... for every closed set on the record
 func AllowIncomplete(keys ...string) Option
 ```
 
