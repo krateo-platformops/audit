@@ -290,13 +290,13 @@ All four are closed, and the gateway denies the tool to every caller.
 
 ## Open questions
 
-Each question names the issue to ask it on. None of these is a row yet.
+Each open question is asked on its owner's issue; the link goes to the comment. None of these is a row yet.
 
 1. **authn's identity backfill on Secrets.** The AUDIT-4 inventory lists it
    among authn's background writes, beside the certificate renewal and the
    step-up sweep. Does it change a credential Secret's data (then it's a row
    under the named exception), or only its metadata (then it's out of
-   scope)? Ask on [authn#119].
+   scope)? [Asked on authn#119](https://github.com/krateo-platformops/authn/issues/119#issuecomment-6800345899).
 2. **ui-token-hop** in agentgateway-policies. *Answered by observability
    (2026-11-11, relayed by the AUDIT-4 lead).* It is a reverse proxy with no
    method filter: `/api/...` goes through the agent gateway to
@@ -307,18 +307,19 @@ Each question names the issue to ask it on. None of these is a row yet.
    LoginURL `POST` is one of authn's login rows.
 3. **oasgen-provider and credential Secrets.** [oasgen-provider#543] puts
    credential Secrets in scope, but the write list read at `fadf5ed3` names
-   none. Does oasgen-provider write a credential Secret? Ask on
-   [oasgen-provider#543].
+   none. Does oasgen-provider write a credential Secret?
+   [Asked on oasgen-provider#543](https://github.com/krateo-platformops/oasgen-provider/issues/543#issuecomment-6800346558).
 4. **identity-lifecycle's AccessRequest** ([identity-lifecycle#28], a draft
    stacked on #27). It adds controller writes (an IdP user create, a group
    join, an action email, a CRM form and contact update), and a public
    intake that creates AccessRequest objects with no verified caller. The
    controller rows land with that PR. Is the intake's create a row, and if
-   so, which writer class and which actor? Ask on [identity-lifecycle#24].
+   so, which writer class and which actor?
+   [Asked on identity-lifecycle#24](https://github.com/krateo-platformops/identity-lifecycle/issues/24#issuecomment-6800347833).
 5. **The preview label on the sandbox Namespace.** The frontend sets the
    label that writers read for `krateo.audit.preview`. Does it set it
    through `/call` (then snowplow's `/call` row covers it), or by another
-   path? Ask on [snowplow#1333].
+   path? [Asked on snowplow#1333](https://github.com/krateo-platformops/snowplow/issues/1333#issuecomment-6800348688).
 
 [audit#8]: https://github.com/krateo-platformops/audit/issues/8
 [audit#9]: https://github.com/krateo-platformops/audit/issues/9
