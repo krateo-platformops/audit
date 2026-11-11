@@ -9,6 +9,27 @@ timestamp: 2026-11-11T00:00:00Z
 
 # Log
 
+- **2026-11-11**: [coverage.md](./coverage.md), the cross-component audit
+  inventory (audit#9; AUDIT-4, installer#410). One row per mutating path per
+  component, in one table per writer class and one for the paths no writer
+  records: what changes, the writer class, where the identity comes from,
+  the status (audited, audited and non-conformant, not audited, or out of
+  scope with its reason), the owner issue, and the scope, `krateo.action`,
+  verb and outcomes where they are known. It covers snowplow, authn, the
+  agent path (gateway, cert-replay-hop, kagent tools), the controllers (cdc,
+  core-provider, rest-dynamic-controller, oasgen-provider, access-review,
+  identity-lifecycle), the installer, the frontend and the readers. The
+  2026-11-09 boundary rulings, the exclusions and the stated limit are
+  written once; the kept deletion is the v0.5.0 key
+  `denial_reason=kept_resource_policy`. A status describes merged code
+  only. An owner's emit-site PR updates its rows in the same change. The
+  page names no identity, not even a placeholder.
+  `TestCoverage_EveryRowMeetsTheAcceptance` fails when a row has no owner
+  issue or no out-of-scope reason, a writer class or status outside the
+  closed sets, a scope that is not a population of its own writer in
+  `schema/v1.yaml`, or an audited path with no scope, and when the page
+  holds a placeholder such as `<user>`. Docs and a test only; no code or
+  schema change.
 - **2026-11-11**: schema v1 gains two keys, for v0.5.0 (audit#8, audit#10;
   AUDIT-4, installer#410). Additive: every v0.4.0 record stays valid (a test
   replays records v0.4.0's own `Emit` wrote and expects v0.4.0's own check
