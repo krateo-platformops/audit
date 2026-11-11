@@ -1,7 +1,7 @@
 ---
 type: Usage
 title: audit — usage
-description: Install the package, when and how to emit, who the actor is, adopting v0.4.0, v0.5.0, v0.6.0 and v0.6.1, testing a writer against the schema, and checking the live table.
+description: Install the package, when and how to emit, who the actor is, adopting v0.4.0, v0.5.0, v0.6.0 and v0.7.0, testing a writer against the schema, and checking the live table.
 resource: github.com/krateo-platformops/audit
 tags: [library, audit, usage]
 timestamp: 2026-11-11T00:00:00Z
@@ -242,9 +242,9 @@ access-review and identity-lifecycle each emit on their own scope,
 `github.com/krateo-platformops/audit` stays a controller population for the
 rows written before the move.
 
-## Adopting v0.6.1
+## Adopting v0.7.0
 
-v0.6.1 is additive. It gives authn's `/delegate` a reason for refusing a
+v0.7.0 is additive. It gives authn's `/delegate` a reason for refusing a
 subject token after the actor verified: `DenialReasonSubjectTokenExpired`
 (the token has expired, or expires within authn's 1 s margin) and
 `DenialReasonSubjectTokenInvalid` (the token did not verify). Both go on a

@@ -84,7 +84,7 @@ func TestCheck_V060Rules(t *testing.T) {
 		{"a missing username recorded as a failure", "request",
 			sub(sub(denied, "platform_group", "name_missing"), authnOutcome, `{"key":"krateo.audit.outcome","value":{"stringValue":"failure"}},`),
 			[]string{"krateo.audit.denial_reason: unexpected"}},
-		// v0.6.1 (audit#18): /delegate's refused subject token.
+		// v0.7.0 (audit#18): /delegate's refused subject token.
 		{"authn refuses an expired subject token", "request", sub(denied, "platform_group", "subject_token_expired"), nil},
 		{"authn refuses an invalid subject token", "request", sub(denied, "platform_group", "subject_token_invalid"), nil},
 		{"an invalid subject token with a status code", "request", sub(sub(denied, "platform_group", "subject_token_invalid"), authnOutcome, authnOutcome+portalStatus),

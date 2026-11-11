@@ -7,7 +7,7 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 )
 
-// v0.6.1 (audit#18): authn's /delegate refusals of a subject token, after the
+// v0.7.0 (audit#18): authn's /delegate refusals of a subject token, after the
 // actor verified. Denied, no status code, the request writer's alone.
 func TestCheck_SubjectTokenReasons(t *testing.T) {
 	v := func(k string, r Reason) Violation { return Violation{Key: k, Reason: r} }
