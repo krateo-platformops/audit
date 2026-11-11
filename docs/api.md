@@ -73,6 +73,8 @@ const MetricRecordedMarkerUnattached = "krateo.audit.recorded_marker.unattached"
 | `Namespace` | `k8s.namespace.name` | |
 | `Group`, `Version`, `Resource`, `Subresource`, `Kind`, `ObjectName` | `krateo.audit.object_ref.{api_group,api_version,resource,subresource,kind,name}` (+ `k8s.resource.*`) | a Kubernetes object always names its `Resource` |
 | `ObjectUID`, `ObjectGeneration`, `ObjectResourceVersion` | `krateo.audit.object_ref.{uid,generation,resource_version}` (+ `k8s.object.*`) | the written object's identity, the request side of the join; generation omitted when 0. For a controller, the object it wrote |
+| `ContentSHA256` | `krateo.audit.object_ref.content_sha256` | a `create` or `update` that writes content only; computed with `ContentSHA256` before the write; never for a credential target (a Secret). No v0.3 key |
+| `Client` (`ClientProvenance{Rejected, Source, AgentSessionID, ConfirmationID, ConfirmedSet, RequestedAt}`) | `krateo.audit.client.{rejected,source,agent_session_id,confirmation_id,confirmed_set.*,requested_at}` | what a client asserted about a write, as the writer validated it (request and action writers, writes only). `Rejected` set: written alone. `ConfirmedSet` (`*ConfirmedSet{Count, Irreversible, SHA256, Op}`): all four keys, `Op` from 0. `RequestedAt`: RFC 3339 in UTC with milliseconds, omitted when zero. Never identity, outcome or target |
 | `Cause` (`CauseRef{Group, Version, Resource, Namespace, Name, UID, Generation}`) | `krateo.audit.cause_ref.{api_group,api_version,resource,namespace,name,uid,generation}` | controllers only: the object reconciled. `UID` and `Generation` are the controller side of the join; generation omitted when 0. No v0.3 key |
 | `ServerAddress` | `server.address` | **host[:port] only**: `Emit` drops any scheme, userinfo, path, query and fragment, and omits a value with no parseable host |
 | `RequestURI`, `SourceIPs`, `UserAgent`, `ReceivedTime` | `krateo.request.uri`, `krateo.request.source_ips`, `user_agent.original`, `krateo.request.received_time_unix_nano` | what a request-serving writer received; the User-Agent is cut at 1024 bytes on a character |
@@ -91,6 +93,17 @@ type Class string  // ClassHuman | ClassAgent | ClassController | ClassService; 
 type Preview uint8 // PreviewUnknown | PreviewFalse | PreviewTrue
 type Link struct{ Class Class; Subject string }
 type CauseRef struct{ Group, Version, Resource, Namespace, Name, UID string; Generation int64 }
+type ClientProvenance struct {
+	Rejected                               string // ClientRejectedOversize | ClientRejectedEncoding | ClientRejectedVersion | ClientRejectedSchema
+	Source, AgentSessionID, ConfirmationID string // Source: ClientSourcePortal
+	ConfirmedSet                           *ConfirmedSet
+	RequestedAt                            time.Time
+}
+type ConfirmedSet struct{ Count int64; Irreversible bool; SHA256 string; Op int64 }
+type CredentialTarget struct{ Group, Resource, Subresource string } // Subresource "": any
+
+func ContentSHA256(group, resource string, obj any) (string, error) // the content hash; ErrCredentialTarget for a Secret
+var ErrCredentialTarget error
 
 type Requirement struct {
 	Level    Level     // required | conditional | optional | not_established | not_applicable
@@ -109,6 +122,8 @@ func Writers() []Writer
 func Markers() []string                // what krateo.audit.incomplete may list
 func Target() TargetRule               // object_ref.resource or server.address, per writer
 func Conditions() []Condition          // the conditions Check evaluates on a record
+func CredentialTargets() []CredentialTarget                   // where a credential-free key is never written
+func IsCredentialTarget(group, resource, subresource string) bool
 func Populations() []Population        // instrumentation scope -> writer, in krateo_audit
 func LegacyControls() []Population
 func LegacyKey(key string) string      // the v0.3 twin of a key, during W1
@@ -123,6 +138,7 @@ func CheckRecord(w Writer, eventName string, attrs []attribute.KeyValue) []Viola
 func RequiredKeys(w Writer, attrs []attribute.KeyValue) []string                   // what Check requires of this record
 func Holds(c Condition, attrs []attribute.KeyValue) bool                            // a condition, as Check evaluates it
 func WriteVerbs() []string                                                          // the verbs that make a record a write (condition write)
+func ContentWriteVerbs() []string                                                   // create, update: the records a content hash may be on
 
 type Violation struct{ Key string; Reason Reason } // never a value
 ```
@@ -134,7 +150,12 @@ established by, or not applicable to, this writer), `bad-type`, `bad-enum`,
 `unexpected` (written outside the condition the schema allows it under, its
 `only_when`: `http.request.method_original` with a method other than
 `_OTHER`, or with none; `krateo.audit.denial_reason` on a record that is not
-`denied`), `two-targets`, `legacy-without-replacement`,
+`denied`; or under the condition it is never written under, its `not_when`:
+`http.response.status_code` on a `denied` record, a client key beside
+`krateo.audit.client.rejected`), `not-for-target` (a credential-free key,
+the content hash, on a credential target), `out-of-range` (an int below its
+minimum, or not below its `less_than` key: `confirmed_set.op` not below
+`confirmed_set.count`), `two-targets`, `legacy-without-replacement`,
 `legacy-disagrees`,
 `affected-user-is-actor`, `unknown-writer`, `bad-event-name`.
 `Violation.Key` is an attribute key, `RuleTarget` (`"target"`) or

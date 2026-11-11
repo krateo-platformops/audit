@@ -144,8 +144,8 @@ func TestSchema_IdentityAndAssertion(t *testing.T) {
 		if k.Identity && k.Asserted {
 			t.Errorf("%s is both identity and asserted", k.Name)
 		}
-		if k.Asserted != strings.HasPrefix(k.Name, "krateo.audit.asserted.") {
-			t.Errorf("%s: asserted keys, and only they, live under krateo.audit.asserted.", k.Name)
+		if k.Asserted != (strings.HasPrefix(k.Name, "krateo.audit.asserted.") || strings.HasPrefix(k.Name, clientPrefix)) {
+			t.Errorf("%s: asserted keys, and only they, live under krateo.audit.asserted. or %s", k.Name, clientPrefix)
 		}
 		if k.Identity {
 			identity = append(identity, k.Name)

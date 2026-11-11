@@ -37,10 +37,22 @@
 # `identity: true` keys carry who someone is, on purpose (the audit trail is
 # identity-bearing by design). They never reach a span or an ordinary log line.
 # `asserted: true` keys hold a value a client chose: never identity, never a
-# policy key.
+# policy key. They, and only they, live under krateo.audit.asserted. (a
+# header the gateway saw) or krateo.audit.client. (provenance a client sent
+# the writer, snowplow#1333).
 #
 # `only_when: <condition>` means the key may be written only while that
 # condition holds; the checker reports it, as unexpected, anywhere else.
+# `not_when: <condition>` is the converse: the key is never written while the
+# condition holds, and the checker reports it there as unexpected.
+#
+# `credential_free: true` means the key is never written on a record whose
+# Kubernetes target is one of `credential_targets`; the checker reports it
+# there as not-for-target.
+#
+# `minimum: <n>` bounds an int key from below, and `less_than: <key>` bounds
+# it by another int key on the same record; the checker reports a value
+# outside the bound as out-of-range.
 #
 # Keys with `replaced_by` are the v0.3 names, written side by side with their
 # replacement during migration window W1 (library v0.4.x and v0.5.x) and
@@ -116,6 +128,26 @@ conditions:
     go: CondDenied
     description: >-
       krateo.audit.outcome is denied: the writer itself refused.
+  - id: content_write
+    go: CondContentWrite
+    description: >-
+      krateo.audit.verb creates or replaces an object's content: create or
+      update.
+  - id: client_rejected
+    go: CondClientRejected
+    description: >-
+      The writer rejected the client's provenance header:
+      krateo.audit.client.rejected is present.
+  - id: client_provenance
+    go: CondClientProvenance
+    description: >-
+      The record carries provenance the client asserted: a
+      krateo.audit.client.* key other than source and rejected is present.
+  - id: confirmed_set
+    go: CondConfirmedSet
+    description: >-
+      The record names the confirmed set its write belongs to: any
+      krateo.audit.client.confirmed_set.* key is present.
 
 # Exactly one target per record: a Kubernetes object or an external endpoint.
 # A controller's record may name both: the object it wrote in object_ref and
@@ -130,6 +162,15 @@ target:
     gateway: exactly_one
     action: exactly_one
     controller: at_least_one
+
+# The Kubernetes targets that carry a credential: a key marked
+# `credential_free` is never written on a record whose object_ref names one.
+# An entry without a subresource matches the resource and every subresource
+# of it; one with a subresource matches that subresource only. api_group ""
+# is the core group (object_ref.api_group omitted).
+credential_targets:
+  - {api_group: "", resource: secrets}
+  - {api_group: "", resource: serviceaccounts, subresource: token}
 
 # Where each writer's records land in default.krateo_audit, by the
 # instrumentation scope name of the logger it emits on. Used by
@@ -150,9 +191,17 @@ populations:
   - scope: github.com/krateo-platformops/observability/gateway-audit
     writer: gateway
     who: the collector's gateway-audit projection
+  - scope: github.com/krateo-platformops/access-review/audit
+    writer: controller
+    who: access-review
+  - scope: github.com/krateo-platformops/identity-lifecycle/audit
+    writer: controller
+    who: identity-lifecycle
   - scope: github.com/krateo-platformops/audit
     writer: controller
-    who: access-review and identity-lifecycle (split by ServiceName)
+    who: >-
+      access-review and identity-lifecycle before each moved to its own scope
+      (split by ServiceName); kept for their historical rows
   - scope: rest-dynamic-controller/audit
     writer: controller
     who: rest-dynamic-controller
@@ -415,7 +464,13 @@ keys:
       # group_not_allowed: an OIDCConfig's allowedGroups refused an identity the
       # IdP verified, because it is in none of the admitted groups (403
       # GroupNotAllowed).
-      request: {level: optional, values: [name_reserved, name_claimed, name_held_legacy, name_provisioned, name_bound, system_group, group_not_allowed]}
+      # delegation_not_allowed, delegation_too_deep: authn's /delegate refused
+      # the token exchange: the actor may not act for the subject, or the act
+      # chain would exceed its depth bound (authn#123).
+      # platform_group: an identity source (LDAP, OAuth, OIDC) asserted a
+      # krateo: group, which only the platform grants (403). Not system_group,
+      # which is a Kubernetes system: group.
+      request: {level: optional, values: [name_reserved, name_claimed, name_held_legacy, name_provisioned, name_bound, system_group, group_not_allowed, delegation_not_allowed, delegation_too_deep, platform_group]}
       gateway: not_applicable
       action: not_applicable
       # kept_resource_policy: helm declined a delete because the object carries
@@ -426,7 +481,11 @@ keys:
     go: HTTPStatusCode
     type: int
     semconv: stable
-    description: The status code the authority answered (Kubernetes responseStatus.code).
+    description: >-
+      The status code the authority answered (Kubernetes responseStatus.code).
+      Never on a denied record: denied means the writer itself refused, so no
+      authority answered.
+    not_when: denied
     writers:
       request: {level: conditional, when: the authority answered}
       gateway: {level: conditional, when: the backend answered}
@@ -561,6 +620,21 @@ keys:
       gateway: not_established
       action: {level: conditional, when: "a successful, non-dry-run write that is not a DELETE"}
       controller: {level: conditional, when: the controller acted on a generation}
+
+  - name: krateo.audit.object_ref.content_sha256
+    go: ObjectContentSHA256
+    type: string
+    semconv: none
+    format: sha256_hex
+    description: >-
+      The tamper-evidence anchor of a write that creates or replaces content:
+      the lowercase hex SHA-256 of the object's canonical content
+      (audit.ContentSHA256, docs/schema.md), computed by the writer before the
+      write. Never on a credential-bearing target: a hash of low-entropy
+      secret data can be guessed offline.
+    only_when: content_write
+    credential_free: true
+    writers: {request: optional, gateway: not_established, action: optional, controller: optional}
 
   # --- what a controller reconciled -------------------------------------------
   # A controller row has two objects: object_ref.* is the object it WROTE (the
@@ -815,6 +889,143 @@ keys:
       gateway: {level: conditional, when: the header was present}
       action: not_applicable
       controller: not_applicable
+
+  # --- client-asserted provenance (snowplow#1333) ----------------------------
+  # What the portal asserted about a write in its X-Krateo-Provenance header,
+  # as the writer received it after validating it. Asserted: never identity,
+  # actor class, agent identity, outcome or target, which the writer
+  # establishes itself. Only on a write; when the writer rejected the header,
+  # the record carries krateo.audit.client.rejected and no other client key.
+  - name: krateo.audit.client.source
+    go: ClientSource
+    type: string
+    semconv: none
+    asserted: true
+    values: [portal]
+    description: The client that sent the provenance header.
+    only_when: write
+    not_when: client_rejected
+    writers:
+      request: {level: conditional, when: the record carries client provenance, check: client_provenance}
+      gateway: not_applicable
+      action: {level: conditional, when: the record carries client provenance, check: client_provenance}
+      controller: not_applicable
+
+  - name: krateo.audit.client.agent_session_id
+    go: ClientAgentSessionID
+    type: string
+    semconv: none
+    asserted: true
+    format: opaque_id
+    description: >-
+      The Agentiko session the write was made in, for an agent-initiated
+      write: at most 128 of [A-Za-z0-9_-]. An agent's prompt is traced through
+      it in Agentiko's own store; no prompt text is carried.
+    only_when: write
+    not_when: client_rejected
+    writers: {request: optional, gateway: not_applicable, action: optional, controller: not_applicable}
+
+  - name: krateo.audit.client.confirmation_id
+    go: ClientConfirmationID
+    type: string
+    semconv: none
+    asserted: true
+    format: uuid
+    description: >-
+      One press of the portal's confirm gate, a lowercase UUID: every write
+      of one confirmed set carries the same id.
+    only_when: write
+    not_when: client_rejected
+    writers: {request: optional, gateway: not_applicable, action: optional, controller: not_applicable}
+
+  - name: krateo.audit.client.confirmed_set.count
+    go: ClientConfirmedSetCount
+    type: int
+    semconv: none
+    asserted: true
+    minimum: 1
+    description: How many writes the confirmed set holds.
+    only_when: write
+    not_when: client_rejected
+    writers:
+      request: {level: conditional, when: the record names a confirmed set, check: confirmed_set}
+      gateway: not_applicable
+      action: {level: conditional, when: the record names a confirmed set, check: confirmed_set}
+      controller: not_applicable
+
+  - name: krateo.audit.client.confirmed_set.irreversible
+    go: ClientConfirmedSetIrreversible
+    type: bool
+    semconv: none
+    asserted: true
+    description: true when any write of the confirmed set is irreversible.
+    only_when: write
+    not_when: client_rejected
+    writers:
+      request: {level: conditional, when: the record names a confirmed set, check: confirmed_set}
+      gateway: not_applicable
+      action: {level: conditional, when: the record names a confirmed set, check: confirmed_set}
+      controller: not_applicable
+
+  - name: krateo.audit.client.confirmed_set.sha256
+    go: ClientConfirmedSetSHA256
+    type: string
+    semconv: none
+    asserted: true
+    format: sha256_hex
+    description: >-
+      The lowercase hex SHA-256 of the canonical confirmed set (snowplow#1333):
+      the blast radius the person confirmed, not its diffs.
+    only_when: write
+    not_when: client_rejected
+    writers:
+      request: {level: conditional, when: the record names a confirmed set, check: confirmed_set}
+      gateway: not_applicable
+      action: {level: conditional, when: the record names a confirmed set, check: confirmed_set}
+      controller: not_applicable
+
+  - name: krateo.audit.client.confirmed_set.op
+    go: ClientConfirmedSetOp
+    type: int
+    semconv: none
+    asserted: true
+    minimum: 0
+    less_than: krateo.audit.client.confirmed_set.count
+    description: The index of this write in the confirmed set, from 0.
+    only_when: write
+    not_when: client_rejected
+    writers:
+      request: {level: conditional, when: the record names a confirmed set, check: confirmed_set}
+      gateway: not_applicable
+      action: {level: conditional, when: the record names a confirmed set, check: confirmed_set}
+      controller: not_applicable
+
+  - name: krateo.audit.client.requested_at
+    go: ClientRequestedAt
+    type: string
+    semconv: none
+    asserted: true
+    format: rfc3339
+    description: >-
+      When the client says the person confirmed, an RFC 3339 timestamp from
+      the browser's clock. Never the event time.
+    only_when: write
+    not_when: client_rejected
+    writers: {request: optional, gateway: not_applicable, action: optional, controller: not_applicable}
+
+  - name: krateo.audit.client.rejected
+    go: ClientRejected
+    type: string
+    semconv: none
+    asserted: true
+    values: [oversize, encoding, version, schema]
+    description: >-
+      The writer rejected the client's provenance header, and why: the header
+      was too long, not base64url JSON, of another version, or broke the
+      closed schema. The write itself still ran. The record then carries no
+      other client key.
+    only_when: write
+    writers: {request: optional, gateway: not_applicable, action: optional, controller: not_applicable}
 
   # --- v0.3 names, written side by side during W1, removed when W1 closes ----
   - name: outcome

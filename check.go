@@ -1,9 +1,11 @@
 package audit
 
 import (
+	"regexp"
 	"slices"
 	"strconv"
 	"strings"
+	"time"
 	"unicode/utf8"
 
 	"go.opentelemetry.io/otel/attribute"
@@ -46,8 +48,17 @@ const (
 	ReasonMarkedButPresent Reason = "marked-but-present"
 	// ReasonUnexpected: the key is written while the condition it may only
 	// be written under (KeySpec.OnlyWhen) does not hold, e.g.
-	// http.request.method_original beside a method semconv names.
+	// http.request.method_original beside a method semconv names, or while
+	// the condition it is never written under (KeySpec.NotWhen) holds, e.g.
+	// http.response.status_code on a denied record.
 	ReasonUnexpected Reason = "unexpected"
+	// ReasonNotForTarget: a credential-free key (KeySpec.CredentialFree) is
+	// written on a record whose Kubernetes target carries a credential
+	// (CredentialTargets), e.g. a content hash of a Secret.
+	ReasonNotForTarget Reason = "not-for-target"
+	// ReasonOutOfRange: an int key's value is below its KeySpec.Min, or not
+	// below the key its KeySpec.LessThan names.
+	ReasonOutOfRange Reason = "out-of-range"
 	// ReasonTwoTargets: the record names a Kubernetes object and an external
 	// endpoint, for a writer whose record has exactly one target.
 	ReasonTwoTargets Reason = "two-targets"
@@ -83,12 +94,14 @@ func (v Violation) String() string { return v.Key + ": " + string(v.Reason) }
 
 // Check validates one record's attributes against the schema for writer w. It
 // reports, in a fixed order: per attribute, keys outside the closed set, keys
-// this writer cannot write, type, enum, format and UTF-8 errors, duplicates;
-// then marks of keys the record carries; then keys written outside their
-// only_when condition; then every key the writer must write here that is
-// absent (missing, or incomplete when marked); then the target rule; then
-// the W1 pairs; then an affected user equal to the actor. An empty result
-// means the record conforms.
+// this writer cannot write, type, enum, format, minimum and UTF-8 errors,
+// duplicates; then marks of keys the record carries; then keys written
+// outside their only_when condition or under their not_when condition; then
+// credential-free keys on a credential target; then every key the writer must
+// write here that is absent (missing, or incomplete when marked); then the
+// target rule; then the W1 pairs; then an affected user equal to the actor;
+// then int keys not below their less_than key. An empty result means the
+// record conforms.
 //
 // Check sees attributes only. CheckRecord also checks the LogRecord EventName.
 func Check(w Writer, attrs []attribute.KeyValue) []Violation {
@@ -138,11 +151,16 @@ func Check(w Writer, attrs []attribute.KeyValue) []Violation {
 	}
 	for i := range schemaKeys {
 		spec := &schemaKeys[i]
-		if _, here := present[spec.Name]; !here || spec.OnlyWhen == "" {
-			continue
-		}
-		if holds, _ := evalCondition(spec.OnlyWhen, present); !holds {
+		if _, here := present[spec.Name]; here && unexpected(spec, present) {
 			out = append(out, Violation{Key: spec.Name, Reason: ReasonUnexpected})
+		}
+	}
+	if credentialTarget(present) {
+		for i := range schemaKeys {
+			spec := &schemaKeys[i]
+			if _, here := present[spec.Name]; here && spec.CredentialFree {
+				out = append(out, Violation{Key: spec.Name, Reason: ReasonNotForTarget})
+			}
 		}
 	}
 	for i := range schemaKeys {
@@ -185,7 +203,47 @@ func Check(w Writer, attrs []attribute.KeyValue) []Violation {
 			out = append(out, Violation{Key: KeyAffectedUser, Reason: ReasonAffectedUserIsActor})
 		}
 	}
+
+	for i := range schemaKeys {
+		spec := &schemaKeys[i]
+		v, here := present[spec.Name]
+		if !here || spec.LessThan == "" || v.Type() != attribute.INT64 {
+			continue
+		}
+		if bound, ok := present[spec.LessThan]; ok && bound.Type() == attribute.INT64 && v.AsInt64() >= bound.AsInt64() {
+			out = append(out, Violation{Key: spec.Name, Reason: ReasonOutOfRange})
+		}
+	}
 	return out
+}
+
+// unexpected reports whether a key spec, present on the record, is written
+// outside its only_when condition or under its not_when condition.
+func unexpected(spec *KeySpec, present map[string]attribute.Value) bool {
+	if spec.OnlyWhen != "" {
+		if holds, _ := evalCondition(spec.OnlyWhen, present); !holds {
+			return true
+		}
+	}
+	if spec.NotWhen != "" {
+		if holds, _ := evalCondition(spec.NotWhen, present); holds {
+			return true
+		}
+	}
+	return false
+}
+
+// credentialTarget reports whether the record's Kubernetes target, as its
+// object_ref names it, is a credential target.
+func credentialTarget(present map[string]attribute.Value) bool {
+	str := func(k string) string {
+		if v, ok := present[k]; ok && v.Type() == attribute.STRING {
+			return v.AsString()
+		}
+		return ""
+	}
+	resource := str(KeyObjectResource)
+	return resource != "" && IsCredentialTarget(str(KeyObjectAPIGroup), resource, str(KeyObjectSubresource))
 }
 
 // CheckRecord is Check plus the LogRecord EventName, which is a record field
@@ -266,14 +324,39 @@ func evalCondition(c Condition, present map[string]attribute.Value) (holds, know
 	case CondDenied:
 		o, ok := present[KeyOutcome]
 		return ok && o.Type() == attribute.STRING && o.AsString() == OutcomeDenied, true
+	case CondContentWrite:
+		v, ok := present[KeyVerb]
+		return ok && v.Type() == attribute.STRING && slices.Contains(contentWriteVerbs, v.AsString()), true
+	case CondClientRejected:
+		return has(KeyClientRejected), true
+	case CondClientProvenance:
+		for k := range present {
+			if strings.HasPrefix(k, clientPrefix) && k != KeyClientSource && k != KeyClientRejected {
+				return true, true
+			}
+		}
+		return false, true
+	case CondConfirmedSet:
+		return hasPrefix(present, confirmedSetPrefix), true
 	}
 	return false, false
 }
 
 const (
-	objectRefPrefix = "krateo.audit.object_ref."
-	causeRefPrefix  = "krateo.audit.cause_ref."
+	objectRefPrefix    = "krateo.audit.object_ref."
+	causeRefPrefix     = "krateo.audit.cause_ref."
+	clientPrefix       = "krateo.audit.client."
+	confirmedSetPrefix = "krateo.audit.client.confirmed_set."
 )
+
+// contentWriteVerbs are the krateo.audit.verb values of a write that creates
+// or replaces an object's content (condition content_write).
+var contentWriteVerbs = []string{"create", "update"}
+
+// ContentWriteVerbs returns the krateo.audit.verb values of a write that
+// creates or replaces an object's content: the only records a content hash
+// (krateo.audit.object_ref.content_sha256) may be written on.
+func ContentWriteVerbs() []string { return slices.Clone(contentWriteVerbs) }
 
 // writeVerbs are the krateo.audit.verb values of a write (condition write):
 // the apiserver's mutating verbs, and the non-resource POST and PUT (a PATCH
@@ -405,6 +488,10 @@ func checkValue(spec *KeySpec, r Requirement, v attribute.Value) (Reason, bool) 
 		if len(stringList(v)) == 0 {
 			return ReasonEmpty, true
 		}
+	case TypeInt:
+		if spec.Min != nil && v.AsInt64() < *spec.Min {
+			return ReasonOutOfRange, true
+		}
 	}
 	switch spec.Format {
 	case "delegation_link":
@@ -422,8 +509,44 @@ func checkValue(spec *KeySpec, r Requirement, v attribute.Value) (Reason, bool) 
 			}
 			seen[m] = true
 		}
+	case "sha256_hex":
+		if !lowerHex(v.AsString(), 64) {
+			return ReasonBadFormat, true
+		}
+	case "uuid":
+		if !uuidForm.MatchString(v.AsString()) {
+			return ReasonBadFormat, true
+		}
+	case "opaque_id":
+		if !opaqueID.MatchString(v.AsString()) {
+			return ReasonBadFormat, true
+		}
+	case "rfc3339":
+		if _, err := time.Parse(time.RFC3339, v.AsString()); err != nil {
+			return ReasonBadFormat, true
+		}
 	}
 	return "", false
+}
+
+var (
+	// uuidForm is a UUID in its canonical textual form, lowercase.
+	uuidForm = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`)
+	// opaqueID is 1 to 128 of [A-Za-z0-9_-].
+	opaqueID = regexp.MustCompile(`^[A-Za-z0-9_-]{1,128}$`)
+)
+
+// lowerHex reports whether s is exactly n lowercase hex digits.
+func lowerHex(s string, n int) bool {
+	if len(s) != n {
+		return false
+	}
+	for i := 0; i < len(s); i++ {
+		if c := s[i]; (c < '0' || c > '9') && (c < 'a' || c > 'f') {
+			return false
+		}
+	}
+	return true
 }
 
 // hasType reports whether v is of type t. A string list is a STRINGSLICE or a

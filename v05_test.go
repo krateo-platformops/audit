@@ -21,8 +21,10 @@ var exampleCause = []attribute.KeyValue{
 	attribute.Int64(KeyCauseGeneration, 4),
 }
 
+// deniedRecord is attrs refused by the writer itself: outcome denied, and no
+// status code, since no authority answered (v0.6.0, audit#13).
 func deniedRecord(attrs []attribute.KeyValue) []attribute.KeyValue {
-	return with(attrs, attribute.String(KeyOutcome, OutcomeDenied), attribute.String(KeyLegacyOutcome, OutcomeDenied))
+	return with(without(attrs, KeyHTTPStatusCode), attribute.String(KeyOutcome, OutcomeDenied), attribute.String(KeyLegacyOutcome, OutcomeDenied))
 }
 
 // Accepted where the schema allows them, reported everywhere else.
@@ -135,7 +137,10 @@ func TestSchema_CauseRefAndDenialReason(t *testing.T) {
 		t.Errorf("denial_reason: %+v", d)
 	}
 	want := map[Writer][]string{
-		WriterRequest:    {"name_reserved", "name_claimed", "name_held_legacy", "name_provisioned", "name_bound", "system_group", "group_not_allowed"},
+		// v0.5.0's seven, then v0.6.0's /delegate refusals and the krateo:
+		// group refusal (audit#12).
+		WriterRequest: {"name_reserved", "name_claimed", "name_held_legacy", "name_provisioned", "name_bound", "system_group", "group_not_allowed",
+			"delegation_not_allowed", "delegation_too_deep", "platform_group"},
 		WriterController: {"kept_resource_policy"},
 	}
 	for _, w := range Writers() {
