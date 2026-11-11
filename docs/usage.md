@@ -1,7 +1,7 @@
 ---
 type: Usage
 title: audit — usage
-description: Install the package, when and how to emit, who the actor is, adopting v0.4.0, v0.5.0, v0.6.0 and v0.7.0, testing a writer against the schema, and checking the live table.
+description: Install the package, when and how to emit, who the actor is, adopting v0.4.0, v0.5.0, v0.6.0, v0.7.0 and v0.8.0, testing a writer against the schema, and checking the live table.
 resource: github.com/krateo-platformops/audit
 tags: [library, audit, usage]
 timestamp: 2026-11-11T00:00:00Z
@@ -249,6 +249,30 @@ subject token after the actor verified: `DenialReasonSubjectTokenExpired`
 (the token has expired, or expires within authn's 1 s margin) and
 `DenialReasonSubjectTokenInvalid` (the token did not verify). Both go on a
 denied record with no status code; the caller still gets one 401.
+
+## Adopting v0.8.0
+
+v0.8.0 is additive. Every refusal of an identity that has already verified
+is a denied record with a closed reason and no status code. It adds six,
+for authn:
+
+- the step-up, after the ID token verified: `DenialReasonStepupNotEnabled`
+  (step-up is not enabled for the OIDCConfig), `DenialReasonInsufficientAssurance`
+  (the ID token's acr is not one of the step-up's acr values) and
+  `DenialReasonStaleAuthentication` (no `auth_time`, or older than the
+  step-up's maxAge);
+- a ServiceAccount login, after the TokenReview authenticated the caller:
+  `DenialReasonNotAServiceAccount` (the username is not a ServiceAccount's),
+  `DenialReasonNoMapping` (no mapping admits the ServiceAccount) and
+  `DenialReasonAmbiguousMapping` (more than one does). The two mapping
+  records name the mapping resource without a name.
+
+An audience mismatch is part of verification, so it never gets a row.
+Failures after verification are `failure` rows, not denials, and their
+status code is the authority's answer, never authn's own HTTP status. A
+failed mapping lookup carries the apiserver's code when the apiserver
+answered, and no code when nothing answered. A misconfigured step-up
+carries no status code.
 
 ## Testing a writer
 
