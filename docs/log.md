@@ -62,7 +62,12 @@ timestamp: 2026-11-11T00:00:00Z
   - Request denial reasons `delegation_not_allowed` and
     `delegation_too_deep` (authn's `/delegate` refusals, authn#123) and
     `platform_group` (an identity source asserted a `krateo:` group; not
-    `system_group`, a Kubernetes `system:` group).
+    `system_group`, a Kubernetes `system:` group), and `name_missing` (an
+    identity source verified an identity but returned no username: an OIDC
+    claim absent or empty, an OAuth RESTAction with no username, an LDAP
+    entry with no uid; authn refuses it with 403. The record is denied, has
+    no status code, and names the Secret resource without a name. It closes
+    the LOW from authn#123's review, which recorded the case as a failure).
   - Populations `github.com/krateo-platformops/access-review/audit` and
     `github.com/krateo-platformops/identity-lifecycle/audit`, controller;
     the shared `github.com/krateo-platformops/audit` row stays for the rows

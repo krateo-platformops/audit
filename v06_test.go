@@ -66,6 +66,11 @@ func TestCheck_V060Rules(t *testing.T) {
 	portal := with(req, portalProvenance...)
 	rejected := with(req, attribute.String(KeyClientRejected, ClientRejectedSchema))
 	authnRefused := deniedRecord(req)
+	// authn's login refused for a verified identity with no username: the
+	// credential Secret's resource, no name (there is none to derive).
+	nameMissing := with(without(deniedRecord(onObject(req, "", "secrets", "")), KeyObjectName, KeyLegacyResourceName),
+		attribute.String(KeyVerb, "update"), attribute.String(KeyHTTPMethod, "PUT"), attribute.String(KeyAction, "authn.login.oidc"),
+		attribute.String(KeyDenialReason, DenialReasonNameMissing))
 
 	cases := []struct {
 		name  string
@@ -89,6 +94,19 @@ func TestCheck_V060Rules(t *testing.T) {
 		{"an unknown request reason", WriterRequest, with(authnRefused, attribute.String(KeyDenialReason, "krateo_group")), []Violation{v(KeyDenialReason, ReasonBadEnum)}},
 		{"a delegation reason on a controller", WriterController, with(deniedRecord(ctrl), attribute.String(KeyDenialReason, DenialReasonDelegationTooDeep)), []Violation{v(KeyDenialReason, ReasonBadEnum)}},
 		{"platform_group on a success", WriterRequest, with(req, attribute.String(KeyDenialReason, DenialReasonPlatformGroup)), []Violation{v(KeyDenialReason, ReasonUnexpected)}},
+
+		// name_missing: a verified identity with no username. Denied, no
+		// status code, the Secret resource named without a name.
+		{"authn: no username", WriterRequest, nameMissing, nil},
+		{"no username, with a status code", WriterRequest, with(nameMissing, attribute.Int(KeyHTTPStatusCode, 403)), []Violation{v(KeyHTTPStatusCode, ReasonUnexpected)}},
+		{"no username, recorded as a failure", WriterRequest, with(nameMissing, attribute.String(KeyOutcome, OutcomeFailure), attribute.String(KeyLegacyOutcome, OutcomeFailure)),
+			[]Violation{v(KeyDenialReason, ReasonUnexpected)}},
+		{"no username, recorded as a success", WriterRequest, with(nameMissing, attribute.String(KeyOutcome, OutcomeSuccess), attribute.String(KeyLegacyOutcome, OutcomeSuccess)),
+			[]Violation{v(KeyDenialReason, ReasonUnexpected)}},
+		{"no username, with no outcome", WriterRequest, without(nameMissing, KeyOutcome, KeyLegacyOutcome),
+			[]Violation{v(KeyDenialReason, ReasonUnexpected), v(KeyOutcome, ReasonMissing)}},
+		{"name_missing on a controller", WriterController, with(deniedRecord(ctrl), attribute.String(KeyDenialReason, DenialReasonNameMissing)), []Violation{v(KeyDenialReason, ReasonBadEnum)}},
+		{"name_missing on the gateway", WriterGateway, with(deniedRecord(gw), attribute.String(KeyDenialReason, DenialReasonNameMissing)), []Violation{v(KeyDenialReason, ReasonNotForWriter)}},
 
 		// content_sha256: create or update of a non-credential object only.
 		{"content hash on a create", WriterRequest, hashed, nil},
@@ -296,7 +314,7 @@ func TestSchema_V060(t *testing.T) {
 	}
 
 	// The three request denial reasons.
-	for c, v := range map[string]string{DenialReasonDelegationNotAllowed: "delegation_not_allowed", DenialReasonDelegationTooDeep: "delegation_too_deep", DenialReasonPlatformGroup: "platform_group"} {
+	for c, v := range map[string]string{DenialReasonDelegationNotAllowed: "delegation_not_allowed", DenialReasonDelegationTooDeep: "delegation_too_deep", DenialReasonPlatformGroup: "platform_group", DenialReasonNameMissing: "name_missing"} {
 		if c != v || !slices.Contains(get(KeyDenialReason).Writers[WriterRequest].Values, v) || slices.Contains(get(KeyDenialReason).Writers[WriterController].Values, v) {
 			t.Errorf("denial reason %q: the request writer's only", v)
 		}

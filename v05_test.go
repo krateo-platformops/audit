@@ -140,7 +140,7 @@ func TestSchema_CauseRefAndDenialReason(t *testing.T) {
 		// v0.5.0's seven, then v0.6.0's /delegate refusals and the krateo:
 		// group refusal (audit#12).
 		WriterRequest: {"name_reserved", "name_claimed", "name_held_legacy", "name_provisioned", "name_bound", "system_group", "group_not_allowed",
-			"delegation_not_allowed", "delegation_too_deep", "platform_group"},
+			"delegation_not_allowed", "delegation_too_deep", "platform_group", "name_missing"},
 		WriterController: {"kept_resource_policy"},
 	}
 	for _, w := range Writers() {

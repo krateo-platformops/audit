@@ -521,7 +521,12 @@ keys:
       # platform_group: an identity source (LDAP, OAuth, OIDC) asserted a
       # krateo: group, which only the platform grants (403). Not system_group,
       # which is a Kubernetes system: group.
-      request: {level: optional, values: [name_reserved, name_claimed, name_held_legacy, name_provisioned, name_bound, system_group, group_not_allowed, delegation_not_allowed, delegation_too_deep, platform_group]}
+      # name_missing: an identity source verified the identity but returned no
+      # username (an OIDC claim absent or empty, an OAuth RESTAction with no
+      # username, an LDAP entry with no uid), so authn refuses it (403). With
+      # no username there is no credential Secret to name: the record names
+      # the Secret resource without its name, and carries no status code.
+      request: {level: optional, values: [name_reserved, name_claimed, name_held_legacy, name_provisioned, name_bound, system_group, group_not_allowed, delegation_not_allowed, delegation_too_deep, platform_group, name_missing]}
       gateway: not_applicable
       action: not_applicable
       # kept_resource_policy: helm declined a delete because the object carries

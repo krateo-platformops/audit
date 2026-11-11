@@ -229,10 +229,12 @@ What a writer may now set ([schema.md](./schema.md)):
    what the portal asserted in its provenance header, after the writer
    validated it. Set `Client.Rejected` instead when the header was rejected;
    `Emit` then writes it alone.
-4. **Three request denial reasons** for authn: `DenialReasonDelegationNotAllowed`
-   and `DenialReasonDelegationTooDeep` for `/delegate`, and
+4. **Four request denial reasons** for authn: `DenialReasonDelegationNotAllowed`
+   and `DenialReasonDelegationTooDeep` for `/delegate`;
    `DenialReasonPlatformGroup` for an identity source that asserted a
-   `krateo:` group.
+   `krateo:` group; and `DenialReasonNameMissing` for a verified identity
+   that came back with no username. Each is a denied record with no status
+   code. A `name_missing` record names the Secret resource but no Secret.
 
 access-review and identity-lifecycle each emit on their own scope,
 `github.com/krateo-platformops/access-review/audit` and
