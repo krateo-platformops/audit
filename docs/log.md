@@ -25,18 +25,28 @@ timestamp: 2026-11-11T00:00:00Z
     record carries no code, and no compatibility record carries one.
   - `krateo.audit.object_ref.content_sha256` (`Event.ContentSHA256`): the
     tamper-evidence anchor of a `create` or `update` (condition
-    `content_write`), the lowercase hex SHA-256 of the object's canonical
-    content. `audit.ContentSHA256(group, resource, obj)` computes it: a
-    ConfigMap's `data` and `binaryData`, any other object's top-level fields
-    but `apiVersion`, `kind`, `metadata` and `status`, as canonical JSON
-    (sorted keys, no whitespace, minimal escaping, integers only).
-    [schema.md](./schema.md) states the form and a test vector that
-    `TestContentSHA256_Vector` computes. **Never on a credential target**:
-    the schema's new `credential_targets` (core `secrets` with any
-    subresource, `serviceaccounts/token`) and a key's `credential_free`
-    make `Check` report it there as `not-for-target`, and the live query
-    count it (`not_for_target_...`); `ContentSHA256` refuses one
-    (`ErrCredentialTarget`).
+    `content_write`), `c1:` and the lowercase hex SHA-256 of the object's
+    canonical content in form **c1**. The form is fixed before the tag
+    because changing it would invalidate every stored hash: any later change
+    is `c2`, and `Check` refuses a prefix other than `c1` (format
+    `content_hash`). `audit.ContentSHA256(group, resource, subresource, obj)`
+    computes it from the request body as sent: a ConfigMap's `data` and
+    `binaryData`, any other object's top-level fields but `apiVersion`,
+    `kind`, `metadata` and `status`; plus, for every kind,
+    `metadata.annotations` kept to the declared authorization annotations
+    (`AuthorizationAnnotations()`, schema `content_annotations`:
+    `authn.krateo.io/strategy`, `authn.krateo.io/groups`, from authn's
+    `storage.AuthorizationAnnotations`; plumbing's `helm/v3/verdicts.go`
+    declares none); object members that are null left out at every depth;
+    as canonical JSON (sorted keys, no whitespace, minimal escaping,
+    integers only). [schema.md](./schema.md) defines c1 and a test vector
+    that `TestContentSHA256_Vector` computes. **Never on a credential
+    target**: the schema's new `credential_targets` (core `secrets` with any
+    subresource, `serviceaccounts/token`, `tokenreviews.authentication.k8s.io`;
+    the schema lists the kinds checked and left out) and a key's
+    `credential_free` make `Check` report it there as `not-for-target`, and
+    the live query count it (`not_for_target_...`); `ContentSHA256` refuses
+    the same targets (`ErrCredentialTarget`).
   - `krateo.audit.client.*` (`Event.Client`, a `ClientProvenance`), the
     client-asserted provenance of snowplow#1333's `X-Krateo-Provenance`
     header: `source` (`portal`), `agent_session_id`, `confirmation_id`,
@@ -64,11 +74,11 @@ timestamp: 2026-11-11T00:00:00Z
     request rows the join returns). The query is documentation; it is not
     run by a test.
   - Schema grammar: `not_when`, `credential_free` with `credential_targets`,
-    `minimum` and `less_than` on an int key, the formats `sha256_hex`,
+    `minimum` and `less_than` on an int key, the formats `sha256_hex`, `content_hash`,
     `uuid`, `opaque_id` and `rfc3339`. `Check` gains the reasons
     `not-for-target` and `out-of-range`; `KeySpec` gains `NotWhen`,
     `CredentialFree`, `Min` and `LessThan`. The generator refuses an unknown
-    `not_when`, `not_when` equal to `only_when`, `credential_free` with no
+    `not_when`, `not_when` equal to `only_when`, an unprefixed or repeated content annotation, `credential_free` with no
     targets, a format or bound on the wrong type, `less_than` naming no
     other int key, and an asserted key that is required, marked or a target.
   - docs/coverage.md is unchanged: its rows describe merged code, and

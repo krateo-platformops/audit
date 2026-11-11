@@ -219,11 +219,12 @@ record. One rule is tighter, as the schema already defined it:
 What a writer may now set ([schema.md](./schema.md)):
 
 2. **`Event.ContentSHA256`** (`krateo.audit.object_ref.content_sha256`): on a
-   `create` or `update` that writes content, the hash
-   `audit.ContentSHA256(group, resource, obj)` returns for the object the
-   write sends. Never for a Secret: `ContentSHA256` refuses it
-   (`ErrCredentialTarget`) and `Check` reports the key there as
-   `not-for-target`.
+   `create` or `update` that writes content, the `c1:<hex>` value
+   `audit.ContentSHA256(group, resource, subresource, obj)` returns for the
+   request body as sent, with the target as `object_ref` names it. Never for
+   a credential target (a Secret, a token request or review):
+   `ContentSHA256` refuses it (`ErrCredentialTarget`) and `Check` reports the
+   key there as `not-for-target`.
 3. **`Event.Client`** (`krateo.audit.client.*`, request and action writers):
    what the portal asserted in its provenance header, after the writer
    validated it. Set `Client.Rejected` instead when the header was rejected;

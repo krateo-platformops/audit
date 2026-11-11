@@ -168,9 +168,46 @@ target:
 # An entry without a subresource matches the resource and every subresource
 # of it; one with a subresource matches that subresource only. api_group ""
 # is the core group (object_ref.api_group omitted).
+#
+# What was checked (2026-11-11), and why each is in or out:
+#   in   secrets: data and stringData hold the secret itself.
+#   in   serviceaccounts/token: the TokenRequest's status.token is a bearer.
+#        TokenRequest is served only as this subresource; there is no
+#        tokenrequests resource to list.
+#   in   tokenreviews.authentication.k8s.io: spec.token is the bearer under
+#        review.
+#   out  selfsubjectreviews.authentication.k8s.io: the body carries no token
+#        (the caller's own credential is in the request headers).
+#   out  subjectaccessreviews, selfsubjectaccessreviews,
+#        localsubjectaccessreviews.authorization.k8s.io: identity, no
+#        credential.
+#   out  certificatesigningrequests.certificates.k8s.io: spec.request is a CSR
+#        and status.certificate the issued certificate, both public; the
+#        private key never reaches the apiserver.
+#   out  webhook configurations and apiservices: caBundle is a public CA.
+#   out  authn's CRDs (users.basic, ldapconfigs, oauthconfigs, oidcconfigs,
+#        serviceaccounts.serviceaccount.authn.krateo.io, authn@26c4456d):
+#        every credential field is a reference to a Secret key
+#        (passwordRef, bindSecret, clientSecretRef, clientSecret), never the
+#        value.
 credential_targets:
   - {api_group: "", resource: secrets}
   - {api_group: "", resource: serviceaccounts, subresource: token}
+  - {api_group: authentication.k8s.io, resource: tokenreviews}
+
+# The annotations that are content (krateo.audit.object_ref.content_sha256):
+# authorization reads them, so a write that changes one changes what an
+# identity may do, as the AUDIT-4 ruling counts it. Every other annotation,
+# and every label, is metadata and is not hashed. The one declared list,
+# collected from:
+#   - authn's storage.AuthorizationAnnotations (authn@26c4456d,
+#     go/authn/internal/helpers/kube/config/storage/identity.go):
+#     authn.krateo.io/strategy, authn.krateo.io/groups;
+#   - plumbing's helm/v3/verdicts.go (plumbing@3a581c7d) declares none: its
+#     canonicalContent counts no label or annotation.
+content_annotations:
+  - authn.krateo.io/strategy
+  - authn.krateo.io/groups
 
 # Where each writer's records land in default.krateo_audit, by the
 # instrumentation scope name of the logger it emits on. Used by
@@ -625,13 +662,15 @@ keys:
     go: ObjectContentSHA256
     type: string
     semconv: none
-    format: sha256_hex
+    format: content_hash
     description: >-
       The tamper-evidence anchor of a write that creates or replaces content:
-      the lowercase hex SHA-256 of the object's canonical content
-      (audit.ContentSHA256, docs/schema.md), computed by the writer before the
-      write. Never on a credential-bearing target: a hash of low-entropy
-      secret data can be guessed offline.
+      c1:<the lowercase hex SHA-256 of the object's canonical content, form
+      c1> (audit.ContentSHA256, docs/schema.md), computed by the writer from
+      the request body it sends. A later change of the form is c2, so a
+      stored hash is always read with the form that made it. Never on a
+      credential-bearing target: a hash of low-entropy secret data can be
+      guessed offline.
     only_when: content_write
     credential_free: true
     writers: {request: optional, gateway: not_established, action: optional, controller: optional}

@@ -69,7 +69,7 @@ through the generated `audit.Key*` constants and test their records with
 | `krateo.audit.object_ref.uid` | string | none | C: a successful, non-dry-run write | NE | C: a successful, non-dry-run write | C: the object is known | The uid of the object written, as the authority returned it; for a controller, of the object it wrote or acted on. A request row's object_ref.uid is the join key to the reconciles it caused, whose controller rows carry it as krateo.audit.cause_ref.uid. |
 | `krateo.audit.object_ref.resource_version` | string | none | C: a successful, non-dry-run write that is not a DELETE | NE | C: a successful, non-dry-run write that is not a DELETE | O | The resourceVersion the authority returned for the write, or the one a controller read. |
 | `krateo.audit.object_ref.generation` | int | none | C: a successful, non-dry-run write that is not a DELETE | NE | C: a successful, non-dry-run write that is not a DELETE | C: the controller acted on a generation | The generation the authority returned for the write, or the one a controller acted on. |
-| `krateo.audit.object_ref.content_sha256` | string | none | O | NE | O | O | The tamper-evidence anchor of a write that creates or replaces content: the lowercase hex SHA-256 of the object's canonical content (audit.ContentSHA256, docs/schema.md), computed by the writer before the write. Never on a credential-bearing target: a hash of low-entropy secret data can be guessed offline. Format `sha256_hex`. **Only when** `content_write` holds; anywhere else `Check` reports it `unexpected`. **Never on a credential target**; there `Check` reports it `not-for-target`. |
+| `krateo.audit.object_ref.content_sha256` | string | none | O | NE | O | O | The tamper-evidence anchor of a write that creates or replaces content: c1:&lt;the lowercase hex SHA-256 of the object's canonical content, form c1&gt; (audit.ContentSHA256, docs/schema.md), computed by the writer from the request body it sends. A later change of the form is c2, so a stored hash is always read with the form that made it. Never on a credential-bearing target: a hash of low-entropy secret data can be guessed offline. Format `content_hash`. **Only when** `content_write` holds; anywhere else `Check` reports it `unexpected`. **Never on a credential target**; there `Check` reports it `not-for-target`. |
 | `krateo.audit.cause_ref.api_group` | string | none | — | — | — | C: the reconciled object is outside the core group | The API group of the object the controller reconciled. Omitted for the core group. |
 | `krateo.audit.cause_ref.api_version` | string | none | — | — | — | C: the record names a reconciled object [checked] | The API version of the object the controller reconciled. |
 | `krateo.audit.cause_ref.resource` | string | none | — | — | — | C: the record names a reconciled object [checked] | The resource, the plural, of the object the controller reconciled. |
@@ -124,6 +124,7 @@ listed matches the resource and every subresource of it.
 |---|---|---|
 | core (omitted) | `secrets` | any |
 | core (omitted) | `serviceaccounts` | `token` |
+| `authentication.k8s.io` | `tokenreviews` | any |
 
 ## Conditions `Check` evaluates
 
@@ -147,6 +148,7 @@ minimum, or not below its `less_than` key, is `out-of-range`.
 - `delegation_link`: `<class>:<subject>`, the class one of the actor classes or empty, the subject not empty.
 - `marker_list`: comma-separated markers of the schema, each at most once.
 - `sha256_hex`: 64 lowercase hex digits.
+- `content_hash`: `c1:` and 64 lowercase hex digits: the content hash in form c1 (below). Any other form prefix is refused: a stored hash is read only with the form that made it.
 - `uuid`: a UUID in its canonical textual form, lowercase (8-4-4-4-12 hex digits).
 - `opaque_id`: 1 to 128 of `[A-Za-z0-9_-]`.
 - `rfc3339`: an RFC 3339 timestamp, with or without fractional seconds.
@@ -274,41 +276,70 @@ signed by the token the request writer verified.
 
 `krateo.audit.object_ref.content_sha256` is the tamper-evidence anchor of a
 write that creates or replaces content (verb `create` or `update`):
-the lowercase hex SHA-256 of the object's canonical content, computed by the
-writer before the write. A record pins an object by `uid` and
+the SHA-256 of the object's canonical content, computed by the writer from
+the request body it sends. A record pins an object by `uid` and
 `resource_version`; the hash also shows what it said, after the object
 is deleted, and lets an exported copy be checked against the trail. It is
 optional, and never written for a credential target (above): a hash of
 low-entropy secret data can be guessed offline.
 
-Go writers compute it with `audit.ContentSHA256(group, resource, obj)`,
-which refuses a credential target (`audit.ErrCredentialTarget`). Any
-other writer computes the same bytes:
+The value is `c1:` and 64 lowercase hex digits. **c1** names the canonical
+form below. The form is fixed: a change to it, however small, is a new
+form, `c2`, so a hash stored under c1 is always checked with c1. `Check`
+reports any other prefix as `bad-format`.
+
+Go writers compute it with
+`audit.ContentSHA256(group, resource, subresource, obj)`, where the target
+is the record's `object_ref` and `obj` is the request body as sent (a
+typed object, an unstructured map, or its JSON). It refuses a credential
+target (`audit.ErrCredentialTarget`), the same targets `Check` refuses.
+Any other writer computes the same bytes.
+
+**Form c1:**
 
 1. **The content, per kind family.** A ConfigMap (core `configmaps`): its
    `data` and `binaryData`. Any other object: every top-level field
    but `apiVersion`, `kind`, `metadata` and `status` (a custom
-   resource's `spec`; a RoleBinding's `roleRef` and `subjects`). A
-   field that is absent or null is left out; the content is a JSON object,
-   `{}` when nothing is left.
-2. **The canonical form.** UTF-8 JSON with no whitespace; object keys sorted
-   by their bytes; strings with only the escapes JSON requires (`\"`,
-   `\\`, and each control character as `\b` `\f` `\n` `\r`
-   `\t` or `\u00xx`), every other character raw, `<`, `>` and
-   `&` included; `binaryData` values as the base64 strings the
-   object's JSON holds; integers in decimal. A non-integer number has no
-   canonical form, and the object gets no hash.
-3. **The hash.** SHA-256 of those bytes, as 64 lowercase hex digits.
+   resource's `spec`; a RoleBinding's `roleRef` and `subjects`).
+2. **Plus the authorization annotations**, for every family:
+   `metadata.annotations` kept to the keys below, as
+   `{"metadata":{"annotations":{...}}}`, and left out when none of them is
+   set. Authorization reads them, so changing one changes what an identity
+   may do (AUDIT-4). Every other annotation, and every label, is metadata
+   and is not hashed.
+3. **Nulls.** An object member whose value is null is left out, at every
+   depth, so a typed object and its unstructured form (a
+   `creationTimestamp: null` in a pod template) hash the same. A null
+   element of an array stays: dropping it would move the others. The content
+   is a JSON object, `{}` when nothing is left.
+4. **The bytes.** UTF-8 JSON with no whitespace; object keys sorted by their
+   bytes; strings with only the escapes JSON requires (`\"`, `\\`, and
+   each control character as `\b` `\f` `\n` `\r` `\t` or
+   `\u00xx`), every other character raw, `<`, `>` and `&`
+   included; `binaryData` values as the base64 strings the object's JSON
+   holds; integers in decimal. A non-integer number has no canonical form,
+   and the object gets no hash.
+5. **The hash.** `c1:` and the SHA-256 of those bytes, as 64 lowercase hex
+   digits.
+
+The annotations c1 counts (`audit.AuthorizationAnnotations()`):
+
+- `authn.krateo.io/strategy`
+- `authn.krateo.io/groups`
+
+They are authn's `storage.AuthorizationAnnotations`. plumbing's
+`helm/v3/verdicts.go` declares none: its change verdict counts no annotation.
 
 The test vector (`TestContentSHA256_Vector`): a ConfigMap whose data is
-`k: <é>` and `a"b: line1⏎line2`, and whose binaryData is
-`logo: iVBORw==`, has the content bytes
+`k: <é>` and `a"b: line1⏎line2`, whose binaryData is
+`logo: iVBORw==`, and whose annotations are `authn.krateo.io/groups: devs⏎ops`
+and an undeclared `example.com/note`, has the content bytes
 
 ```json
-{"binaryData":{"logo":"iVBORw=="},"data":{"a\"b":"line1\nline2","k":"<é>"}}
+{"binaryData":{"logo":"iVBORw=="},"data":{"a\"b":"line1\nline2","k":"<é>"},"metadata":{"annotations":{"authn.krateo.io/groups":"devs\nops"}}}
 ```
 
-and the hash `2bbf0a0f3ccc266c6ee429376afbd9a20714a80d5b03a753bbb29ec8c1fee232`.
+and the value `c1:e8374f859e140054ea17527c08740cd2439bc7bcad48dd777a3e3cc0921d708c`.
 
 ## Client-asserted provenance
 

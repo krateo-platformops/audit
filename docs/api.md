@@ -73,7 +73,7 @@ const MetricRecordedMarkerUnattached = "krateo.audit.recorded_marker.unattached"
 | `Namespace` | `k8s.namespace.name` | |
 | `Group`, `Version`, `Resource`, `Subresource`, `Kind`, `ObjectName` | `krateo.audit.object_ref.{api_group,api_version,resource,subresource,kind,name}` (+ `k8s.resource.*`) | a Kubernetes object always names its `Resource` |
 | `ObjectUID`, `ObjectGeneration`, `ObjectResourceVersion` | `krateo.audit.object_ref.{uid,generation,resource_version}` (+ `k8s.object.*`) | the written object's identity, the request side of the join; generation omitted when 0. For a controller, the object it wrote |
-| `ContentSHA256` | `krateo.audit.object_ref.content_sha256` | a `create` or `update` that writes content only; computed with `ContentSHA256` before the write; never for a credential target (a Secret). No v0.3 key |
+| `ContentSHA256` | `krateo.audit.object_ref.content_sha256` | a `create` or `update` that writes content only; the `c1:<hex>` value `ContentSHA256` computes from the request body as sent; never for a credential target (a Secret, a token request or review). No v0.3 key |
 | `Client` (`ClientProvenance{Rejected, Source, AgentSessionID, ConfirmationID, ConfirmedSet, RequestedAt}`) | `krateo.audit.client.{rejected,source,agent_session_id,confirmation_id,confirmed_set.*,requested_at}` | what a client asserted about a write, as the writer validated it (request and action writers, writes only). `Rejected` set: written alone. `ConfirmedSet` (`*ConfirmedSet{Count, Irreversible, SHA256, Op}`): all four keys, `Op` from 0. `RequestedAt`: RFC 3339 in UTC with milliseconds, omitted when zero. Never identity, outcome or target |
 | `Cause` (`CauseRef{Group, Version, Resource, Namespace, Name, UID, Generation}`) | `krateo.audit.cause_ref.{api_group,api_version,resource,namespace,name,uid,generation}` | controllers only: the object reconciled. `UID` and `Generation` are the controller side of the join; generation omitted when 0. No v0.3 key |
 | `ServerAddress` | `server.address` | **host[:port] only**: `Emit` drops any scheme, userinfo, path, query and fragment, and omits a value with no parseable host |
@@ -102,7 +102,9 @@ type ClientProvenance struct {
 type ConfirmedSet struct{ Count int64; Irreversible bool; SHA256 string; Op int64 }
 type CredentialTarget struct{ Group, Resource, Subresource string } // Subresource "": any
 
-func ContentSHA256(group, resource string, obj any) (string, error) // the content hash; ErrCredentialTarget for a Secret
+func ContentSHA256(group, resource, subresource string, obj any) (string, error) // "c1:<hex>"; ErrCredentialTarget where Check refuses the key
+func AuthorizationAnnotations() []string // the annotations form c1 counts as content
+const ContentFormC1 = "c1"
 var ErrCredentialTarget error
 
 type Requirement struct {

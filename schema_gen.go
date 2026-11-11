@@ -131,11 +131,12 @@ const (
 	// the authority returned for the write, or the one a controller acted on.
 	KeyObjectGeneration = "krateo.audit.object_ref.generation"
 	// KeyObjectContentSHA256 is "krateo.audit.object_ref.content_sha256". The
-	// tamper-evidence anchor of a write that creates or replaces content: the
-	// lowercase hex SHA-256 of the object's canonical content
-	// (audit.ContentSHA256, docs/schema.md), computed by the writer before the
-	// write. Never on a credential-bearing target: a hash of low-entropy secret
-	// data can be guessed offline.
+	// tamper-evidence anchor of a write that creates or replaces content: c1:<the
+	// lowercase hex SHA-256 of the object's canonical content, form c1>
+	// (audit.ContentSHA256, docs/schema.md), computed by the writer from the
+	// request body it sends. A later change of the form is c2, so a stored hash is
+	// always read with the form that made it. Never on a credential-bearing
+	// target: a hash of low-entropy secret data can be guessed offline.
 	KeyObjectContentSHA256 = "krateo.audit.object_ref.content_sha256"
 	// KeyCauseAPIGroup is "krateo.audit.cause_ref.api_group". The API group of the
 	// object the controller reconciled. Omitted for the core group.
@@ -420,7 +421,10 @@ var schemaTarget = TargetRule{
 var schemaCredentialTargets = []CredentialTarget{
 	{Group: "", Resource: "secrets", Subresource: ""},
 	{Group: "", Resource: "serviceaccounts", Subresource: "token"},
+	{Group: "authentication.k8s.io", Resource: "tokenreviews", Subresource: ""},
 }
+
+var schemaContentAnnotations = []string{"authn.krateo.io/strategy", "authn.krateo.io/groups"}
 
 var schemaPopulations = []Population{
 	{Scope: "github.com/krateo-platformops/snowplow/audit", Writer: WriterRequest, Who: "snowplow (H, and T for an agent going through /call)"},
@@ -1139,7 +1143,7 @@ var schemaKeys = []KeySpec{
 		Type:           TypeString,
 		Semconv:        "none",
 		Values:         nil,
-		Format:         "sha256_hex",
+		Format:         "content_hash",
 		Marker:         "",
 		Identity:       false,
 		Asserted:       false,
@@ -1150,7 +1154,7 @@ var schemaKeys = []KeySpec{
 		CredentialFree: true,
 		Min:            nil,
 		LessThan:       "",
-		Description:    "The tamper-evidence anchor of a write that creates or replaces content: the lowercase hex SHA-256 of the object's canonical content (audit.ContentSHA256, docs/schema.md), computed by the writer before the write. Never on a credential-bearing target: a hash of low-entropy secret data can be guessed offline.",
+		Description:    "The tamper-evidence anchor of a write that creates or replaces content: c1:<the lowercase hex SHA-256 of the object's canonical content, form c1> (audit.ContentSHA256, docs/schema.md), computed by the writer from the request body it sends. A later change of the form is c2, so a stored hash is always read with the form that made it. Never on a credential-bearing target: a hash of low-entropy secret data can be guessed offline.",
 		Writers: map[Writer]Requirement{
 			WriterRequest:    {Level: LevelOptional},
 			WriterGateway:    {Level: LevelNotEstablished},

@@ -513,6 +513,13 @@ func checkValue(spec *KeySpec, r Requirement, v attribute.Value) (Reason, bool) 
 		if !lowerHex(v.AsString(), 64) {
 			return ReasonBadFormat, true
 		}
+	case "content_hash":
+		// Only the forms this library defines: a form it does not know has
+		// no rule to check a stored hash with.
+		form, sum, ok := strings.Cut(v.AsString(), ":")
+		if !ok || form != ContentFormC1 || !lowerHex(sum, 64) {
+			return ReasonBadFormat, true
+		}
 	case "uuid":
 		if !uuidForm.MatchString(v.AsString()) {
 			return ReasonBadFormat, true

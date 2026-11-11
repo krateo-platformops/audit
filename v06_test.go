@@ -21,7 +21,7 @@ import (
 // access-review and identity-lifecycle.
 
 const (
-	exampleSHA     = "2bbf0a0f3ccc266c6ee429376afbd9a20714a80d5b03a753bbb29ec8c1fee232"
+	exampleSHA     = "c1:2bbf0a0f3ccc266c6ee429376afbd9a20714a80d5b03a753bbb29ec8c1fee232"
 	exampleSetSHA  = "0a08bb91090b111f15a045b6061bccc4d0b8488d85f99ba57d8632e17061c277"
 	exampleConfirm = "00000000-0000-4000-8000-0000000000aa"
 )
@@ -107,6 +107,13 @@ func TestCheck_V060Rules(t *testing.T) {
 		{"content hash of a Secret, read", WriterRequest, without(withVerb(onObject(hashed, "", "secrets", ""), "get"), KeyDryRun),
 			[]Violation{v(KeyObjectContentSHA256, ReasonUnexpected), v(KeyObjectContentSHA256, ReasonNotForTarget)}},
 		{"content hash in upper case", WriterRequest, with(hashed, attribute.String(KeyObjectContentSHA256, strings.ToUpper(exampleSHA))), []Violation{v(KeyObjectContentSHA256, ReasonBadFormat)}},
+		{"content hash without its form", WriterRequest, with(hashed, attribute.String(KeyObjectContentSHA256, strings.TrimPrefix(exampleSHA, "c1:"))), []Violation{v(KeyObjectContentSHA256, ReasonBadFormat)}},
+		{"content hash of an unknown form", WriterRequest, with(hashed, attribute.String(KeyObjectContentSHA256, "c2:"+strings.TrimPrefix(exampleSHA, "c1:"))), []Violation{v(KeyObjectContentSHA256, ReasonBadFormat)}},
+		{"content hash with upper-case hex", WriterRequest, with(hashed, attribute.String(KeyObjectContentSHA256, "c1:"+strings.ToUpper(strings.TrimPrefix(exampleSHA, "c1:")))), []Violation{v(KeyObjectContentSHA256, ReasonBadFormat)}},
+		{"a confirmed set hash in upper case", WriterRequest, with(portal, attribute.String(KeyClientConfirmedSetSHA256, strings.ToUpper(exampleSetSHA))), []Violation{v(KeyClientConfirmedSetSHA256, ReasonBadFormat)}},
+		{"content hash with the form only", WriterRequest, with(hashed, attribute.String(KeyObjectContentSHA256, "c1:")), []Violation{v(KeyObjectContentSHA256, ReasonBadFormat)}},
+		{"content hash of a token review", WriterRequest, onObject(hashed, "authentication.k8s.io", "tokenreviews", ""), []Violation{v(KeyObjectContentSHA256, ReasonNotForTarget)}},
+		{"content hash of a self-subject review", WriterRequest, onObject(hashed, "authentication.k8s.io", "selfsubjectreviews", ""), nil},
 		{"content hash too short", WriterRequest, with(hashed, attribute.String(KeyObjectContentSHA256, exampleSHA[:63])), []Violation{v(KeyObjectContentSHA256, ReasonBadFormat)}},
 		{"content hash on the gateway", WriterGateway, with(withVerb(gw, "create"), attribute.String(KeyObjectContentSHA256, exampleSHA)), []Violation{v(KeyObjectContentSHA256, ReasonNotForWriter)}},
 
@@ -205,7 +212,7 @@ func TestSchema_V060(t *testing.T) {
 	}
 
 	c := get(KeyObjectContentSHA256)
-	if !c.CredentialFree || c.OnlyWhen != CondContentWrite || c.Format != "sha256_hex" || c.Identity || c.Asserted || LegacyKey(c.Name) != "" {
+	if !c.CredentialFree || c.OnlyWhen != CondContentWrite || c.Format != "content_hash" || c.Identity || c.Asserted || LegacyKey(c.Name) != "" {
 		t.Errorf("content_sha256: %+v", c)
 	}
 	for w, want := range map[Writer]Level{WriterRequest: LevelOptional, WriterGateway: LevelNotEstablished, WriterAction: LevelOptional, WriterController: LevelOptional} {
@@ -217,7 +224,7 @@ func TestSchema_V060(t *testing.T) {
 		t.Errorf("content-write verbs = %v", got)
 	}
 	// Written out by hand: the credential targets, and what matches them.
-	if got, want := CredentialTargets(), []CredentialTarget{{"", "secrets", ""}, {"", "serviceaccounts", "token"}}; !slices.Equal(got, want) {
+	if got, want := CredentialTargets(), []CredentialTarget{{"", "secrets", ""}, {"", "serviceaccounts", "token"}, {"authentication.k8s.io", "tokenreviews", ""}}; !slices.Equal(got, want) {
 		t.Errorf("credential targets = %v, want %v", got, want)
 	}
 	for _, tc := range []struct {
@@ -225,7 +232,7 @@ func TestSchema_V060(t *testing.T) {
 		want    bool
 	}{
 		{"", "secrets", "", true}, {"", "secrets", "status", true}, {"", "serviceaccounts", "token", true},
-		{"", "serviceaccounts", "", false}, {"", "configmaps", "", false}, {"example.krateo.io", "secrets", "", false},
+		{"", "serviceaccounts", "", false}, {"authentication.k8s.io", "tokenreviews", "", true}, {"authentication.k8s.io", "selfsubjectreviews", "", false}, {"", "configmaps", "", false}, {"example.krateo.io", "secrets", "", false},
 	} {
 		if got := IsCredentialTarget(tc.g, tc.r, tc.s); got != tc.want {
 			t.Errorf("IsCredentialTarget(%q, %q, %q) = %v", tc.g, tc.r, tc.s, got)
@@ -378,58 +385,202 @@ func kvs(m map[string]attribute.Value) []attribute.KeyValue {
 }
 
 // The content hash test vector, computed from three spellings of the same
-// ConfigMap, matches the bytes and the hash docs/schema.md shows.
+// ConfigMap, matches the bytes and the value docs/schema.md shows.
 func TestContentSHA256_Vector(t *testing.T) {
-	const wantBytes = `{"binaryData":{"logo":"iVBORw=="},"data":{"a\"b":"line1\nline2","k":"<é>"}}`
+	const (
+		wantBytes = `{"binaryData":{"logo":"iVBORw=="},"data":{"a\"b":"line1\nline2","k":"<é>"},"metadata":{"annotations":{"authn.krateo.io/groups":"devs\nops"}}}`
+		wantHash  = "c1:e8374f859e140054ea17527c08740cd2439bc7bcad48dd777a3e3cc0921d708c"
+	)
 	unstructured := map[string]any{
 		"apiVersion": "v1", "kind": "ConfigMap", "immutable": true,
-		"metadata":   map[string]any{"name": "example-evidence", "namespace": "example-ns", "uid": "uid-e"},
+		"metadata": map[string]any{"name": "example-evidence", "namespace": "example-ns", "uid": "uid-e",
+			"labels":      map[string]any{"app": "x"},
+			"annotations": map[string]any{"authn.krateo.io/groups": "devs\nops", "example.com/note": "x"}},
 		"data":       map[string]any{"k": "<é>", "a\"b": "line1\nline2"},
 		"binaryData": map[string]any{"logo": "iVBORw=="},
 	}
+	type objectMeta struct {
+		Name        string            `json:"name,omitempty"`
+		Annotations map[string]string `json:"annotations,omitempty"`
+	}
 	type configMap struct { // the shape of corev1.ConfigMap, fields in its order
 		Kind       string            `json:"kind,omitempty"`
-		Metadata   map[string]string `json:"metadata,omitempty"`
+		Metadata   objectMeta        `json:"metadata"`
 		Immutable  *bool             `json:"immutable,omitempty"`
 		Data       map[string]string `json:"data,omitempty"`
 		BinaryData map[string][]byte `json:"binaryData,omitempty"`
 	}
 	yes := true
-	typed := configMap{Kind: "ConfigMap", Metadata: map[string]string{"name": "other-name"}, Immutable: &yes,
-		Data: map[string]string{"a\"b": "line1\nline2", "k": "<é>"}, BinaryData: map[string][]byte{"logo": {0x89, 0x50, 0x4e, 0x47}}}
-	raw := json.RawMessage(`{ "data" : { "k" : "<é>", "a\"b" : "line1\nline2" }, "binaryData": {"logo":"iVBORw=="}, "status": {"x": 1} }`)
+	typed := configMap{Kind: "ConfigMap", Metadata: objectMeta{Name: "other-name", Annotations: map[string]string{"authn.krateo.io/groups": "devs\nops"}},
+		Immutable: &yes, Data: map[string]string{"a\"b": "line1\nline2", "k": "<é>"}, BinaryData: map[string][]byte{"logo": {0x89, 0x50, 0x4e, 0x47}}}
+	raw := json.RawMessage(`{ "metadata": {"annotations": {"authn.krateo.io/groups": "devs\nops", "authn.krateo.io/strategy": null}},
+		"data" : { "k" : "<é>", "a\"b" : "line1\nline2" }, "binaryData": {"logo":"iVBORw=="}, "status": {"x": 1} }`)
 	for name, obj := range map[string]any{"unstructured": unstructured, "typed": typed, "raw JSON": raw} {
-		got, err := ContentSHA256("", "configmaps", obj)
-		if err != nil || got != exampleSHA {
-			t.Errorf("%s: %q, %v; want %s", name, got, err, exampleSHA)
+		got, err := ContentSHA256("", "configmaps", "", obj)
+		if err != nil || got != wantHash {
+			t.Errorf("%s: %q, %v; want %s", name, got, err, wantHash)
 		}
 	}
 	var b bytes.Buffer
-	if err := canonicalJSON(&b, map[string]any{"data": unstructured["data"], "binaryData": unstructured["binaryData"]}); err != nil || b.String() != wantBytes {
+	content := map[string]any{"data": unstructured["data"], "binaryData": unstructured["binaryData"],
+		"metadata": map[string]any{"annotations": map[string]any{"authn.krateo.io/groups": "devs\nops"}}}
+	if err := canonicalJSON(&b, content); err != nil || b.String() != wantBytes {
 		t.Errorf("canonical bytes %q, %v; want %q", b.String(), err, wantBytes)
+	}
+	if sum := sha256.Sum256(b.Bytes()); "c1:"+hex.EncodeToString(sum[:]) != wantHash {
+		t.Errorf("the vector's value is not c1: and the SHA-256 of its bytes")
+	}
+	// Without a declared annotation, no metadata member at all: the bytes are
+	// data and binaryData alone, whose SHA-256 was computed apart (shasum).
+	delete(unstructured["metadata"].(map[string]any)["annotations"].(map[string]any), "authn.krateo.io/groups")
+	if got, err := ContentSHA256("", "configmaps", "", unstructured); err != nil || got != exampleSHA {
+		t.Errorf("no declared annotation: %q, %v; want %s", got, err, exampleSHA)
 	}
 	doc, err := os.ReadFile("docs/schema.md")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !bytes.Contains(doc, []byte(wantBytes)) || !bytes.Contains(doc, []byte(exampleSHA)) {
+	if !bytes.Contains(doc, []byte(wantBytes)) || !bytes.Contains(doc, []byte(wantHash)) {
 		t.Errorf("docs/schema.md does not show the test vector")
 	}
 }
 
-// The content of each kind family, and what is refused.
+// The declared authorization annotations, by hand: authn's
+// storage.AuthorizationAnnotations, as the schema collects them.
+func TestAuthorizationAnnotations(t *testing.T) {
+	if got, want := AuthorizationAnnotations(), []string{"authn.krateo.io/strategy", "authn.krateo.io/groups"}; !slices.Equal(got, want) {
+		t.Errorf("AuthorizationAnnotations() = %v, want %v", got, want)
+	}
+	a := AuthorizationAnnotations()
+	a[0] = "mutated"
+	if AuthorizationAnnotations()[0] != "authn.krateo.io/strategy" {
+		t.Errorf("AuthorizationAnnotations shares the schema's list with its caller")
+	}
+}
+
+// The probe: two objects that differ only in a declared annotation hash
+// differently; two that differ only in an undeclared one, or in a label, hash
+// the same. For every family, and for every declared key.
+func TestContentSHA256_AnnotationsProbe(t *testing.T) {
+	hash := func(group, resource string, annotations, labels map[string]any) string {
+		t.Helper()
+		obj := map[string]any{"spec": map[string]any{"a": "1"}, "data": map[string]any{"a": "1"},
+			"metadata": map[string]any{"name": "x", "annotations": annotations, "labels": labels}}
+		h, err := ContentSHA256(group, resource, "", obj)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return h
+	}
+	for _, target := range [][2]string{{"", "configmaps"}, {"example.krateo.io", "campaigns"}, {"rbac.authorization.k8s.io", "rolebindings"}} {
+		g, r := target[0], target[1]
+		none := hash(g, r, nil, nil)
+		if none != hash(g, r, map[string]any{}, nil) {
+			t.Errorf("%s/%s: no annotations and empty annotations differ", g, r)
+		}
+		for _, k := range AuthorizationAnnotations() {
+			if hash(g, r, map[string]any{k: "oidc"}, nil) == hash(g, r, map[string]any{k: "ldap"}, nil) {
+				t.Errorf("%s/%s: a changed %s is not detected", g, r, k)
+			}
+			if hash(g, r, map[string]any{k: "oidc"}, nil) == none {
+				t.Errorf("%s/%s: an added %s is not detected", g, r, k)
+			}
+			if hash(g, r, map[string]any{k: nil}, nil) != none {
+				t.Errorf("%s/%s: a null %s is not left out", g, r, k)
+			}
+		}
+		if hash(g, r, map[string]any{"example.com/note": "a"}, nil) != hash(g, r, map[string]any{"example.com/note": "b"}, nil) ||
+			hash(g, r, map[string]any{"example.com/note": "a", "kubectl.kubernetes.io/last-applied-configuration": "{}"}, nil) != none {
+			t.Errorf("%s/%s: an undeclared annotation changes the hash", g, r)
+		}
+		if hash(g, r, nil, map[string]any{"authn.krateo.io/groups": "devs"}) != none {
+			t.Errorf("%s/%s: a label changes the hash", g, r)
+		}
+	}
+}
+
+// A typed Deployment and its unstructured form hash the same: the typed one
+// carries template.metadata.creationTimestamp: null (metav1.Time marshals its
+// zero value as null), and nulls are left out at every depth.
+func TestContentSHA256_TypedAndUnstructuredDeployment(t *testing.T) {
+	type objectMeta struct {
+		Name              string            `json:"name,omitempty"`
+		CreationTimestamp nullTime          `json:"creationTimestamp,omitempty"` // a struct: omitempty keeps it
+		Labels            map[string]string `json:"labels,omitempty"`
+	}
+	type container struct {
+		Name    string   `json:"name"`
+		Image   string   `json:"image,omitempty"`
+		Command []string `json:"command"` // nil: null, like a field without omitempty
+	}
+	type deployment struct {
+		APIVersion string     `json:"apiVersion"`
+		Kind       string     `json:"kind"`
+		Metadata   objectMeta `json:"metadata"`
+		Spec       struct {
+			Replicas *int32 `json:"replicas,omitempty"`
+			Selector struct {
+				MatchLabels map[string]string `json:"matchLabels"`
+			} `json:"selector"`
+			Template struct {
+				Metadata objectMeta `json:"metadata"`
+				Spec     struct {
+					Containers []container `json:"containers"`
+				} `json:"spec"`
+			} `json:"template"`
+		} `json:"spec"`
+		Status *struct{} `json:"status"` // nil: null
+	}
+	var typed deployment
+	typed.APIVersion, typed.Kind, typed.Metadata.Name = "apps/v1", "Deployment", "example-worker"
+	three := int32(3)
+	typed.Spec.Replicas = &three
+	typed.Spec.Selector.MatchLabels = map[string]string{"app": "w"}
+	typed.Spec.Template.Metadata.Labels = map[string]string{"app": "w"}
+	typed.Spec.Template.Spec.Containers = []container{{Name: "w", Image: "example/worker:1"}}
+
+	raw, _ := json.Marshal(typed)
+	if !bytes.Contains(raw, []byte(`"creationTimestamp":null`)) || !bytes.Contains(raw, []byte(`"command":null`)) {
+		t.Fatalf("precondition: the typed body carries no null: %s", raw)
+	}
+	unstructured := map[string]any{"apiVersion": "apps/v1", "kind": "Deployment", "metadata": map[string]any{"name": "example-worker"},
+		"spec": map[string]any{"replicas": 3, "selector": map[string]any{"matchLabels": map[string]any{"app": "w"}},
+			"template": map[string]any{"metadata": map[string]any{"labels": map[string]any{"app": "w"}},
+				"spec": map[string]any{"containers": []any{map[string]any{"name": "w", "image": "example/worker:1"}}}}}}
+	a, errA := ContentSHA256("apps", "deployments", "", typed)
+	b, errB := ContentSHA256("apps", "deployments", "", unstructured)
+	if errA != nil || errB != nil || a != b {
+		t.Errorf("typed %q (%v) and unstructured %q (%v) differ", a, errA, b, errB)
+	}
+	// A null array element stays: it is not a member.
+	var buf bytes.Buffer
+	if err := canonicalJSON(&buf, map[string]any{"a": []any{nil, "x", map[string]any{"n": nil}}, "b": nil}); err != nil || buf.String() != `{"a":[null,"x",{}]}` {
+		t.Errorf("nulls: %s, %v; want {\"a\":[null,\"x\",{}]}", buf.String(), err)
+	}
+}
+
+// nullTime marshals as metav1.Time's zero value does: null.
+type nullTime struct{}
+
+func (nullTime) MarshalJSON() ([]byte, error) { return []byte("null"), nil }
+
+// The content of each kind family, and what is refused: ContentSHA256 refuses
+// exactly the targets Check refuses the key on.
 func TestContentSHA256_Families(t *testing.T) {
 	hash := func(group, resource string, obj any) string {
 		t.Helper()
-		h, err := ContentSHA256(group, resource, obj)
+		h, err := ContentSHA256(group, resource, "", obj)
 		if err != nil {
 			t.Fatalf("%s/%s: %v", group, resource, err)
+		}
+		if !strings.HasPrefix(h, "c1:") || !lowerHex(strings.TrimPrefix(h, "c1:"), 64) {
+			t.Fatalf("%s/%s: %q is not c1:<64 hex>", group, resource, h)
 		}
 		return h
 	}
 	cm := map[string]any{"data": map[string]any{"a": "1"}}
 	if hash("", "configmaps", cm) != hash("", "configmaps", map[string]any{"data": map[string]any{"a": "1"}, "immutable": true, "metadata": map[string]any{"labels": map[string]any{"x": "y"}}}) {
-		t.Errorf("a ConfigMap's hash depends on more than data and binaryData")
+		t.Errorf("a ConfigMap's hash depends on more than data, binaryData and the declared annotations")
 	}
 	if hash("", "configmaps", cm) == hash("", "configmaps", map[string]any{"data": map[string]any{"a": "2"}}) {
 		t.Errorf("a ConfigMap's hash ignores its data")
@@ -437,10 +588,13 @@ func TestContentSHA256_Families(t *testing.T) {
 	if hash("", "configmaps", map[string]any{"data": nil}) != hash("", "configmaps", map[string]any{}) {
 		t.Errorf("a null field is not left out")
 	}
+	if hash("e.io", "things", map[string]any{"spec": map[string]any{"a": map[string]any{"b": nil, "c": "1"}}}) != hash("e.io", "things", map[string]any{"spec": map[string]any{"a": map[string]any{"c": "1"}}}) {
+		t.Errorf("a nested null member is not left out")
+	}
 	cr := map[string]any{"apiVersion": "example.krateo.io/v1", "kind": "Campaign", "spec": map[string]any{"n": 3, "decisions": []any{"keep"}},
 		"metadata": map[string]any{"generation": 4}, "status": map[string]any{"phase": "Done"}}
 	if hash("example.krateo.io", "campaigns", cr) != hash("example.krateo.io", "campaigns", map[string]any{"spec": map[string]any{"decisions": []any{"keep"}, "n": 3}}) {
-		t.Errorf("a custom resource's hash depends on apiVersion, kind, metadata or status")
+		t.Errorf("a custom resource's hash depends on apiVersion, kind, undeclared metadata or status")
 	}
 	if hash("rbac.authorization.k8s.io", "rolebindings", map[string]any{"roleRef": "r", "subjects": []any{"s"}}) ==
 		hash("rbac.authorization.k8s.io", "rolebindings", map[string]any{"roleRef": "r"}) {
@@ -453,25 +607,39 @@ func TestContentSHA256_Families(t *testing.T) {
 	}
 
 	for name, tc := range map[string]struct {
-		group, resource string
-		obj             any
-		credential      bool
+		group, resource, sub string
+		obj                  any
+		credential           bool
 	}{
-		"a Secret":          {"", "secrets", map[string]any{"data": map[string]any{"password": "aGk="}}, true},
-		"a float":           {"example.krateo.io", "things", map[string]any{"spec": map[string]any{"ratio": 0.5}}, false},
-		"an exponent":       {"example.krateo.io", "things", json.RawMessage(`{"spec":1e3}`), false},
-		"not an object":     {"", "configmaps", []string{"a"}, false},
-		"not JSON at all":   {"", "configmaps", func() {}, false},
-		"a negative zero":   {"example.krateo.io", "things", json.RawMessage(`{"spec":-0}`), false},
-		"an integer as 1.0": {"example.krateo.io", "things", json.RawMessage(`{"spec":[1.0]}`), false},
+		"a Secret":                               {"", "secrets", "", map[string]any{"data": map[string]any{"password": "aGk="}}, true},
+		"a Secret's subresource":                 {"", "secrets", "status", map[string]any{"data": map[string]any{"password": "aGk="}}, true},
+		"a token request":                        {"", "serviceaccounts", "token", map[string]any{"spec": map[string]any{"audiences": []any{"a"}}}, true},
+		"a token review":                         {"authentication.k8s.io", "tokenreviews", "", map[string]any{"spec": map[string]any{"token": "example-bearer"}}, true},
+		"a float":                                {"example.krateo.io", "things", "", map[string]any{"spec": map[string]any{"ratio": 0.5}}, false},
+		"an exponent":                            {"example.krateo.io", "things", "", json.RawMessage(`{"spec":1e3}`), false},
+		"not an object":                          {"", "configmaps", "", []string{"a"}, false},
+		"not JSON at all":                        {"", "configmaps", "", func() {}, false},
+		"a negative zero":                        {"example.krateo.io", "things", "", json.RawMessage(`{"spec":-0}`), false},
+		"an integer as 1.0":                      {"example.krateo.io", "things", "", json.RawMessage(`{"spec":[1.0]}`), false},
+		"a float in an authz annotation's place": {"example.krateo.io", "things", "", json.RawMessage(`{"metadata":{"annotations":{"authn.krateo.io/groups":0.5}}}`), false},
 	} {
-		h, err := ContentSHA256(tc.group, tc.resource, tc.obj)
+		h, err := ContentSHA256(tc.group, tc.resource, tc.sub, tc.obj)
 		if err == nil || h != "" {
 			t.Errorf("%s: %q, %v; want refused", name, h, err)
 		}
 		if errors.Is(err, ErrCredentialTarget) != tc.credential {
 			t.Errorf("%s: %v; ErrCredentialTarget %v", name, err, tc.credential)
 		}
+	}
+	// The same targets as Check: every credential target is refused, and a
+	// ServiceAccount itself is not.
+	for _, c := range CredentialTargets() {
+		if _, err := ContentSHA256(c.Group, c.Resource, c.Subresource, map[string]any{}); !errors.Is(err, ErrCredentialTarget) {
+			t.Errorf("%+v: not refused", c)
+		}
+	}
+	if _, err := ContentSHA256("", "serviceaccounts", "", map[string]any{}); err != nil {
+		t.Errorf("a ServiceAccount itself is refused: %v", err)
 	}
 	if h := hash("example.krateo.io", "things", map[string]any{"spec": map[string]any{"n": -12, "z": 0}}); h == "" {
 		t.Errorf("integers have a canonical form")

@@ -79,9 +79,11 @@ type schema struct {
 	Conditions        []condition        `yaml:"conditions"`
 	Target            target             `yaml:"target"`
 	CredentialTargets []credentialTarget `yaml:"credential_targets"`
-	Populations       []population       `yaml:"populations"`
-	LegacyControls    []population       `yaml:"legacy_controls"`
-	Keys              []key              `yaml:"keys"`
+	// ContentAnnotations are the annotations the content hash counts.
+	ContentAnnotations []string     `yaml:"content_annotations"`
+	Populations        []population `yaml:"populations"`
+	LegacyControls     []population `yaml:"legacy_controls"`
+	Keys               []key        `yaml:"keys"`
 }
 
 // credentialTarget is a Kubernetes target that carries a credential: a key
@@ -187,7 +189,10 @@ var (
 	levels   = map[string]string{"required": "LevelRequired", "conditional": "LevelConditional", "optional": "LevelOptional", "not_established": "LevelNotEstablished", "not_applicable": "LevelNotApplicable"}
 	types    = map[string]string{"string": "TypeString", "string[]": "TypeStringSlice", "bool": "TypeBool", "int": "TypeInt"}
 	semconvs = []string{"stable", "development", "deprecated", "none"}
-	formats  = []string{"", "delegation_link", "marker_list", "sha256_hex", "uuid", "opaque_id", "rfc3339"}
+	formats  = []string{"", "delegation_link", "marker_list", "sha256_hex", "content_hash", "uuid", "opaque_id", "rfc3339"}
+	// annotationKey is a prefixed Kubernetes annotation key: a DNS subdomain,
+	// a slash, a name. Only a prefixed key can be one a component owns.
+	annotationKey = regexp.MustCompile(`^[a-z0-9]([a-z0-9.-]*[a-z0-9])?/[A-Za-z0-9]([A-Za-z0-9._-]*[A-Za-z0-9])?$`)
 	// assertedPrefixes are where the asserted keys live, and only they: a
 	// header the gateway saw, and the provenance a client sent the writer.
 	assertedPrefixes = []string{"krateo.audit.asserted.", "krateo.audit.client."}
@@ -371,6 +376,13 @@ func (s *schema) validate() error {
 			return fmt.Errorf("credential target %+v: a resource is required, and each target is listed once", c)
 		}
 		seenTargets[c] = true
+	}
+	seenAnnotations := map[string]bool{}
+	for _, a := range s.ContentAnnotations {
+		if !annotationKey.MatchString(a) || seenAnnotations[a] {
+			return fmt.Errorf("content annotation %q: a qualified annotation key (prefix/name), listed once", a)
+		}
+		seenAnnotations[a] = true
 	}
 	scopes := map[string]bool{}
 	for _, p := range append(slices.Clone(s.Populations), s.LegacyControls...) {
@@ -651,6 +663,8 @@ var schemaCredentialTargets = []CredentialTarget{
 	{Group: {{q .APIGroup}}, Resource: {{q .Resource}}, Subresource: {{q .Subresource}}},
 {{- end}}
 }
+
+var schemaContentAnnotations = {{strs .ContentAnnotations}}
 
 var schemaPopulations = []Population{
 {{- range .Populations}}

@@ -13,34 +13,43 @@ import (
 	"unicode/utf8"
 )
 
+// ContentFormC1 is the canonical form ContentSHA256 hashes, and the prefix of
+// every value it returns ("c1:<hex>"). The form is fixed: any change to it is
+// a new form, c2, so a stored hash is always checked with the form that made
+// it. docs/schema.md defines c1.
+const ContentFormC1 = "c1"
+
 // ErrCredentialTarget is ContentSHA256's refusal of a credential target (a
-// Secret): a hash of low-entropy secret data can be guessed offline, so such
-// a write carries no content hash.
+// Secret, a token request or review): a hash of low-entropy secret data can be
+// guessed offline, so such a write carries no content hash.
 var ErrCredentialTarget = errors.New("audit: no content hash for a credential target")
 
-// ContentSHA256 returns the lowercase hex SHA-256 of obj's canonical content,
-// for krateo.audit.object_ref.content_sha256 (Event.ContentSHA256). group and
-// resource are the object's as object_ref names them (group "" for the core
-// group). obj is the object the write sends: a typed object, an
-// unstructured map, or its JSON (json.RawMessage).
+// ContentSHA256 returns "c1:" and the lowercase hex SHA-256 of obj's canonical
+// content in form c1, for krateo.audit.object_ref.content_sha256
+// (Event.ContentSHA256). group, resource and subresource are the target as
+// the record's object_ref names it (group "" for the core group). obj is the
+// request body as sent: a typed object, an unstructured map, or its JSON
+// (json.RawMessage).
 //
-// The content, per kind family (docs/schema.md has the rules and a test
-// vector):
-//   - a ConfigMap (core configmaps): its data and binaryData;
-//   - any other object: every top-level field but apiVersion, kind, metadata
-//     and status (a custom resource's spec, a RoleBinding's roleRef and
-//     subjects).
+// Form c1 (docs/schema.md has the rules and a test vector):
+//   - the content, per kind family: a ConfigMap's (core configmaps) data and
+//     binaryData; any other object's top-level fields but apiVersion, kind,
+//     metadata and status;
+//   - plus, for every family, metadata.annotations kept to
+//     AuthorizationAnnotations, left out when none is set;
+//   - an object member whose value is null is left out, at every depth (a
+//     null array element stays);
+//   - UTF-8 JSON with no whitespace, object keys sorted by their bytes,
+//     strings with only the escapes JSON requires (`\"`, `\\`, and the
+//     control characters, as \b \f \n \r \t or \u00xx) and every other
+//     character raw, integers in decimal.
 //
-// A field that is absent or null is left out. The canonical form is UTF-8
-// JSON with no whitespace, object keys sorted by their bytes, strings with
-// only the escapes JSON requires (`\"`, `\\`, and the control characters,
-// as \b \f \n \r \t or \u00xx) and every other character raw, and integers
-// in decimal. A non-integer number, or obj not being a JSON object, is an
-// error: there is no canonical form for it. Bytes that are not valid UTF-8
-// become U+FFFD, as encoding/json makes them. A credential target is refused
-// with ErrCredentialTarget.
-func ContentSHA256(group, resource string, obj any) (string, error) {
-	if IsCredentialTarget(group, resource, "") {
+// A non-integer number, or obj not being a JSON object, is an error: there is
+// no canonical form for it. Bytes that are not valid UTF-8 become U+FFFD, as
+// encoding/json makes them. A credential target (IsCredentialTarget, the
+// targets Check refuses the key on) is refused with ErrCredentialTarget.
+func ContentSHA256(group, resource, subresource string, obj any) (string, error) {
+	if IsCredentialTarget(group, resource, subresource) {
 		return "", ErrCredentialTarget
 	}
 	raw, err := json.Marshal(obj)
@@ -59,16 +68,19 @@ func ContentSHA256(group, resource string, obj any) (string, error) {
 	}
 	content := map[string]any{}
 	for k, v := range fields {
-		if v != nil && contentField(group, resource, k) {
+		if contentField(group, resource, k) {
 			content[k] = v
 		}
+	}
+	if a := authorizationAnnotations(fields); len(a) > 0 {
+		content["metadata"] = map[string]any{"annotations": a}
 	}
 	var b bytes.Buffer
 	if err := canonicalJSON(&b, content); err != nil {
 		return "", fmt.Errorf("audit: content hash: %w", err)
 	}
 	sum := sha256.Sum256(b.Bytes())
-	return hex.EncodeToString(sum[:]), nil
+	return ContentFormC1 + ":" + hex.EncodeToString(sum[:]), nil
 }
 
 // contentField reports whether the top-level field k is part of the content
@@ -80,12 +92,27 @@ func contentField(group, resource, k string) bool {
 	return !slices.Contains([]string{"apiVersion", "kind", "metadata", "status"}, k)
 }
 
+// authorizationAnnotations is the object's metadata.annotations kept to
+// AuthorizationAnnotations, without the null ones.
+func authorizationAnnotations(fields map[string]any) map[string]any {
+	meta, _ := fields["metadata"].(map[string]any)
+	all, _ := meta["annotations"].(map[string]any)
+	out := map[string]any{}
+	for _, k := range schemaContentAnnotations {
+		if v, ok := all[k]; ok && v != nil {
+			out[k] = v
+		}
+	}
+	return out
+}
+
 // integer is a JSON integer in decimal: no sign on zero, no leading zero, no
 // fraction, no exponent.
 var integer = regexp.MustCompile(`^(0|-?[1-9][0-9]*)$`)
 
-// canonicalJSON writes v, as encoding/json decodes JSON with UseNumber, in
-// the canonical form ContentSHA256 hashes.
+// canonicalJSON writes v, as encoding/json decodes JSON with UseNumber, in the
+// bytes of form c1. An object member whose value is null is left out, at
+// every depth; a null array element is written.
 func canonicalJSON(b *bytes.Buffer, v any) error {
 	switch x := v.(type) {
 	case nil:
@@ -112,8 +139,10 @@ func canonicalJSON(b *bytes.Buffer, v any) error {
 		b.WriteByte(']')
 	case map[string]any:
 		keys := make([]string, 0, len(x))
-		for k := range x {
-			keys = append(keys, k)
+		for k, e := range x {
+			if e != nil {
+				keys = append(keys, k)
+			}
 		}
 		slices.Sort(keys) // by bytes: UTF-8 order
 		b.WriteByte('{')

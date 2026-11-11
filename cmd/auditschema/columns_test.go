@@ -66,7 +66,7 @@ var fixtureValue = map[string]attribute.Value{
 	// v0.6.0: the content hash, and the client-asserted provenance (with its
 	// rejection: the rich row breaks the "rejected alone" rule on purpose,
 	// so every unexpected_ client column fires on it).
-	audit.KeyObjectContentSHA256:            attribute.StringValue("2bbf0a0f3ccc266c6ee429376afbd9a20714a80d5b03a753bbb29ec8c1fee232"),
+	audit.KeyObjectContentSHA256:            attribute.StringValue("c1:2bbf0a0f3ccc266c6ee429376afbd9a20714a80d5b03a753bbb29ec8c1fee232"),
 	audit.KeyClientSource:                   attribute.StringValue("portal"),
 	audit.KeyClientAgentSessionID:           attribute.StringValue("example-agent-session"),
 	audit.KeyClientConfirmationID:           attribute.StringValue("00000000-0000-4000-8000-0000000000aa"),

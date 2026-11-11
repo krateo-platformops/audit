@@ -231,6 +231,14 @@ func IsCredentialTarget(group, resource, subresource string) bool {
 	})
 }
 
+// AuthorizationAnnotations returns the annotation keys the content hash counts
+// as content (schema/v1.yaml content_annotations): authorization reads them,
+// so changing one changes what an identity may do (AUDIT-4). It is the one
+// declared list, collected from authn's storage.AuthorizationAnnotations
+// (authn@26c4456d: authn.krateo.io/strategy, authn.krateo.io/groups);
+// plumbing's helm/v3/verdicts.go (plumbing@3a581c7d) declares none.
+func AuthorizationAnnotations() []string { return slices.Clone(schemaContentAnnotations) }
+
 // Populations returns where each writer's records land, by scope name.
 func Populations() []Population { return slices.Clone(schemaPopulations) }
 

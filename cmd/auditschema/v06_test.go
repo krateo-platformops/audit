@@ -28,7 +28,7 @@ const portalWrite = `{"eventName":"audit","attributes":[
   {"key":"krateo.audit.object_ref.api_version","value":{"stringValue":"v1"}},
   {"key":"krateo.audit.object_ref.resource","value":{"stringValue":"configmaps"}},
   {"key":"krateo.audit.object_ref.name","value":{"stringValue":"example-evidence"}},
-  {"key":"krateo.audit.object_ref.content_sha256","value":{"stringValue":"2bbf0a0f3ccc266c6ee429376afbd9a20714a80d5b03a753bbb29ec8c1fee232"}},
+  {"key":"krateo.audit.object_ref.content_sha256","value":{"stringValue":"c1:2bbf0a0f3ccc266c6ee429376afbd9a20714a80d5b03a753bbb29ec8c1fee232"}},
   {"key":"krateo.request.uri","value":{"stringValue":"/call"}},
   {"key":"krateo.request.source_ips","value":{"arrayValue":{"values":[{"stringValue":"192.0.2.10"}]}}},
   {"key":"session.id","value":{"stringValue":"example-session"}},
@@ -137,7 +137,8 @@ func TestSQL_V060(t *testing.T) {
 		for _, tc := range []struct {
 			group, resource, sub string
 			want                 bool
-		}{{"", "secrets", "", true}, {"", "secrets", "status", true}, {"", "serviceaccounts", "token", true}, {"", "serviceaccounts", "", false}, {"", "configmaps", "", false}, {"example.krateo.io", "secrets", "", false}} {
+		}{{"", "secrets", "", true}, {"", "secrets", "status", true}, {"", "serviceaccounts", "token", true}, {"authentication.k8s.io", "tokenreviews", "", true},
+			{"", "serviceaccounts", "", false}, {"", "configmaps", "", false}, {"example.krateo.io", "secrets", "", false}, {"authentication.k8s.io", "selfsubjectreviews", "", false}} {
 			row := []attribute.KeyValue{s(audit.KeyObjectContentSHA256, "x"), s(audit.KeyObjectResource, tc.resource)}
 			if tc.group != "" {
 				row = append(row, s(audit.KeyObjectAPIGroup, tc.group))
