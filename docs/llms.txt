@@ -3,7 +3,7 @@
 docs/index.md: the map of this bundle
 docs/overview.md: why one shared emitter and schema, and how a record flows to krateo_audit
 docs/schema.md: the record contract, key by key, per writer class (generated from schema/v1.yaml)
-docs/coverage.md: the cross-component audit inventory: every mutating path, writer class, identity source, status and owner issue
+docs/coverage.md: the cross-component audit inventory (AUDIT-4): one row per mutating path per component, in one table per writer class
 docs/usage.md: install, when to emit, the actor, adopting v0.4 and v0.5, testing a writer, the live check
 docs/configuration.md: the Emitter's options and metrics, and the OTel Logs SDK setup
 docs/api.md: the Go API, audittest and cmd/auditschema
@@ -15,7 +15,7 @@ audit.go: the emitter
 check.go: the checker
 schema.go: the schema types and accessors
 schema_gen.go: generated from schema/v1.yaml
-coverage_test.go: the check that every docs/coverage.md row meets audit#9's acceptance, falsifier included
+coverage_test.go: the check that every docs/coverage.md row meets audit#9's acceptance and names a real population, falsifier included
 contract_records_test.go: the example records docs/schema.md shows (kept deletion, pruned child), emitted and checked
 testdata/v0.4.0/: records audit v0.4.0 emitted, and v0.4.0's check report on them (the compatibility arm)
 sanitize.go: the UTF-8 sanitiser
