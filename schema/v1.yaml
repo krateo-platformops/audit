@@ -242,6 +242,20 @@ populations:
   - scope: rest-dynamic-controller/audit
     writer: controller
     who: rest-dynamic-controller
+  - scope: github.com/krateo-platformops/composition-dynamic-controller/audit
+    writer: controller
+    who: >-
+      the composition-dynamic-controller's helm writes to a Composition's
+      children (one record per child installed, upgraded, pruned or kept)
+    note: >-
+      The composition-dynamic-controller runs one Deployment per
+      CompositionDefinition version, each with its own ServiceName, and every
+      one emits on this scope: select its rows by scope, not by ServiceName.
+  - scope: github.com/krateo-platformops/core-provider/audit
+    writer: controller
+    who: >-
+      core-provider's *.krateo.io spec writes (authn mapping, spoke mirror
+      Compositions, hub delete) and its RBAC and credential-Secret writes
 
 # Rows written before this schema, kept as the positive control of the live
 # query: they carry no krateo.audit.schema_version and no event.name attribute.

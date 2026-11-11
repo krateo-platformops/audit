@@ -117,6 +117,9 @@ type population struct {
 	Scope  string `yaml:"scope"`
 	Writer string `yaml:"writer"`
 	Who    string `yaml:"who"`
+	// Note is how a reader selects the population's rows, when that is not
+	// obvious from the scope; docs/schema.md shows it under the table.
+	Note string `yaml:"note"`
 }
 
 type key struct {

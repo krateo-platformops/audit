@@ -67,6 +67,12 @@ timestamp: 2026-11-11T00:00:00Z
     `github.com/krateo-platformops/identity-lifecycle/audit`, controller;
     the shared `github.com/krateo-platformops/audit` row stays for the rows
     written before each moved.
+  - Populations `github.com/krateo-platformops/composition-dynamic-controller/audit`
+    and `github.com/krateo-platformops/core-provider/audit`, controller, for
+    core-provider's emitters (module paths from each go.mod). The cdc runs
+    one Deployment per CompositionDefinition version, so its rows are
+    selected by scope, not ServiceName; a population's new `note` says so
+    under the table in [schema.md](./schema.md).
   - [schema.md](./schema.md): the generation range join (a reconcile at
     generation *G* covers the request writes in (*P*, *G*], *P* its
     previous reconcile's generation; every one is returned, none is picked)

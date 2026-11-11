@@ -500,4 +500,8 @@ actor: `actor`). Each marker is counted under
 | `github.com/krateo-platformops/identity-lifecycle/audit` | `controller` | identity-lifecycle |
 | `github.com/krateo-platformops/audit` | `controller` | access-review and identity-lifecycle before each moved to its own scope (split by ServiceName); kept for their historical rows |
 | `rest-dynamic-controller/audit` | `controller` | rest-dynamic-controller |
+| `github.com/krateo-platformops/composition-dynamic-controller/audit` | `controller` | the composition-dynamic-controller's helm writes to a Composition's children (one record per child installed, upgraded, pruned or kept) |
+| `github.com/krateo-platformops/core-provider/audit` | `controller` | core-provider's *.krateo.io spec writes (authn mapping, spoke mirror Compositions, hub delete) and its RBAC and credential-Secret writes |
 | `request` | `gateway` | the agent gateway's pre-2026-10-22 access-log rows (pre-schema, the positive control) |
+
+- `github.com/krateo-platformops/composition-dynamic-controller/audit`: The composition-dynamic-controller runs one Deployment per CompositionDefinition version, each with its own ServiceName, and every one emits on this scope: select its rows by scope, not by ServiceName.

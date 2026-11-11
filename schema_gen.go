@@ -435,6 +435,8 @@ var schemaPopulations = []Population{
 	{Scope: "github.com/krateo-platformops/identity-lifecycle/audit", Writer: WriterController, Who: "identity-lifecycle"},
 	{Scope: "github.com/krateo-platformops/audit", Writer: WriterController, Who: "access-review and identity-lifecycle before each moved to its own scope (split by ServiceName); kept for their historical rows"},
 	{Scope: "rest-dynamic-controller/audit", Writer: WriterController, Who: "rest-dynamic-controller"},
+	{Scope: "github.com/krateo-platformops/composition-dynamic-controller/audit", Writer: WriterController, Who: "the composition-dynamic-controller's helm writes to a Composition's children (one record per child installed, upgraded, pruned or kept)"},
+	{Scope: "github.com/krateo-platformops/core-provider/audit", Writer: WriterController, Who: "core-provider's *.krateo.io spec writes (authn mapping, spoke mirror Compositions, hub delete) and its RBAC and credential-Secret writes"},
 }
 
 var schemaLegacyControls = []Population{

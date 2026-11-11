@@ -174,10 +174,16 @@ func TestSQL_V060(t *testing.T) {
 		t.Errorf("the gateway's rules judge client keys it cannot write, other than as not_for_writer")
 	}
 
-	scopes := regexp.MustCompile(`AND ScopeName IN \(([^)]*)\)`).FindStringSubmatch(rulesQuery(t, sql, audit.WriterController))
-	for _, sc := range []string{"github.com/krateo-platformops/access-review/audit", "github.com/krateo-platformops/identity-lifecycle/audit", "github.com/krateo-platformops/audit"} {
+	scopeList := regexp.MustCompile(`AND ScopeName IN \(([^)]*)\)`)
+	scopes := scopeList.FindStringSubmatch(rulesQuery(t, sql, audit.WriterController))
+	requestScopes := scopeList.FindStringSubmatch(rulesQuery(t, sql, audit.WriterRequest))
+	for _, sc := range []string{"github.com/krateo-platformops/access-review/audit", "github.com/krateo-platformops/identity-lifecycle/audit", "github.com/krateo-platformops/audit",
+		"github.com/krateo-platformops/composition-dynamic-controller/audit", "github.com/krateo-platformops/core-provider/audit"} {
 		if scopes == nil || !strings.Contains(scopes[1], "'"+sc+"'") {
 			t.Errorf("the controller's rules do not read %s", sc)
+		}
+		if requestScopes == nil || strings.Contains(requestScopes[1], "'"+sc+"'") {
+			t.Errorf("the request writer's rules read the controller scope %s", sc)
 		}
 	}
 	if !slices.ContainsFunc(audit.Populations(), func(p audit.Population) bool {

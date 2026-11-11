@@ -415,6 +415,17 @@ actor: ` + "`actor`" + `). Each marker is counted under
 	for _, p := range s.LegacyControls {
 		fmt.Fprintf(&b, "| `%s` | `%s` | %s (pre-schema, the positive control) |\n", p.Scope, p.Writer, cell(p.Who))
 	}
+	first := true
+	for _, p := range append(slices.Clone(s.Populations), s.LegacyControls...) {
+		if p.Note == "" {
+			continue
+		}
+		if first {
+			b.WriteString("\n")
+			first = false
+		}
+		fmt.Fprintf(&b, "- `%s`: %s\n", p.Scope, strings.TrimSpace(p.Note))
+	}
 	return []byte(b.String())
 }
 
