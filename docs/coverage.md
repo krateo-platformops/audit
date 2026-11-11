@@ -53,8 +53,14 @@ The row's owner issue links to the PR.
 No identity appears on this page: component, path and object names only.
 An object whose name embeds a user name is described in words ("the
 user's clientconfig Secret"), never spelled out, not even with a
-placeholder. `TestCoverage_EveryRowMeetsTheAcceptance` fails on a row that
-breaks any rule in this section.
+placeholder.
+
+`TestCoverage_EveryRowMeetsTheAcceptance` enforces the column rules above:
+the writer class, the status, the owner issue, the out-of-scope reason and
+the scope. Of the identity rule, it enforces the shapes a pattern can
+see: no placeholder in angle brackets, no email address, and no
+clientconfig Secret spelled by its user-named name. A person's name has no
+such shape, so keeping names off this page is a review rule.
 
 ## Owner rule
 
@@ -72,7 +78,7 @@ one row per path.
 
 ## Boundary rulings
 
-These are Diego's rulings of 2026-11-09 ([installer#410], scope comment),
+These are the owner's rulings of 2026-11-09 ([installer#410], scope comment),
 stated once here for every row below.
 
 1. **Creates and deletes pass the ".spec changes" test** of AUDIT-7
@@ -178,7 +184,7 @@ remaining test gaps. The live `auditschema sql` check follows the roll.
 | agent gateway | an A2A call to an agent (a request with an `a2a.method`) | gateway | the token the gateway verified: `principal` and the `act` chain; `user.name` is the outermost actor | audited | [observability#138], [agentgateway-policies#79]; emit: [observability#155] | `github.com/krateo-platformops/observability/gateway-audit` | | | |
 | agent gateway | an MCP `tools/call`, `resources/read` or `prompts/get`, and any MCP method on neither the projected nor the excluded list | gateway | as above | audited | [observability#138], [agentgateway-policies#79]; emit: [observability#155] | `github.com/krateo-platformops/observability/gateway-audit` | | | |
 | agent gateway | an LLM completion | gateway | as above | audited | [observability#138], [agentgateway-policies#79]; emit: [observability#155] | `github.com/krateo-platformops/observability/gateway-audit` | | | |
-| agent gateway | a plain HTTP hop (protocol `http`), such as ui-token-hop's `/api/...` traffic to kagent-controller | gateway | as above | out of scope (counted, not projected; the counting fix comes from observability) | [observability#138] | | | | |
+| agent gateway | a plain HTTP hop (protocol `http`), such as ui-token-hop's `/api/...` traffic to kagent-controller | gateway | as above | out of scope (not projected, and not counted yet: the counting fix is pending in observability) | [observability#138] | | | | |
 | agent gateway | MCP session plumbing, agent-card fetches, model listing, and requests that matched no route | gateway | as above | out of scope (not an acting hop; counted in `krateo.gateway_audit.excluded`) | [observability#138] | | | | |
 
 ## action (T)

@@ -29,9 +29,18 @@ var (
 	coverageRef = regexp.MustCompile(`\[([a-z0-9-]+#[0-9]+)\]`)
 	// Its definition: [repo#123]: https://github.com/<org>/repo/(issues|pull)/123.
 	coverageDef = regexp.MustCompile(`^\[([a-z0-9-]+)#([0-9]+)\]: https://github\.com/(krateo-platformops|krateo-agentiko)/([a-z0-9-]+)/(issues|pull)/([0-9]+)$`)
-	// A placeholder such as <user>: the page holds no identity, not even a stand-in for one.
+	// The identity shapes the page must not hold. A person's name has no
+	// shape a pattern can tell from a word, so names are a review rule, not
+	// a check here.
+	//
+	// A placeholder such as <user>: not even a stand-in for an identity.
 	coveragePlaceholder = regexp.MustCompile(`<[A-Za-z][^<>\n]*>`)
-	coverageOutOfScope  = regexp.MustCompile(`^out of scope \(.+\)$`)
+	// An email address.
+	coverageEmail = regexp.MustCompile(`[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}`)
+	// A clientconfig Secret spelled by its name, which embeds the user's
+	// (name-clientconfig, name-clientconfig-stepup): describe it in words.
+	coverageUserSecret = regexp.MustCompile(`[A-Za-z0-9][A-Za-z0-9._-]*-clientconfig`)
+	coverageOutOfScope = regexp.MustCompile(`^out of scope \(.+\)$`)
 )
 
 // coverageRows parses the inventory tables of docs/coverage.md. It fails on
@@ -174,6 +183,28 @@ func coverageDefinitions(doc string) (map[string]bool, []string) {
 	return defined, bad
 }
 
+// coverageIdentityProblems is every identity shape the page holds: a
+// placeholder, an email address, or a clientconfig Secret spelled by its
+// user-named name.
+func coverageIdentityProblems(doc string) []string {
+	var out []string
+	for i, l := range strings.Split(doc, "\n") {
+		for _, c := range []struct {
+			re   *regexp.Regexp
+			what string
+		}{
+			{coveragePlaceholder, "a placeholder: not even a stand-in for an identity"},
+			{coverageEmail, "an email address"},
+			{coverageUserSecret, "a clientconfig Secret spelled by its user-named name: describe it in words"},
+		} {
+			if m := c.re.FindString(l); m != "" {
+				out = append(out, fmt.Sprintf("docs/coverage.md:%d: %q is %s", i+1, m, c.what))
+			}
+		}
+	}
+	return out
+}
+
 // docs/coverage.md meets audit#9's acceptance, and every scope it names is a
 // population of its own writer in schema/v1.yaml.
 func TestCoverage_EveryRowMeetsTheAcceptance(t *testing.T) {
@@ -193,8 +224,8 @@ func TestCoverage_EveryRowMeetsTheAcceptance(t *testing.T) {
 	for _, p := range coverageProblems(rows, defined) {
 		t.Error(p)
 	}
-	if m := coveragePlaceholder.FindString(doc); m != "" {
-		t.Errorf("docs/coverage.md holds the placeholder %q: the page names no identity, not even a stand-in", m)
+	for _, p := range coverageIdentityProblems(doc) {
+		t.Error(p)
 	}
 }
 
@@ -254,7 +285,25 @@ func TestCoverage_TheCheckCanFail(t *testing.T) {
 			t.Errorf("the definition %q is not reported", d)
 		}
 	}
-	if coveragePlaceholder.FindString("the <user>-clientconfig Secret") == "" {
-		t.Error("a <user> placeholder is not found")
+
+	// Each identity shape is found; the words the page uses instead are not.
+	for _, bad := range []string{
+		"the <user>-clientconfig Secret",
+		"contact first.last@example.com",
+		"the Secret `jdoe-clientconfig`",
+		"the Secret jdoe-clientconfig-stepup",
+	} {
+		if len(coverageIdentityProblems(bad)) == 0 {
+			t.Errorf("%q is not reported", bad)
+		}
+	}
+	for _, fine := range []string{
+		"creates or updates the user's clientconfig Secret",
+		"the user's step-up clientconfig Secret",
+		"`auditschema check` pinned with a tool directive",
+	} {
+		if p := coverageIdentityProblems(fine); len(p) != 0 {
+			t.Errorf("%q is reported: %v", fine, p)
+		}
 	}
 }
