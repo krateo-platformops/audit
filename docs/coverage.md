@@ -89,6 +89,14 @@ stated once here for every row below.
    `.spec` where it exists, and also ConfigMap and Secret `data`, `type` and
    `immutable`, RBAC `rules`, `subjects`, `roleRef` and `aggregationRule`
    (compared as sets), and an admission configuration's `webhooks`.
+   **Content** is that desired state plus the authorization-bearing
+   annotations and labels the schema declares
+   ([schema.md](./schema.md#authorization-bearing-metadata):
+   `audit.AuthorizationAnnotations()`, `audit.AuthorizationLabels()`),
+   compared by key and value. A write that changes one of them, adds it
+   or removes it is a content change, even with the desired state
+   unchanged: authorization reads them. An undeclared annotation or label
+   is metadata (v0.13.0, ruled by the AUDIT-4 lead on 2026-11-12).
 2. **A kept deletion is a controller row.** That is a delete that helm
    declined because of `helm.sh/resource-policy: keep`. The row has verb
    `delete`, outcome `denied`, and `krateo.audit.denial_reason` =

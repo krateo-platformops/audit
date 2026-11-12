@@ -19,7 +19,7 @@ is built on. It ships no image, no chart and no CRDs.
 - [overview](./overview.md): why one shared emitter and schema, and how a record flows
 - [schema](./schema.md): the record contract, key by key, per writer (generated)
 - [coverage](./coverage.md): the cross-component inventory (AUDIT-4): every mutating path, its writer class, identity source, status and owner issue
-- [usage](./usage.md): when to emit, the actor, adopting v0.4, v0.5, v0.6, v0.7, v0.8, v0.9, v0.10, v0.11 and v0.12, testing a writer, the live check
+- [usage](./usage.md): when to emit, the actor, adopting v0.4, v0.5, v0.6, v0.7, v0.8, v0.9, v0.10, v0.11, v0.12 and v0.13, testing a writer, the live check
 - [configuration](./configuration.md): the Emitter's options and metrics, and the OTel Logs SDK setup
 - [api](./api.md): the Go API, audittest and cmd/auditschema
 - [examples](./examples.md): runnable examples

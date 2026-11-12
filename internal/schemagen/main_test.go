@@ -114,23 +114,28 @@ func TestParse_RefusesABrokenSchema(t *testing.T) {
 		"two values, one constant":   {"values: [kept_resource_policy]}", "values: [kept_resource_policy, a_b1, a_b_1]}", "both make the constant DenialReasonAB1"},
 		"duplicate population scope": {"  - scope: github.com/krateo-platformops/authn/audit/controller\n", "  - scope: github.com/krateo-platformops/authn/audit\n", `population "github.com/krateo-platformops/authn/audit": duplicate scope`},
 		// v0.6.0: not_when, credential_free, the int bounds, the new formats and the client prefix.
-		"unknown not_when":                    {"    not_when: denied\n", "    not_when: denid\n", `not_when "denid" is not a declared condition`},
-		"not_when equal to only_when":         {"    only_when: write\n    not_when: client_rejected\n", "    only_when: write\n    not_when: write\n", "only_when and not_when name the same condition"},
-		"credential_free, no targets":         {"credential_targets:\n  - {api_group: \"\", resource: secrets}\n  - {api_group: \"\", resource: serviceaccounts, subresource: token}\n  - {api_group: authentication.k8s.io, resource: tokenreviews}\n", "credential_targets: []\n", "credential_free with no credential_targets"},
-		"content annotation without a prefix": {"  - authn.krateo.io/strategy\n", "  - strategy\n", `content annotation "strategy": a qualified annotation key`},
-		"duplicate content annotation":        {"  - authn.krateo.io/groups\n", "  - authn.krateo.io/strategy\n", `content annotation "authn.krateo.io/strategy": a qualified annotation key (prefix/name), listed once`},
-		"credential target, no resource":      {"  - {api_group: \"\", resource: secrets}\n", "  - {api_group: \"\"}\n", "a resource is required"},
-		"duplicate credential target":         {"  - {api_group: \"\", resource: serviceaccounts, subresource: token}\n", "  - {api_group: \"\", resource: secrets}\n", "each target is listed once"},
-		"unknown format":                      {"    format: sha256_hex\n", "    format: sha256\n", `unknown format "sha256"`},
-		"format on an int":                    {"    minimum: 1\n", "    minimum: 1\n    format: uuid\n", "format uuid needs a string key, not int"},
-		"minimum on a string":                 {"    format: opaque_id\n", "    format: opaque_id\n    minimum: 1\n", "minimum and less_than bound an int key, not string"},
-		"less_than an unknown key":            {"less_than: krateo.audit.client.confirmed_set.count", "less_than: krateo.audit.client.confirmed_set.size", `less_than "krateo.audit.client.confirmed_set.size" is not another int key`},
-		"less_than a string key":              {"less_than: krateo.audit.client.confirmed_set.count", "less_than: krateo.audit.client.confirmed_set.sha256", "is not another int key"},
-		"less_than itself":                    {"less_than: krateo.audit.client.confirmed_set.count", "less_than: krateo.audit.client.confirmed_set.op", "is not another int key"},
-		"client key not asserted":             {"    asserted: true\n    values: [portal]\n", "    values: [portal]\n", "asserted keys, and only they, live under the prefixes"},
-		"asserted key outside the prefixes":   {"  - name: krateo.audit.client.requested_at\n", "  - name: krateo.audit.requested_at\n", "asserted keys, and only they, live under the prefixes"},
-		"an asserted key required":            {"      request: {level: conditional, when: the record carries client provenance, check: client_provenance}\n", "      request: required\n", "an asserted key is never required"},
-		"an asserted key marked":              {"    values: [portal]\n", "    values: [portal]\n    marker: source\n", "an asserted key is never marked and never a target"},
+		"unknown not_when":            {"    not_when: denied\n", "    not_when: denid\n", `not_when "denid" is not a declared condition`},
+		"not_when equal to only_when": {"    only_when: write\n    not_when: client_rejected\n", "    only_when: write\n    not_when: write\n", "only_when and not_when name the same condition"},
+		"credential_free, no targets": {"credential_targets:\n  - {api_group: \"\", resource: secrets}\n  - {api_group: \"\", resource: serviceaccounts, subresource: token}\n  - {api_group: authentication.k8s.io, resource: tokenreviews}\n", "credential_targets: []\n", "credential_free with no credential_targets"},
+		// v0.13.0: authorization_metadata, the authorization-bearing annotations and labels.
+		"authorization annotation without a prefix": {"    key: authn.krateo.io/strategy\n", "    key: strategy\n", `authorization annotation "strategy": a qualified key (prefix/name), listed once`},
+		"duplicate authorization annotation":        {"    key: authn.krateo.io/groups\n", "    key: authn.krateo.io/strategy\n", `authorization annotation "authn.krateo.io/strategy": a qualified key (prefix/name), listed once`},
+		"authorization label without a prefix":      {"    key: authn.krateo.io/principal\n", "    key: principal\n", `authorization label "principal": a qualified key (prefix/name), listed once`},
+		"duplicate authorization label":             {"    key: authn.krateo.io/username-label\n", "    key: authn.krateo.io/principal\n", `authorization label "authn.krateo.io/principal": a qualified key (prefix/name), listed once`},
+		"authorization metadata of an unknown kind": {"  - kind: label\n    key: authn.krateo.io/principal\n", "  - kind: tag\n    key: authn.krateo.io/principal\n", `authorization metadata "authn.krateo.io/principal": kind "tag" is not annotation or label`},
+		"authorization metadata without a reason":   {"    reason: the session's groups, which RBAC binds\n", "", `authorization annotation "authn.krateo.io/groups": a reason is required`},
+		"credential target, no resource":            {"  - {api_group: \"\", resource: secrets}\n", "  - {api_group: \"\"}\n", "a resource is required"},
+		"duplicate credential target":               {"  - {api_group: \"\", resource: serviceaccounts, subresource: token}\n", "  - {api_group: \"\", resource: secrets}\n", "each target is listed once"},
+		"unknown format":                            {"    format: sha256_hex\n", "    format: sha256\n", `unknown format "sha256"`},
+		"format on an int":                          {"    minimum: 1\n", "    minimum: 1\n    format: uuid\n", "format uuid needs a string key, not int"},
+		"minimum on a string":                       {"    format: opaque_id\n", "    format: opaque_id\n    minimum: 1\n", "minimum and less_than bound an int key, not string"},
+		"less_than an unknown key":                  {"less_than: krateo.audit.client.confirmed_set.count", "less_than: krateo.audit.client.confirmed_set.size", `less_than "krateo.audit.client.confirmed_set.size" is not another int key`},
+		"less_than a string key":                    {"less_than: krateo.audit.client.confirmed_set.count", "less_than: krateo.audit.client.confirmed_set.sha256", "is not another int key"},
+		"less_than itself":                          {"less_than: krateo.audit.client.confirmed_set.count", "less_than: krateo.audit.client.confirmed_set.op", "is not another int key"},
+		"client key not asserted":                   {"    asserted: true\n    values: [portal]\n", "    values: [portal]\n", "asserted keys, and only they, live under the prefixes"},
+		"asserted key outside the prefixes":         {"  - name: krateo.audit.client.requested_at\n", "  - name: krateo.audit.requested_at\n", "asserted keys, and only they, live under the prefixes"},
+		"an asserted key required":                  {"      request: {level: conditional, when: the record carries client provenance, check: client_provenance}\n", "      request: required\n", "an asserted key is never required"},
+		"an asserted key marked":                    {"    values: [portal]\n", "    values: [portal]\n    marker: source\n", "an asserted key is never marked and never a target"},
 		// v0.12.0: writer_keys, a writer's own target keys.
 		"writer_keys repeats a shared target key":   {"  writer_keys:\n    request: [url.path]\n", "  writer_keys:\n    request: [server.address]\n", `target: writer "request"'s key "server.address" is unknown or already a target key of every writer`},
 		"writer_keys names an unknown key":          {"  writer_keys:\n    request: [url.path]\n", "  writer_keys:\n    request: [url.paths]\n", `target: writer "request"'s key "url.paths" is unknown or already a target key of every writer`},
@@ -288,5 +293,24 @@ func TestRender_NosecG101OnlyWhereTheNameMatches(t *testing.T) {
 	}
 	if !strings.Contains(string(raw), `DenialReasonPerUserCredentialRef = "per_user_credential_ref" // #nosec G101`) {
 		t.Error("DenialReasonPerUserCredentialRef, the constant gosec reports, has no directive")
+	}
+}
+
+// A schema whose authorization metadata has no label, or no annotation, is
+// refused: AuthorizationLabels and AuthorizationAnnotations are never empty.
+func TestParse_AuthorizationMetadataDeclaresBothKinds(t *testing.T) {
+	raw, err := os.ReadFile("../../schema/v1.yaml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for kind, other := range map[string]string{"label": "annotation", "annotation": "label"} {
+		bad := strings.ReplaceAll(string(raw), "  - kind: "+kind+"\n", "  - kind: "+other+"\n")
+		if bad == string(raw) {
+			t.Fatalf("precondition: no %s declared", kind)
+		}
+		_, err := parse([]byte(bad))
+		if err == nil || !strings.Contains(err.Error(), "declares no annotation or no label") {
+			t.Errorf("no %s: err = %v", kind, err)
+		}
 	}
 }

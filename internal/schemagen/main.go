@@ -81,11 +81,30 @@ type schema struct {
 	Formats           []valueFormat      `yaml:"formats"`
 	Target            target             `yaml:"target"`
 	CredentialTargets []credentialTarget `yaml:"credential_targets"`
-	// ContentAnnotations are the annotations the content hash counts.
-	ContentAnnotations []string     `yaml:"content_annotations"`
-	Populations        []population `yaml:"populations"`
-	LegacyControls     []population `yaml:"legacy_controls"`
-	Keys               []key        `yaml:"keys"`
+	// AuthorizationMetadata are the authorization-bearing annotations and
+	// labels: content, as the AUDIT-4 ruling counts it.
+	AuthorizationMetadata []authorizationKey `yaml:"authorization_metadata"`
+	Populations           []population       `yaml:"populations"`
+	LegacyControls        []population       `yaml:"legacy_controls"`
+	Keys                  []key              `yaml:"keys"`
+}
+
+// authorizationKey is one authorization-bearing annotation or label.
+type authorizationKey struct {
+	Kind   string `yaml:"kind"`
+	Key    string `yaml:"key"`
+	Reason string `yaml:"reason"`
+}
+
+// authorizationKeys returns the keys of kind k, in schema order.
+func (s *schema) authorizationKeys(k string) []string {
+	var out []string
+	for _, a := range s.AuthorizationMetadata {
+		if a.Kind == k {
+			out = append(out, a.Key)
+		}
+	}
+	return out
 }
 
 // credentialTarget is a Kubernetes target that carries a credential: a key
@@ -211,9 +230,10 @@ var (
 	levels   = map[string]string{"required": "LevelRequired", "conditional": "LevelConditional", "optional": "LevelOptional", "not_established": "LevelNotEstablished", "not_applicable": "LevelNotApplicable"}
 	types    = map[string]string{"string": "TypeString", "string[]": "TypeStringSlice", "bool": "TypeBool", "int": "TypeInt"}
 	semconvs = []string{"stable", "development", "deprecated", "none"}
-	// annotationKey is a prefixed Kubernetes annotation key: a DNS subdomain,
-	// a slash, a name. Only a prefixed key can be one a component owns.
-	annotationKey = regexp.MustCompile(`^[a-z0-9]([a-z0-9.-]*[a-z0-9])?/[A-Za-z0-9]([A-Za-z0-9._-]*[A-Za-z0-9])?$`)
+	// qualifiedKey is a prefixed Kubernetes annotation or label key: a DNS
+	// subdomain, a slash, a name. Only a prefixed key can be one a component
+	// owns.
+	qualifiedKey = regexp.MustCompile(`^[a-z0-9]([a-z0-9.-]*[a-z0-9])?/[A-Za-z0-9]([A-Za-z0-9._-]*[A-Za-z0-9])?$`)
 	// assertedPrefixes are where the asserted keys live, and only they: a
 	// header the gateway saw, and the provenance a client sent the writer.
 	assertedPrefixes = []string{"krateo.audit.asserted.", "krateo.audit.client."}
@@ -431,12 +451,22 @@ func (s *schema) validate() error {
 		}
 		seenTargets[c] = true
 	}
-	seenAnnotations := map[string]bool{}
-	for _, a := range s.ContentAnnotations {
-		if !annotationKey.MatchString(a) || seenAnnotations[a] {
-			return fmt.Errorf("content annotation %q: a qualified annotation key (prefix/name), listed once", a)
+	seenMetadata := map[authorizationKey]bool{}
+	for _, a := range s.AuthorizationMetadata {
+		if a.Kind != "annotation" && a.Kind != "label" {
+			return fmt.Errorf("authorization metadata %q: kind %q is not annotation or label", a.Key, a.Kind)
 		}
-		seenAnnotations[a] = true
+		k := authorizationKey{Kind: a.Kind, Key: a.Key}
+		if !qualifiedKey.MatchString(a.Key) || seenMetadata[k] {
+			return fmt.Errorf("authorization %s %q: a qualified key (prefix/name), listed once", a.Kind, a.Key)
+		}
+		if strings.TrimSpace(a.Reason) == "" {
+			return fmt.Errorf("authorization %s %q: a reason is required", a.Kind, a.Key)
+		}
+		seenMetadata[k] = true
+	}
+	if len(s.authorizationKeys("annotation")) == 0 || len(s.authorizationKeys("label")) == 0 {
+		return fmt.Errorf("authorization metadata: declares no annotation or no label")
 	}
 	scopes := map[string]bool{}
 	for _, p := range append(slices.Clone(s.Populations), s.LegacyControls...) {
@@ -663,6 +693,7 @@ func render(s *schema) ([]byte, error) {
 		"join":     strings.Join,
 		"deref":    func(p *int64) int64 { return *p },
 		"nosec":    nosecG101,
+		"authz":    s.authorizationKeys,
 	}
 	t, err := template.New("gen").Funcs(funcs).Parse(tmpl)
 	if err != nil {
@@ -835,7 +866,9 @@ var schemaCredentialTargets = []CredentialTarget{
 {{- end}}
 }
 
-var schemaContentAnnotations = {{strs .ContentAnnotations}}
+var schemaContentAnnotations = {{strs (authz "annotation")}}
+
+var schemaContentLabels = {{strs (authz "label")}}
 
 var schemaPopulations = []Population{
 {{- range .Populations}}

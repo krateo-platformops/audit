@@ -9,6 +9,32 @@ timestamp: 2026-11-12T00:00:00Z
 
 # Log
 
+- **2026-11-12**: v0.13.0. Additive: no record, rule or content hash
+  changes.
+  - The authorization-bearing labels: `AuthorizationLabels()`
+    (`authn.krateo.io/principal`, `authn.krateo.io/username-label`), which
+    authn stamps on every session Secret and acmp's tenant onboarding
+    reads. The AUDIT-4 lead ruled them content (2026-11-12).
+  - One schema list for both kinds: `content_annotations` becomes
+    `authorization_metadata`, each entry with its kind (annotation or
+    label), its key and its reason. `AuthorizationAnnotations()` is
+    unchanged, and both functions are generated from the list. The
+    generator refuses an unknown kind, an unqualified or repeated key per
+    kind, an entry with no reason, and a list with no annotation or no
+    label.
+  - Content, as [coverage.md](./coverage.md) ruling 1 now states it: the
+    desired state plus the declared annotations and labels, compared by key
+    and value, a key only as its declared kind.
+    `audittest.AuthorizationMetadataCases()` is that rule as cases, for a
+    comparator to run (plumbing's `kubeutil/content`, whose label support
+    is its own change).
+  - The content hash, form c1, counts no label: a form is fixed. The
+    labels' carrier, the session Secret, is a credential target, which has
+    no hash.
+  - Compatibility: `testdata/v0.12.0/` (29 records audit v0.12.0's own
+    `Emit` wrote, the v0.12.0 shapes included) gives v0.12.0's own report,
+    and every earlier replay is unchanged.
+
 - **2026-11-12**: v0.12.0 (audit#22, for snowplow#1283 and snowplow's
   adoption). Additive.
   - `krateo.audit.endpoint_ref.{namespace,name}` (`Event.EndpointRefNamespace`,

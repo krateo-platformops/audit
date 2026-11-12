@@ -1,7 +1,7 @@
 ---
 type: Usage
 title: audit — usage
-description: Install the package, when and how to emit, who the actor is, adopting v0.4.0, v0.5.0, v0.6.0, v0.7.0, v0.8.0, v0.9.0, v0.10.0, v0.11.0 and v0.12.0, testing a writer against the schema, and checking the live table.
+description: Install the package, when and how to emit, who the actor is, adopting v0.4.0, v0.5.0, v0.6.0, v0.7.0, v0.8.0, v0.9.0, v0.10.0, v0.11.0, v0.12.0 and v0.13.0, testing a writer against the schema, and checking the live table.
 resource: github.com/krateo-platformops/audit
 tags: [library, audit, usage]
 timestamp: 2026-11-12T00:00:00Z
@@ -440,6 +440,30 @@ v0.12.0 is additive (audit#22): a plain bump changes no record.
   }
   emitter := audit.New(logger, opts...)
   ```
+
+## Adopting v0.13.0
+
+v0.13.0 is additive: a plain bump changes no record and no content hash.
+
+- **Authorization-bearing labels.** `audit.AuthorizationLabels()` returns
+  `authn.krateo.io/principal` and `authn.krateo.io/username-label`, which
+  authn stamps on every session Secret and which acmp's tenant onboarding
+  reads. It sits beside `audit.AuthorizationAnnotations()`, and both are
+  generated from one schema list, `authorization_metadata`, where each
+  entry declares its kind, its key and why it is content.
+- **What content is.** The desired state (coverage.md, boundary ruling 1)
+  plus the declared annotations and labels, compared by key and value. A
+  write that changes a declared annotation or label, adds it or removes it
+  is a content change; an undeclared one is metadata; a key counts only as
+  the kind it is declared as. A comparator takes both lists. plumbing's
+  `kubeutil/content` is that comparator: it takes the annotations today,
+  and the labels need its matching change.
+- **Testing a comparator.** `audittest.AuthorizationMetadataCases()` is the
+  rule as cases, derived from the schema: run each `Before` and `After`
+  through the comparator, and its verdict must be `Changed`.
+- **The content hash.** Form c1 hashes the declared annotations and no
+  label: a form is fixed. The labels' carrier, the session Secret, is a
+  credential target, which carries no content hash.
 
 ## Testing a writer
 

@@ -283,19 +283,38 @@ credential_targets:
   - {api_group: "", resource: serviceaccounts, subresource: token}
   - {api_group: authentication.k8s.io, resource: tokenreviews}
 
-# The annotations that are content (krateo.audit.object_ref.content_sha256):
-# authorization reads them, so a write that changes one changes what an
-# identity may do, as the AUDIT-4 ruling counts it. Every other annotation,
-# and every label, is metadata and is not hashed. The one declared list,
-# collected from:
-#   - authn's storage.AuthorizationAnnotations (authn@26c4456d,
-#     go/authn/internal/helpers/kube/config/storage/identity.go):
-#     authn.krateo.io/strategy, authn.krateo.io/groups;
-#   - plumbing's helm/v3/verdicts.go (plumbing@3a581c7d) declares none: its
-#     canonicalContent counts no label or annotation.
-content_annotations:
-  - authn.krateo.io/strategy
-  - authn.krateo.io/groups
+# The authorization-bearing metadata: the annotations and labels that
+# authorization reads, so a write that changes one (its value, or adding or
+# removing it) changes what an identity may do, and is a content change as
+# the AUDIT-4 ruling counts it. Content is the desired state (coverage.md,
+# boundary ruling 1) plus these, compared by key and value. Every other
+# annotation and label is metadata. Each entry declares its kind
+# (annotation or label), its key and why it is here. The one declared list:
+# audit.AuthorizationAnnotations() and audit.AuthorizationLabels() are
+# generated from it. plumbing's kubeutil/content compares the annotations by
+# it today (v1.56.0); the labels need its matching change.
+#
+# Form c1 of krateo.audit.object_ref.content_sha256 hashes the annotations
+# below and no label: a form is fixed (a label in it would be c2). The
+# labels' carrier, the session Secret, is a credential target, which has no
+# content hash.
+authorization_metadata:
+  # authn's storage.AuthorizationAnnotations (authn@26c4456d,
+  # go/authn/internal/helpers/kube/config/storage/identity.go).
+  - kind: annotation
+    key: authn.krateo.io/strategy
+    reason: the identity source a session was issued by; authorization reads it
+  - kind: annotation
+    key: authn.krateo.io/groups
+    reason: the session's groups, which RBAC binds
+  # authn stamps both labels on every session Secret (the AUDIT-4 lead's
+  # ruling, 2026-11-12).
+  - kind: label
+    key: authn.krateo.io/principal
+    reason: "the session's principal class (human, service, agent or controller): acmp's tenant onboarding selects humans by it"
+  - kind: label
+    key: authn.krateo.io/username-label
+    reason: the session's username bounded to a label value; acmp's tenant onboarding names a tenant's namespaces from it
 
 # Where each writer's records land in default.krateo_audit, by the
 # instrumentation scope name of the logger it emits on. Used by

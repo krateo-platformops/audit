@@ -694,6 +694,8 @@ var schemaCredentialTargets = []CredentialTarget{
 
 var schemaContentAnnotations = []string{"authn.krateo.io/strategy", "authn.krateo.io/groups"}
 
+var schemaContentLabels = []string{"authn.krateo.io/principal", "authn.krateo.io/username-label"}
+
 var schemaPopulations = []Population{
 	{Scope: "github.com/krateo-platformops/snowplow/audit", Writer: WriterRequest, Who: "snowplow (H, and T for an agent going through /call)"},
 	{Scope: "github.com/krateo-platformops/authn/audit", Writer: WriterRequest, Who: "authn's login and /delegate records"},

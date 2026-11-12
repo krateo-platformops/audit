@@ -373,7 +373,7 @@ Any other writer computes the same bytes.
    `{"metadata":{"annotations":{...}}}`, and left out when none of them is
    set. Authorization reads them, so changing one changes what an identity
    may do (AUDIT-4). Every other annotation, and every label, is metadata
-   and is not hashed.
+   to c1 and is not hashed (see "Authorization-bearing metadata" below).
 3. **Nulls.** An object member whose value is null is left out, at every
    depth, so a typed object and its unstructured form (a
    `creationTimestamp: null` in a pod template) hash the same. A null
@@ -389,13 +389,8 @@ Any other writer computes the same bytes.
 5. **The hash.** `c1:` and the SHA-256 of those bytes, as 64 lowercase hex
    digits.
 
-The annotations c1 counts (`audit.AuthorizationAnnotations()`):
-
-- `authn.krateo.io/strategy`
-- `authn.krateo.io/groups`
-
-They are authn's `storage.AuthorizationAnnotations`. plumbing's
-`helm/v3/verdicts.go` declares none: its change verdict counts no annotation.
+c1 counts the annotations of the authorization-bearing metadata below
+(`audit.AuthorizationAnnotations()`), and no label.
 
 The test vector (`TestContentSHA256_Vector`): a ConfigMap whose data is
 `k: <é>` and `a"b: line1⏎line2`, whose binaryData is
@@ -407,6 +402,30 @@ and an undeclared `example.com/note`, has the content bytes
 ```
 
 and the value `c1:e8374f859e140054ea17527c08740cd2439bc7bcad48dd777a3e3cc0921d708c`.
+
+### Authorization-bearing metadata
+
+The annotations and labels that authorization reads (schema/v1.yaml
+`authorization_metadata`). A write that changes one, by its value, or by adding
+or removing it, changes what an identity may do, so it is a content change
+as the AUDIT-4 ruling counts it. **Content** is the desired state
+([coverage.md](./coverage.md), boundary ruling 1) plus these, compared by
+key and value: an annotation only as an annotation, a label only as a
+label. Every other annotation and label is metadata.
+`audit.AuthorizationAnnotations()` and `audit.AuthorizationLabels()` are generated
+from this one list. plumbing's `kubeutil/content` compares the annotations
+by it today (v1.56.0); the labels need its matching change.
+
+| kind | key | why it is content |
+|---|---|---|
+| annotation | `authn.krateo.io/strategy` | the identity source a session was issued by; authorization reads it |
+| annotation | `authn.krateo.io/groups` | the session's groups, which RBAC binds |
+| label | `authn.krateo.io/principal` | the session's principal class (human, service, agent or controller): acmp's tenant onboarding selects humans by it |
+| label | `authn.krateo.io/username-label` | the session's username bounded to a label value; acmp's tenant onboarding names a tenant's namespaces from it |
+
+Form c1 hashes the annotations and no label. A form is fixed, so a label
+in the hash would be a new form, c2. The labels' carrier, the session
+Secret, is a credential target, which carries no content hash at all.
 
 ## Client-asserted provenance
 
