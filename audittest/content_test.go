@@ -37,7 +37,7 @@ func TestAuthorizationMetadataCases_TheRuleByHand(t *testing.T) {
 			want["a declared label's key as annotation "+k+" "+e] = false
 		}
 	}
-	for _, k := range []string{"authn.krateo.io/strategy", "authn.krateo.io/groups"} {
+	for _, k := range []string{"authn.krateo.io/strategy", "authn.krateo.io/groups", "authn.krateo.io/username"} {
 		for _, e := range []string{"changed", "added", "removed"} {
 			want["a declared annotation "+k+" "+e] = true
 			want["a declared annotation's key as label "+k+" "+e] = false
@@ -85,8 +85,24 @@ func content(obj map[string]any) map[string]any {
 	}
 }
 
+// c1Annotations is the object's annotations kept to form c1's FROZEN key set
+// (audit.ContentFormC1Annotations), not to the declared list.
+func c1Annotations(obj map[string]any) map[string]any {
+	meta, _ := obj["metadata"].(map[string]any)
+	all, _ := meta["annotations"].(map[string]any)
+	out := map[string]any{}
+	for _, k := range audit.ContentFormC1Annotations() {
+		if v, ok := all[k]; ok {
+			out[k] = v
+		}
+	}
+	return out
+}
+
 // Every case's verdict is the stated rule's, and the content hash, form c1,
-// agrees on the annotations and counts no label (a form is fixed).
+// differs exactly when c1's frozen annotations differ, and counts no label (a
+// form is fixed). A declared annotation outside the frozen set
+// (authn.krateo.io/username) changes the comparator's verdict and not c1.
 func TestAuthorizationMetadataCases_AgreeWithTheRuleAndTheHash(t *testing.T) {
 	hash := func(obj map[string]any) string {
 		t.Helper()
@@ -96,24 +112,46 @@ func TestAuthorizationMetadataCases_AgreeWithTheRuleAndTheHash(t *testing.T) {
 		}
 		return h
 	}
-	var changed, unchanged int
+	var changed, unchanged, hashed, outsideC1 int
 	for _, c := range audittest.AuthorizationMetadataCases() {
 		if got := !reflect.DeepEqual(content(c.Before), content(c.After)); got != c.Changed {
 			t.Errorf("%s: the rule says changed=%v, the case %v", c.Name, got, c.Changed)
 		}
 		hashDiffers := hash(c.Before) != hash(c.After)
-		annotationsDiffer := !reflect.DeepEqual(content(c.Before)["annotations"], content(c.After)["annotations"])
-		if hashDiffers != annotationsDiffer {
-			t.Errorf("%s: c1 differs=%v, the declared annotations differ=%v", c.Name, hashDiffers, annotationsDiffer)
+		c1Differ := !reflect.DeepEqual(c1Annotations(c.Before), c1Annotations(c.After))
+		if hashDiffers != c1Differ {
+			t.Errorf("%s: c1 differs=%v, c1's frozen annotations differ=%v", c.Name, hashDiffers, c1Differ)
 		}
 		if c.Changed {
 			changed++
 		} else {
 			unchanged++
 		}
+		if hashDiffers {
+			hashed++
+		}
+		if c.Changed && !hashDiffers {
+			outsideC1++
+		}
 	}
 	if changed == 0 || unchanged == 0 {
 		t.Errorf("changed %d, unchanged %d: the cases need both", changed, unchanged)
+	}
+	// Both arms of the c1 assertion are exercised: a case c1 sees, and a
+	// content change c1 does not (a declared label, or a declared annotation
+	// outside the frozen set).
+	if hashed == 0 || outsideC1 == 0 {
+		t.Errorf("c1 differs in %d cases, a content change c1 doesn't see in %d: the cases need both", hashed, outsideC1)
+	}
+	for _, e := range []string{"changed", "added", "removed"} {
+		name := "a declared annotation authn.krateo.io/username " + e
+		c, ok := casesByName(t)[name]
+		if !ok {
+			t.Fatalf("no case %q", name)
+		}
+		if !c.Changed || hash(c.Before) != hash(c.After) {
+			t.Errorf("%s: changed=%v, c1 differs=%v; want a content change c1 does not hash", name, c.Changed, hash(c.Before) != hash(c.After))
+		}
 	}
 }
 

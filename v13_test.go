@@ -1,14 +1,17 @@
 package audit
 
 import (
+	"os"
 	"slices"
+	"strings"
 	"testing"
 
 	"go.opentelemetry.io/otel/attribute"
 )
 
-// The declared authorization labels, by hand (v0.13.0): authn stamps both on
-// every session Secret, and authorization reads them.
+// The declared authorization labels, by hand (v0.13.0): authn will stamp both
+// on every session Secret (planned, per authn#144), and authorization reads
+// them.
 func TestAuthorizationLabels(t *testing.T) {
 	if got, want := AuthorizationLabels(), []string{"authn.krateo.io/principal", "authn.krateo.io/username-label"}; !slices.Equal(got, want) {
 		t.Errorf("AuthorizationLabels() = %v, want %v", got, want)
@@ -18,9 +21,77 @@ func TestAuthorizationLabels(t *testing.T) {
 	if AuthorizationLabels()[0] != "authn.krateo.io/principal" {
 		t.Errorf("AuthorizationLabels shares the schema's list with its caller")
 	}
-	// The annotations are unchanged by the move to one list of both kinds.
-	if got, want := AuthorizationAnnotations(), []string{"authn.krateo.io/strategy", "authn.krateo.io/groups"}; !slices.Equal(got, want) {
+	// The annotations: v0.12.0's two, then plumbing v1.58.0's
+	// endpoints.UsernameAnnotation, which decides credential ownership.
+	if got, want := AuthorizationAnnotations(), []string{"authn.krateo.io/strategy", "authn.krateo.io/groups", "authn.krateo.io/username"}; !slices.Equal(got, want) {
 		t.Errorf("AuthorizationAnnotations() = %v, want %v", got, want)
+	}
+}
+
+// c1's annotation key set, by hand: frozen at v0.12.0's two, whatever
+// AuthorizationAnnotations declares, and a copy.
+func TestContentFormC1Annotations_Frozen(t *testing.T) {
+	want := []string{"authn.krateo.io/strategy", "authn.krateo.io/groups"}
+	if got := ContentFormC1Annotations(); !slices.Equal(got, want) {
+		t.Errorf("ContentFormC1Annotations() = %v, want %v", got, want)
+	}
+	c := ContentFormC1Annotations()
+	c[0] = "mutated"
+	if ContentFormC1Annotations()[0] != "authn.krateo.io/strategy" {
+		t.Error("ContentFormC1Annotations shares c1's list with its caller")
+	}
+	doc, err := os.ReadFile("docs/schema.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(doc), "**c1's key set is frozen** (`audit.ContentFormC1Annotations()`): the two\nannotations v0.12.0 declared, `authn.krateo.io/strategy` and `authn.krateo.io/groups`,") {
+		t.Error("docs/schema.md does not state c1's frozen key set")
+	}
+}
+
+// Growing authorization_metadata never changes a c1 hash: an annotation the
+// schema declares after v0.12.0 (authn.krateo.io/username, or any other added
+// to the list) is content to a comparator, and invisible to c1.
+func TestContentSHA256_C1IgnoresTheGrowingAuthorizationList(t *testing.T) {
+	obj := func(annotations map[string]any) map[string]any {
+		return map[string]any{"spec": map[string]any{"a": "1"}, "metadata": map[string]any{"name": "x", "annotations": annotations}}
+	}
+	hash := func(annotations map[string]any) string {
+		t.Helper()
+		h, err := ContentSHA256("example.krateo.io", "examples", "", obj(annotations))
+		if err != nil {
+			t.Fatal(err)
+		}
+		return h
+	}
+	const added = "example.krateo.io/added"
+	before := map[string]string{}
+	for _, k := range []string{"authn.krateo.io/username", added} {
+		before[k] = hash(map[string]any{"authn.krateo.io/groups": "devs", k: "example-a"})
+	}
+	// Add an annotation to the declared list, as a later schema would.
+	saved := schemaContentAnnotations
+	schemaContentAnnotations = append(slices.Clone(saved), added)
+	t.Cleanup(func() { schemaContentAnnotations = saved })
+	if !slices.Contains(AuthorizationAnnotations(), added) {
+		t.Fatal("precondition: the annotation was not added to the declared list")
+	}
+	for _, k := range []string{"authn.krateo.io/username", added} {
+		if !slices.Contains(AuthorizationAnnotations(), k) {
+			t.Fatalf("precondition: %s is not declared", k)
+		}
+		base := map[string]any{"authn.krateo.io/groups": "devs"}
+		with := func(v any) map[string]any { m := map[string]any{"authn.krateo.io/groups": "devs"}; m[k] = v; return m }
+		if got := hash(with("example-a")); got != before[k] {
+			t.Errorf("%s: declaring the annotation changed the c1 hash: %s, was %s", k, got, before[k])
+		}
+		if hash(with("example-a")) != hash(with("example-b")) || hash(with("example-a")) != hash(base) {
+			t.Errorf("%s: a declared annotation outside c1's frozen set changes the c1 hash", k)
+		}
+	}
+	// c1's own keys still count.
+	if hash(map[string]any{"authn.krateo.io/groups": "devs"}) == hash(map[string]any{"authn.krateo.io/groups": "ops"}) {
+		t.Error("a changed authn.krateo.io/groups is not detected")
 	}
 }
 

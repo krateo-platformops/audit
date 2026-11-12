@@ -256,13 +256,17 @@ func IsCredentialTarget(group, resource, subresource string) bool {
 // reads them, so a write that changes one, adds it or removes it changes what
 // an identity may do, and is a content change (AUDIT-4). Content is the
 // desired state plus these and AuthorizationLabels, compared by key and
-// value. They are authn's storage.AuthorizationAnnotations (authn@26c4456d).
-// The content hash, form c1, counts them.
+// value. They are authn's storage.AuthorizationAnnotations (authn@26c4456d)
+// and, from v0.13.0, plumbing's endpoints.UsernameAnnotation
+// (authn.krateo.io/username), by which a reader proves a session Secret is
+// the requester's. The content hash, form c1, does not read this list: its
+// key set is frozen (ContentFormC1Annotations).
 func AuthorizationAnnotations() []string { return slices.Clone(schemaContentAnnotations) }
 
 // AuthorizationLabels returns the authorization-bearing label keys
-// (schema/v1.yaml authorization_metadata, kind label, v0.13.0): authn stamps
-// them on every session Secret, and authorization reads them (acmp's tenant
+// (schema/v1.yaml authorization_metadata, kind label, v0.13.0): authn will
+// stamp them on every session Secret (planned, per authn#144), and
+// authorization reads them (acmp's tenant
 // onboarding selects humans by authn.krateo.io/principal and names a
 // tenant's namespaces from authn.krateo.io/username-label). A write that
 // changes one, adds it or removes it is a content change, as for

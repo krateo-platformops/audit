@@ -695,7 +695,7 @@ var schemaCredentialTargets = []CredentialTarget{
 	{Group: "authentication.k8s.io", Resource: "tokenreviews", Subresource: ""},
 }
 
-var schemaContentAnnotations = []string{"authn.krateo.io/strategy", "authn.krateo.io/groups"}
+var schemaContentAnnotations = []string{"authn.krateo.io/strategy", "authn.krateo.io/groups", "authn.krateo.io/username"}
 
 var schemaContentLabels = []string{"authn.krateo.io/principal", "authn.krateo.io/username-label"}
 

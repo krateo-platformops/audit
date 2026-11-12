@@ -294,10 +294,12 @@ credential_targets:
 # generated from it. plumbing's kubeutil/content compares by it:
 # content.DiffersWith with content.Keys{Annotations, Labels} (v1.59.0).
 #
-# Form c1 of krateo.audit.object_ref.content_sha256 hashes the annotations
-# below and no label: a form is fixed (a label in it would be c2). The
-# labels' carrier, the session Secret, is a credential target, which has no
-# content hash.
+# Form c1 of krateo.audit.object_ref.content_sha256 does NOT read this list.
+# c1's annotation keys are frozen at v0.12.0's two, authn.krateo.io/strategy
+# and authn.krateo.io/groups (audit.ContentFormC1Annotations(), content.go),
+# and it hashes no label: a form is fixed, so growing this list never changes
+# a c1 hash. Hashing another key set is a new form, c2. The labels' carrier,
+# the session Secret, is a credential target, which has no content hash.
 authorization_metadata:
   # authn's storage.AuthorizationAnnotations (authn@26c4456d,
   # go/authn/internal/helpers/kube/config/storage/identity.go).
@@ -307,8 +309,17 @@ authorization_metadata:
   - kind: annotation
     key: authn.krateo.io/groups
     reason: the session's groups, which RBAC binds
-  # authn stamps both labels on every session Secret (the AUDIT-4 lead's
-  # ruling, 2026-11-12).
+  # v0.13.0: plumbing v1.58.0's endpoints.UsernameAnnotation
+  # (endpoints/names.go:13-17). OwnsSecret (names.go:73-81) proves a session
+  # Secret holds the requester's credential by it before a reader uses the
+  # Secret; snowplow#1382 reads it so, and acmp's tenant onboarding names a
+  # tenant's session Secret from it. authn will stamp it on every session
+  # Secret (planned, per authn#144). Not in c1 (above).
+  - kind: annotation
+    key: authn.krateo.io/username
+    reason: the exact username a session Secret holds the credential of; a reader proves the Secret is the requester's by it (plumbing endpoints.OwnsSecret), so it decides credential ownership
+  # authn will stamp both labels on every session Secret (planned, per
+  # authn#144; the AUDIT-4 lead's ruling, 2026-11-12).
   - kind: label
     key: authn.krateo.io/principal
     reason: "the session's principal class (human, service, agent or controller): acmp's tenant onboarding selects humans by it"

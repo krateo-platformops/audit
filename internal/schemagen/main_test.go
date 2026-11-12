@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"os"
 	"regexp"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -124,6 +125,7 @@ func TestParse_RefusesABrokenSchema(t *testing.T) {
 		"duplicate authorization label":             {"    key: authn.krateo.io/username-label\n", "    key: authn.krateo.io/principal\n", `authorization label "authn.krateo.io/principal": a qualified key (prefix/name), listed once`},
 		"authorization metadata of an unknown kind": {"  - kind: label\n    key: authn.krateo.io/principal\n", "  - kind: tag\n    key: authn.krateo.io/principal\n", `authorization metadata "authn.krateo.io/principal": kind "tag" is not annotation or label`},
 		"authorization metadata without a reason":   {"    reason: the session's groups, which RBAC binds\n", "", `authorization annotation "authn.krateo.io/groups": a reason is required`},
+		"authorization metadata, a blank reason":    {"    reason: the session's groups, which RBAC binds\n", "    reason: \"  \\t \"\n", `authorization annotation "authn.krateo.io/groups": a reason is required`},
 		"credential target, no resource":            {"  - {api_group: \"\", resource: secrets}\n", "  - {api_group: \"\"}\n", "a resource is required"},
 		"duplicate credential target":               {"  - {api_group: \"\", resource: serviceaccounts, subresource: token}\n", "  - {api_group: \"\", resource: secrets}\n", "each target is listed once"},
 		"unknown format":                            {"    format: sha256_hex\n", "    format: sha256\n", `unknown format "sha256"`},
@@ -293,6 +295,31 @@ func TestRender_NosecG101OnlyWhereTheNameMatches(t *testing.T) {
 	}
 	if !strings.Contains(string(raw), `DenialReasonPerUserCredentialRef = "per_user_credential_ref" // #nosec G101`) {
 		t.Error("DenialReasonPerUserCredentialRef, the constant gosec reports, has no directive")
+	}
+}
+
+// A key may be declared once per kind: the same key as an annotation AND as a
+// label is two entries, accepted, and each list carries it. Only the same key
+// twice in one kind is refused (TestParse_Refuses).
+func TestParse_AuthorizationMetadataSameKeyInBothKinds(t *testing.T) {
+	raw, err := os.ReadFile("../../schema/v1.yaml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	const anchor = "authorization_metadata:\n"
+	const both = "  - kind: label\n    key: authn.krateo.io/groups\n    reason: the same key as a label\n"
+	src := strings.Replace(string(raw), anchor, anchor+both, 1)
+	if src == string(raw) {
+		t.Fatal("precondition: no authorization_metadata list")
+	}
+	s, err := parse([]byte(src))
+	if err != nil {
+		t.Fatalf("parse refused a key declared once as an annotation and once as a label: %v", err)
+	}
+	for _, kind := range []string{"annotation", "label"} {
+		if !slices.Contains(s.authorizationKeys(kind), "authn.krateo.io/groups") {
+			t.Errorf("the %s list does not carry the key declared in both kinds: %v", kind, s.authorizationKeys(kind))
+		}
 	}
 }
 

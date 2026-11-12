@@ -291,12 +291,12 @@ Any other writer computes the same bytes.
    ` + "`data`" + ` and ` + "`binaryData`" + `. Any other object: every top-level field
    but ` + "`apiVersion`" + `, ` + "`kind`" + `, ` + "`metadata`" + ` and ` + "`status`" + ` (a custom
    resource's ` + "`spec`" + `; a RoleBinding's ` + "`roleRef`" + ` and ` + "`subjects`" + `).
-2. **Plus the authorization annotations**, for every family:
-   ` + "`metadata.annotations`" + ` kept to the keys below, as
-   ` + "`{\"metadata\":{\"annotations\":{...}}}`" + `, and left out when none of them is
+2. **Plus c1's annotations**, for every family:
+   ` + "`metadata.annotations`" + ` kept to ` + "`authn.krateo.io/strategy`" + ` and
+   ` + "`authn.krateo.io/groups`" + `, as
+   ` + "`{\"metadata\":{\"annotations\":{...}}}`" + `, and left out when neither is
    set. Authorization reads them, so changing one changes what an identity
-   may do (AUDIT-4). Every other annotation, and every label, is metadata
-   to c1 and is not hashed (see "Authorization-bearing metadata" below).
+   may do (AUDIT-4). Every other annotation, and every label, is not hashed.
 3. **Nulls.** An object member whose value is null is left out, at every
    depth, so a typed object and its unstructured form (a
    ` + "`creationTimestamp: null`" + ` in a pod template) hash the same. A null
@@ -312,8 +312,14 @@ Any other writer computes the same bytes.
 5. **The hash.** ` + "`c1:`" + ` and the SHA-256 of those bytes, as 64 lowercase hex
    digits.
 
-c1 counts the annotations of the authorization-bearing metadata below
-(` + "`audit.AuthorizationAnnotations()`" + `), and no label.
+**c1's key set is frozen** (` + "`audit.ContentFormC1Annotations()`" + `): the two
+annotations v0.12.0 declared, ` + "`authn.krateo.io/strategy`" + ` and ` + "`authn.krateo.io/groups`" + `,
+and no label. It is not ` + "`audit.AuthorizationAnnotations()`" + `: the
+authorization-bearing metadata below grows (v0.13.0 adds
+` + "`authn.krateo.io/username`" + `), and a form is fixed, so growing it never changes a
+c1 hash. A content comparator still counts every declared key; c1 may then
+say "unchanged" where the comparator says "changed". Hashing another key set
+is a new form, c2.
 
 The test vector (` + "`TestContentSHA256_Vector`" + `): a ConfigMap whose data is
 ` + "`k: <é>`" + ` and ` + "`a\"b: line1⏎line2`" + `, whose binaryData is
@@ -346,9 +352,11 @@ v1.59.0: ` + "`content.DiffersWith(before, after, content.Keys{Annotations, Labe
 		fmt.Fprintf(&b, "| %s | `%s` | %s |\n", a.Kind, a.Key, a.Reason)
 	}
 	b.WriteString(`
-Form c1 hashes the annotations and no label. A form is fixed, so a label
-in the hash would be a new form, c2. The labels' carrier, the session
-Secret, is a credential target, which carries no content hash at all.
+Form c1 hashes its frozen two annotations (` + "`authn.krateo.io/strategy`" + `,
+` + "`authn.krateo.io/groups`" + `) and no label, whatever this table declares. A form
+is fixed, so another annotation or a label in the hash would be a new form,
+c2. The labels' and ` + "`authn.krateo.io/username`" + `'s carrier, the session Secret, is a
+credential target, which carries no content hash at all.
 `)
 
 	b.WriteString(`

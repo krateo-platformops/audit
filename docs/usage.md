@@ -444,13 +444,22 @@ v0.12.0 is additive (audit#22): a plain bump changes no record.
 ## Adopting v0.13.0
 
 v0.13.0 is additive: a plain bump changes no record and no content hash.
+A content comparator that takes `audit.AuthorizationAnnotations()` now also
+counts `authn.krateo.io/username`.
 
 - **Authorization-bearing labels.** `audit.AuthorizationLabels()` returns
   `authn.krateo.io/principal` and `authn.krateo.io/username-label`, which
-  authn stamps on every session Secret and which acmp's tenant onboarding
-  reads. It sits beside `audit.AuthorizationAnnotations()`, and both are
-  generated from one schema list, `authorization_metadata`, where each
-  entry declares its kind, its key and why it is content.
+  authn will stamp on every session Secret (planned, per authn#144) and
+  which acmp's tenant onboarding reads. It sits beside
+  `audit.AuthorizationAnnotations()`, and both are generated from one
+  schema list, `authorization_metadata`, where each entry declares its
+  kind, its key and why it is content.
+- **One more authorization annotation.** `audit.AuthorizationAnnotations()`
+  adds `authn.krateo.io/username` (plumbing v1.58.0's
+  `endpoints.UsernameAnnotation`): the exact username a session Secret
+  holds the credential of, by which a reader proves the Secret is the
+  requester's (`endpoints.OwnsSecret`). authn will stamp it on every
+  session Secret (planned, per authn#144).
 - **What content is.** The desired state (coverage.md, boundary ruling 1)
   plus the declared annotations and labels, compared by key and value. A
   write that changes a declared annotation or label, adds it or removes it
@@ -479,13 +488,22 @@ v0.13.0 is additive: a plain bump changes no record and no content hash.
   rule as cases, derived from the schema: run each `Before` and `After`
   through the comparator (as `&unstructured.Unstructured{Object: c.Before}`
   for `DiffersWith`), and its verdict must be `Changed`.
-- **The content hash.** Form c1 hashes the declared annotations and no
-  label: a form is fixed. The labels' carrier, the session Secret, is a
-  credential target, which carries no content hash.
+- **The content hash.** Form c1's key set is frozen:
+  `audit.ContentFormC1Annotations()`, v0.12.0's two annotations
+  (`authn.krateo.io/strategy`, `authn.krateo.io/groups`), and no label. It
+  is not `audit.AuthorizationAnnotations()`, so declaring
+  `authn.krateo.io/username` (or any later key) never changes a c1 hash. A
+  comparator counts every declared key, so it can report a content change
+  that c1 does not hash. To check a c1 hash against the annotations,
+  compare `ContentFormC1Annotations()`. Hashing another key set is a new
+  form, c2. The new keys' carrier, the session Secret, is a credential
+  target, which carries no content hash.
 - **The writer's own RBAC refusal.** `audit.DenialReasonRbacNotAllowed`
   (`rbac_not_allowed`), a request denial reason: the writer itself
-  evaluated Kubernetes RBAC for a verified caller and refused before any
-  dial. A denied record with no status code. In snowplow, DebugAuthz
+  evaluated Kubernetes RBAC for a verified caller and refused before its
+  handler ran and before any dial for the request. With the cache off the
+  evaluation is a SelfSubjectAccessReview, still the writer's own decision.
+  A denied record with no status code. In snowplow, DebugAuthz
   refusing `POST /debug/shadow-parity` (schema/v1.yaml cites the sites).
   An authority's 403, such as the apiserver answering 403, is not this
   reason: it stays a failure with the authority's status code.
