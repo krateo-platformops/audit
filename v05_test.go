@@ -143,7 +143,8 @@ func TestSchema_CauseRefAndDenialReason(t *testing.T) {
 			"delegation_not_allowed", "delegation_too_deep", "platform_group", "name_missing",
 			"subject_token_expired", "subject_token_invalid", // v0.7.0 (audit#18)
 			"stepup_not_enabled", "insufficient_assurance", "stale_authentication", "no_mapping", "ambiguous_mapping", "not_a_service_account", // v0.8.0 (audit#20)
-			"username_check_not_allowed"}, // v0.9.0 (audit#23)
+			"username_check_not_allowed", // v0.9.0 (audit#23)
+			"invalid_request"},           // v0.10.0 (audit#29)
 		WriterController: {"kept_resource_policy"},
 	}
 	for _, w := range Writers() {

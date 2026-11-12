@@ -584,6 +584,12 @@ keys:
       #   (spec.usernameCheck.allowed), so authn refuses the check (403). The
       #   record names the checked name's clientconfig Secret, carries no
       #   status code, and no check_result: the check never ran.
+      #   invalid_request (audit#29, authn#136): a verified, mapped and
+      #   opted-in caller sent a body with no username, or one that isn't
+      #   JSON, so authn answers 400 and the check never runs. Denied, no
+      #   status code, no check_result. With no username there is no Secret
+      #   to name: the record names the Secret resource without a name, as
+      #   name_missing does.
       # Not denial reasons:
       #   AudienceMismatch is part of verifying the token, so it is a counted
       #   pre-verification refusal and never a row.
@@ -594,7 +600,7 @@ keys:
       #   StepUpMisconfigured is a failure row with no status code: no
       #   authority answered. authn's own HTTP status (500) is never
       #   http.response.status_code.
-      request: {level: optional, values: [name_reserved, name_claimed, name_held_legacy, name_provisioned, name_bound, system_group, group_not_allowed, delegation_not_allowed, delegation_too_deep, platform_group, name_missing, subject_token_expired, subject_token_invalid, stepup_not_enabled, insufficient_assurance, stale_authentication, no_mapping, ambiguous_mapping, not_a_service_account, username_check_not_allowed]}
+      request: {level: optional, values: [name_reserved, name_claimed, name_held_legacy, name_provisioned, name_bound, system_group, group_not_allowed, delegation_not_allowed, delegation_too_deep, platform_group, name_missing, subject_token_expired, subject_token_invalid, stepup_not_enabled, insufficient_assurance, stale_authentication, no_mapping, ambiguous_mapping, not_a_service_account, username_check_not_allowed, invalid_request]}
       gateway: not_applicable
       action: not_applicable
       # kept_resource_policy: helm declined a delete because the object carries

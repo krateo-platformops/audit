@@ -104,6 +104,27 @@ stated once here for every row below.
    `*.krateo.io`). For these objects, condition 2 becomes "their rules,
    subjects or data changed".
 
+## Naming a derived credential Secret
+
+Every writer that names a credential Secret derived from a username, authn's
+username checks and its sign-in refusals included, follows one rule. The
+derived name is plumbing's `endpoints.SecretName`:
+`kubeutil.MakeDNS1123Compatible(username)` plus `-clientconfig`
+(plumbing v1.51.0 `endpoints/endpoints.go:107-109`,
+`kubeutil/dns1123.go:18-32`). It is always a valid object name, but the
+derivation lowercases the username and drops characters, so distinct
+usernames can alias: `Alice@Example` derives the Secret of the user
+`aliceexample`.
+
+- `krateo.audit.object_ref.name` is the derived Secret name only when the
+  derivation leaves the username unchanged
+  (`MakeDNS1123Compatible(username) == username`).
+- Otherwise the record names the Secret resource with no name, as a
+  `name_missing` record does.
+
+The reason is aliasing: a query for one user's Secret must never show checks
+or refusals for names that weren't theirs.
+
 ## Exclusions
 
 None of these is a row anyone emits. Each is a decision.
