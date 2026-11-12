@@ -4,7 +4,7 @@ title: audit — coverage
 description: The cross-component audit inventory (AUDIT-4, installer#410). Every mutating path of every Krateo component, per writer class, with its identity source, status, owner issue, and the scope, action, verb and outcomes its records carry.
 resource: github.com/krateo-platformops/audit
 tags: [library, audit, coverage, inventory]
-timestamp: 2026-11-11T00:00:00Z
+timestamp: 2026-11-12T00:00:00Z
 ---
 
 # Coverage
@@ -113,8 +113,13 @@ None of these is a row anyone emits. Each is a decision.
   case ([installer#411], [installer#781]).
 - **Authentication failures before verification** are counted, never
   recorded as rows. Recording them would let anyone who can send a bad
-  token or a bad password write to the trail. authn counts them by strategy
-  and cause, never by user name ([authn#119] asks for that counter).
+  token or a bad password write to the trail. authn records none
+  (authn@0fa999e0 `internal/auditlog/auditlog.go:74-75`,
+  `internal/routes/auth/serviceaccount/login.go:258-265`). The
+  per-strategy-and-cause counter [authn#119] asks for is not on authn's
+  `main`; they show only in authn's generic `http.server.request.count`, by
+  route and status, when its metrics are on
+  (`internal/telemetry/metrics_middleware.go:15`, `:24`, `:46-52`).
   snowplow's 401s are answered by its UserConfig middleware before any
   handler runs, so they don't reach the trail either. They stay visible in
   the gateway's access log.
@@ -141,17 +146,31 @@ records lack the actor class, `krateo.audit.verb`, `krateo.audit.preview`,
 `/call` records for an agent are written on the same scope, as the action
 writer (T), per the population. They are not listed apart.
 
-authn emits nothing on `main` today; [authn#123] adds its rows here and in
-the controller table. A login's target is the credential Secret authn
-wrote, and its verb is the verb authn sent for that Secret. The CSR that a
+authn emits on `main` (authn@0fa999e0, audit v0.8.0 in `go/authn/go.mod:26`;
+[authn#123], [authn#131] and [authn#133] merged). The rows below cite authn's code at that commit,
+relative to `go/authn/`; the recorders are in `internal/auditlog/`. A
+login's target is the credential Secret authn wrote (or, refused or failed
+before the write, the one it would have written), its verb is the verb
+authn sent for that Secret, and its method follows from that verb
+(`auditlog.go:106-125`, `methodOf` at `:143-157`). A refusal carries no
+status code (`auditlog.go:93-97`, `:101`). The query of the request authn
+served is dropped except the parameters its route reads, so no OAuth or OIDC
+`code` or `state` reaches the record (`auditlog.go:159-190`). The CSR that a
 login creates, approves and deletes is an intermediate step, not a row.
 ui-token-hop's own `POST` to authn's LoginURL, which mints the bearer it
 then sends on, is one of these logins: the login rows cover it. A
-`/delegate` record targets the actor's `serviceaccount.authn.krateo.io`
-mapping. Its refusals get their own `denial_reason` values in v0.6.0
-(`delegation_not_allowed`, `delegation_too_deep`), as does the refusal of
-an IdP-asserted `krateo:` group (`platform_group`) ([audit#12]). Until
-then a refusal is a `denied` record with no reason, which is valid.
+`/delegate` record is shaped as a Kubernetes TokenRequest: verb `create`,
+method `POST`, on the `token` subresource of the actor's
+`serviceaccount.authn.krateo.io` mapping, with no status code, since authn
+issues the token itself (`internal/auditlog/delegate.go:39-44`, `:59-60`);
+the verb `get` in [authn#119]'s text is superseded by it. A ServiceAccount
+caller the TokenReview verified but that no single mapping admits is
+recorded on the mapping resource without a name and with no verb, so its
+actor class, verb, method and preview are marked incomplete by design
+(`internal/auditlog/mapping.go:29-67`; authn's own arm allows exactly those
+four, `internal/routes/auth/serviceaccount/login_audit_test.go:90`). The
+`/usernames/check` rows are [authn#136]'s, at its head `751f089d`, on audit
+v0.9.1: pending its merge.
 
 | component | path (what changes) | writer class | identity source | status | owner issue | scope | krateo.action | verb | outcomes |
 |---|---|---|---|---|---|---|---|---|---|
@@ -163,10 +182,12 @@ then a refusal is a `denied` record with no reason, which is valid.
 | snowplow | a RESTAction write stage in a background resolve (refresher, cohort seed, prewarm, revalidation) | request | none: no person is behind it | out of scope (nothing is sent: the stage is refused before the dial, snowplow#903) | [snowplow#1291] | | | | |
 | snowplow | a RESTAction write stage in an inline dry-run draft (`POST /call/read`) | request | the caller | out of scope (nothing is sent: write stages are refused before egress, snowplow#443) | [snowplow#1291] | | | | |
 | snowplow | a RESTAction write stage abandoned before the dial (unresolvable endpoint, failed template, guard refusal, failed dependency) | request | the caller | out of scope (nothing is sent) | [snowplow#1291] | | | | |
-| authn | basic, LDAP, OAuth and OIDC login: creates or updates the user's clientconfig Secret | request | the identity the strategy verified; a row only after verification | not audited | [authn#119] | `github.com/krateo-platformops/authn/audit` | `authn.login.{basic,ldap,oauth,oidc}` | create, update | success, denied, failure |
-| authn | ServiceAccount login: creates or updates the clientconfig Secret owned by the mapping | request | the verified ServiceAccount token and its mapping | not audited | [authn#119] | `github.com/krateo-platformops/authn/audit` | `authn.login.serviceaccount` | create, update | success, denied, failure |
-| authn | OIDC step-up: creates or updates the user's step-up clientconfig Secret | request | the identity the IdP verified | not audited | [authn#119] | `github.com/krateo-platformops/authn/audit` | `authn.stepup.oidc` | create, update | success, denied, failure |
-| authn | `POST /delegate`: writes nothing; signs a delegated JWT, authorised by the actor's mapping | request | the verified actor; the subject goes to `on_behalf_of`, the chain to `delegation` | not audited | [authn#119] | `github.com/krateo-platformops/authn/audit` | `authn.delegate` | get | success, denied, failure |
+| authn | basic, LDAP, OAuth and OIDC login: creates or updates the user's clientconfig Secret. Emit: `internal/routes/auth/basic/login.go:157`, `ldap/login.go:136`, `oauth/login.go:205`, `oidc/login.go:96`; recorder `internal/auditlog/auditlog.go:76-104`; literals `auditlog.go:33`, `:38`, strategies `internal/helpers/kube/config/storage/identity.go:54-57` | request | the identity the strategy verified, class human (each call passes `jwtutil.PrincipalHuman`); a row only after verification | audited | [authn#119]; emit: [authn#123]; refusal reasons: [authn#131] | `github.com/krateo-platformops/authn/audit` | `authn.login.basic`, `authn.login.ldap`, `authn.login.oauth`, `authn.login.oidc` | the verb sent for the Secret | success, denied (`auditlog.go:256-265`), failure |
+| authn | ServiceAccount login: creates or updates the clientconfig Secret owned by the mapping. Emit: `internal/routes/auth/serviceaccount/login.go:125`; recorder `auditlog.go:76-104` | request | the ServiceAccount the TokenReview verified, of its mapping's declared class | audited | [authn#119]; emit: [authn#123] | `github.com/krateo-platformops/authn/audit` | `authn.login.serviceaccount` | the verb sent for the Secret | success, denied, failure |
+| authn | a ServiceAccount the TokenReview verified, refused or failed at the mapping lookup, on `/serviceaccount/login` and `/delegate`: names the mapping resource without a name, no verb. Emit: `internal/routes/auth/serviceaccount/login.go:104` and `internal/routes/delegate/delegate.go:126`, through `RecordUnmapped` (`serviceaccount/login.go:258-271`); recorder `internal/auditlog/mapping.go:40-67` | request | the TokenReview's username; actor class, verb, method and preview marked incomplete by design | audited | [authn#119]; emit: [authn#133] | `github.com/krateo-platformops/authn/audit` | `authn.login.serviceaccount`, `authn.delegate` | none (marked) | denied (`no_mapping`, `ambiguous_mapping`, `not_a_service_account`, `mapping.go:16-27`), failure with the apiserver's answer to the lookup (`:61-63`) |
+| authn | OIDC step-up: creates or updates the user's step-up clientconfig Secret. Emit: `internal/routes/auth/oidc/stepup.go:260`; recorder `auditlog.go:76-104`; literal `auditlog.go:34` | request | the identity the IdP verified, class human | audited | [authn#119]; emit: [authn#123]; post-verification refusals: [authn#133] | `github.com/krateo-platformops/authn/audit` | `authn.stepup.oidc` | the verb sent for the Secret | success, denied (`stepup_not_enabled`, `insufficient_assurance`, `stale_authentication`, `auditlog.go:266-269`), failure |
+| authn | `POST /delegate`: signs a delegated JWT for an actor its mapping admits; recorded as a create on the mapping's `token` subresource. Emit: `internal/routes/delegate/delegate.go:133`, `:142`, `:150`, `:168`, `:172`; recorder `internal/auditlog/delegate.go:49-97`; literal `auditlog.go:32` | request | the actor, of its mapping's class; the subject goes to `on_behalf_of`, the chain to `delegation` (`delegate.go:86-94`) | audited | [authn#119]; emit: [authn#123]; subject-token refusals: [authn#131] | `github.com/krateo-platformops/authn/audit` | `authn.delegate` | create | success, denied (`delegation_not_allowed`, `subject_token_expired`, `subject_token_invalid`, `delegation_too_deep`, `delegate.go:22-34`), failure |
+| authn | `POST /usernames/check`: whether a username is free; a read of the checked name's clientconfig Secret, verb get. [authn#136] at `751f089d`: route `internal/routes/usernames/check.go:107-150`, recorder `internal/auditlog/usernames.go:54-94`, on audit v0.9.1 | request | the caller's mapping, of its declared class (`usernames.go:60`, `:75-77`); an unmapped caller as in the mapping-lookup row (`check.go:107`) | not audited | [authn#136] (pending authn#136 merge) | `github.com/krateo-platformops/authn/audit` | `authn.username.check` | get | success with `krateo.audit.check_result` (`check.go:166-176`), denied (`username_check_not_allowed`, or no reason for an unreadable body, `check.go:120`, `:129`), failure (`check.go:137`, `:146`) |
 | kagent-controller | its REST writes (sessions, runs, agent edits), reached from the kagent UI through ui-token-hop and the agent gateway | request | the Krateo bearer ui-token-hop mints and swaps in | not audited | [kagent#31] | | | | |
 
 ## gateway (G)
@@ -211,14 +232,23 @@ reconciled ([audit#8], v0.5.0). Each controller also needs the
 [installer#413] predicate at the emit site, and a counter for every write
 the predicate drops, by reason.
 
-- **authn**'s background credential writes come with [authn#123].
+- **authn**'s background credential writes are emitted since [authn#123]
+  (the rows below cite authn@0fa999e0).
 - **cdc and core-provider** emit nothing today. [core-provider#423] waits
   on [plumbing#106] (the uncapped per-object verdict, merged as
   plumbing#120) and on audit v0.5.0. It also renders
   `spec.principal: controller` on every cdc authn mapping, so cdc's tokens
   carry the class `controller`, not `service`. The installer's pin flips,
   which prune and recreate leaves, are executed by cdc and core-provider,
-  so their rows cover them.
+  so their rows cover them. Two cases are expected, not gaps:
+  - A child helm never attempted, because an earlier create failed, gets
+    **no** record. The failed create is the record; the count of children
+    not attempted belongs to the Composition's status and metric, not to
+    the trail.
+  - A child whose Namespace can't be read (one an uninstall's cascade
+    deleted included) is recorded with preview unknown: the record omits
+    `krateo.audit.preview` and marks it, `krateo.audit.incomplete=preview`.
+    It is never guessed `false`.
 - **rest-dynamic-controller** emits on audit v0.3.0. **oasgen-provider**
   emits nothing.
 - **access-review** emits on audit v0.3.0, under the shared scope (split by
@@ -236,9 +266,11 @@ the predicate drops, by reason.
 
 | component | path (what changes) | writer class | identity source | status | owner issue | scope | krateo.action | verb | outcomes |
 |---|---|---|---|---|---|---|---|---|---|
-| authn | the step-up Secret sweep: deletes an expired step-up clientconfig Secret | controller | authn's own ServiceAccount (`WithActor`) | not audited | [authn#119] | `github.com/krateo-platformops/authn/audit/controller` | `authn.stepup.expired` | delete | success, failure |
-| authn | service certificate renewal: creates or updates authn's own clientconfig Secret | controller | authn's own ServiceAccount (`WithActor`) | not audited | [authn#119] | `github.com/krateo-platformops/authn/audit/controller` | `authn.servicecert.issued` | create, update (as sent) | success, failure |
-| authn | the leader-election Lease | controller | authn's own ServiceAccount | out of scope (not `*.krateo.io`, and not an RBAC, admission or credential write) | [authn#119] | | | | |
+| authn | the step-up Secret sweep: deletes an expired step-up clientconfig Secret. Emit: `internal/stepupsweep/sweep.go:129`; recorder `internal/auditlog/controller.go:70-93`; literal `controller.go:16` | controller | authn's own ServiceAccount, class controller (`controller.go:50-57`) | audited | [authn#119]; emit: [authn#123] | `github.com/krateo-platformops/authn/audit/controller` | `authn.stepup.expired` | delete | success, failure with the apiserver's code |
+| authn | service certificate issue or renewal: writes authn's own clientconfig Secret. Emit: `internal/certrenewal/renewal.go:258`; recorder `controller.go:110-133`; literal `controller.go:19` | controller | authn's own ServiceAccount | audited | [authn#119]; emit: [authn#123] | `github.com/krateo-platformops/authn/audit/controller` | `authn.servicecert.issued` | the verb sent (plumbing `StoreWritten`); marked when unknown | success, failure |
+| authn | identity backfill at startup: stamps the authorization-bearing identity annotations (strategy, groups) or the owner on a credential Secret written before authn recorded them; a full update. Emit: `internal/identitybackfill/backfill.go:160`; recorder `controller.go:139-159`; literal `controller.go:20-23` | controller | authn's own ServiceAccount | audited | [authn#119]; emit: [authn#123] | `github.com/krateo-platformops/authn/audit/controller` | `authn.identity.backfilled` | update | success, failure |
+| authn | its own credential's identity annotations brought in line with its certificate, recorded only when an authorization-bearing annotation changed. Emit: `internal/certrenewal/renewal.go:411-421`; recorder `controller.go:139-159`; literal `controller.go:24-26` | controller | authn's own ServiceAccount | audited | [authn#119]; emit: [authn#123] | `github.com/krateo-platformops/authn/audit/controller` | `authn.servicecert.annotated` | update | success, failure |
+| authn | the leader-election Lease that elects the replica doing authn's own-identity work (`internal/leader/leader.go:24-26`); no emit | controller | authn's own ServiceAccount | out of scope (not `*.krateo.io`, and not an RBAC, admission or credential write) | [authn#119] | | | | |
 | cdc | helm install or upgrade of a Composition's child: create, update or patch | controller | cdc's own ServiceAccount | not audited | [core-provider#423], [plumbing#106] | | | | |
 | cdc | helm prune of a child the new revision no longer renders | controller | cdc's own ServiceAccount | not audited | [core-provider#423], [plumbing#106] | | | delete | |
 | cdc | a kept deletion: a child helm declined to delete (`resource-policy: keep`) | controller | cdc's own ServiceAccount | not audited | [core-provider#423], [plumbing#106] | | | delete | denied |
@@ -284,7 +316,7 @@ All four are closed, and the gateway denies the tool to every caller.
 | snowplow | `POST /convert` | — | none | out of scope (not mounted: the route is commented out) | [installer#410] | | | | |
 | snowplow | `POST /telemetry/v1/traces`: browser spans on the trace plane | — | none | out of scope (no platform state changes) | [snowplow#1291] | | | | |
 | snowplow | snowplow's own writes to the cluster | — | snowplow's ServiceAccount | out of scope (there are none: the grant is `get`, `list`, `watch`, non-persistent access reviews and `impersonate` for reads) | [installer#410] | | | | |
-| authn | a failed login before verification | — | none: nothing is verified yet | out of scope (see Exclusions) | [authn#119] | | | | |
+| authn | a failed login before verification; no emit (`internal/auditlog/auditlog.go:74-75`) | — | none: nothing is verified yet | out of scope (see Exclusions) | [authn#119] | | | | |
 | kagent tools | helm, istio, cilium, argo and shell tool writes, run on the tool server's own ServiceAccount | — | the tool server's ServiceAccount only | out of scope (see Exclusions) | [installer#412] | | | | |
 | kagent agents | an agent's tool call | — | the caller's token, passed through to the tool | out of scope (an agent writes only through a tool; its writes are the tool rows) | [agentiko#160], [installer-agent#28], [incident-agent#26], [snowplow-agent#21] | | | | |
 | installer | the `post-install`, `post-upgrade` self-bootstrap hook Job | — | the Job's ServiceAccount, seen only by admission | out of scope (shell hook Job: an AUDIT-5 acceptance case) | [installer#781], [installer#411] | | | | |
@@ -302,13 +334,16 @@ All four are closed, and the gateway denies the tool to every caller.
 
 ## Open questions
 
-Each open question is asked on its owner's issue; the link goes to the comment. None of these is a row yet.
+Each open question is asked on its owner's issue; the link goes to the comment. An answered one says where its row is.
 
-1. **authn's identity backfill on Secrets.** The AUDIT-4 inventory lists it
-   among authn's background writes, beside the certificate renewal and the
-   step-up sweep. Does it change a credential Secret's data (then it's a row
-   under the named exception), or only its metadata (then it's out of
-   scope)? [Asked on authn#119](https://github.com/krateo-platformops/authn/issues/119#issuecomment-6800345899).
+1. **authn's identity backfill on Secrets.** *Answered by authn's code.*
+   [Asked on authn#119](https://github.com/krateo-platformops/authn/issues/119#issuecomment-6800345899).
+   It writes the authorization-bearing identity annotations, or the owner,
+   of a credential Secret, and authn records it as a controller row,
+   `authn.identity.backfilled` (authn@0fa999e0
+   `internal/identitybackfill/backfill.go:160`,
+   `internal/auditlog/controller.go:20-23`, `:139-159`). It is in the
+   controller table.
 2. **ui-token-hop** in agentgateway-policies. *Answered by observability
    (2026-11-11, relayed by the AUDIT-4 lead).* It is a reverse proxy with no
    method filter: `/api/...` goes through the agent gateway to
@@ -355,6 +390,9 @@ Each open question is asked on its owner's issue; the link goes to the comment. 
 [snowplow#1334]: https://github.com/krateo-platformops/snowplow/issues/1334
 [authn#119]: https://github.com/krateo-platformops/authn/issues/119
 [authn#123]: https://github.com/krateo-platformops/authn/pull/123
+[authn#131]: https://github.com/krateo-platformops/authn/pull/131
+[authn#133]: https://github.com/krateo-platformops/authn/pull/133
+[authn#136]: https://github.com/krateo-platformops/authn/pull/136
 [observability#138]: https://github.com/krateo-platformops/observability/issues/138
 [observability#155]: https://github.com/krateo-platformops/observability/pull/155
 [observability#156]: https://github.com/krateo-platformops/observability/issues/156
