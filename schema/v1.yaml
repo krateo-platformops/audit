@@ -747,10 +747,27 @@ keys:
       #   handlers/middleware/userconfig.go:363-364). A refusal before
       #   verification (TokenMissing, TokenInvalid, TokenExpired,
       #   KeyNotPublished, credential_status.go:64-80) is counted, never a row.
+      # the writer's own RBAC evaluation (v0.13.0):
+      #   rbac_not_allowed: the writer itself evaluated Kubernetes RBAC for a
+      #   verified caller and the verdict was not allowed, so it refused
+      #   before its handler ran and before any dial for the request. First
+      #   user: snowplow's /debug/* gate, POST /debug/shadow-parity
+      #   (go/snowplow/debug_routes.go:308), mounted behind
+      #   middleware.DebugAuthz (debug_routes.go:211). DebugAuthz evaluates
+      #   the non-resource URL (verb post, the request path) for the JWT's
+      #   username and groups through rbac.EvaluateRBAC
+      #   (internal/handlers/middleware/debugauthz.go:85-88) and refuses a
+      #   not-allowed verdict (:93-99). The decision is the writer's own,
+      #   in-process with cache on or by a SelfSubjectAccessReview with
+      #   cache off. Denied, no status code: snowplow's own 403 is never
+      #   http.response.status_code. Not this reason: an authority's 403,
+      #   such as the apiserver answering 403 to a request the writer
+      #   dialled. That is the authority's refusal, not the writer's, and
+      #   stays a status code on the row, as before.
       # Not denial reasons: a Secret the apiserver answered NotFound or
       # Forbidden for, a page-budget cut, and a refused 3xx redirect are
       # failures with the authority's code (or none), never denied.
-      request: {level: optional, values: [name_reserved, name_claimed, name_held_legacy, name_provisioned, name_bound, system_group, group_not_allowed, delegation_not_allowed, delegation_too_deep, platform_group, name_missing, subject_token_expired, subject_token_invalid, stepup_not_enabled, insufficient_assurance, stale_authentication, no_mapping, ambiguous_mapping, not_a_service_account, username_check_not_allowed, invalid_request, name_not_issued, destination_refused, per_user_credential_ref, endpoint_ref_malformed, internal_identity_context, write_refused, dry_run_not_executed, dependency_failed, uaf_on_write_verb, invalid_path, template_error, session_credential_missing, step_up_required]}
+      request: {level: optional, values: [name_reserved, name_claimed, name_held_legacy, name_provisioned, name_bound, system_group, group_not_allowed, delegation_not_allowed, delegation_too_deep, platform_group, name_missing, subject_token_expired, subject_token_invalid, stepup_not_enabled, insufficient_assurance, stale_authentication, no_mapping, ambiguous_mapping, not_a_service_account, username_check_not_allowed, invalid_request, name_not_issued, destination_refused, per_user_credential_ref, endpoint_ref_malformed, internal_identity_context, write_refused, dry_run_not_executed, dependency_failed, uaf_on_write_verb, invalid_path, template_error, session_credential_missing, step_up_required, rbac_not_allowed]}
       gateway: not_applicable
       action: not_applicable
       # kept_resource_policy: helm declined a delete because the object carries

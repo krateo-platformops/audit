@@ -9,8 +9,8 @@ timestamp: 2026-11-12T00:00:00Z
 
 # Log
 
-- **2026-11-12**: v0.13.0. Additive: no record, rule or content hash
-  changes.
+- **2026-11-12**: v0.13.0. Additive: one more request denial reason; no
+  record shape, rule or content hash changes.
   - The authorization-bearing labels: `AuthorizationLabels()`
     (`authn.krateo.io/principal`, `authn.krateo.io/username-label`), which
     authn stamps on every session Secret and acmp's tenant onboarding
@@ -32,6 +32,15 @@ timestamp: 2026-11-12T00:00:00Z
   - The content hash, form c1, counts no label: a form is fixed. The
     labels' carrier, the session Secret, is a credential target, which has
     no hash.
+  - A request denial reason, `rbac_not_allowed`
+    (`DenialReasonRbacNotAllowed`): the writer's own RBAC evaluation refused
+    a verified caller before any dial. Denied, no status code. First user:
+    snowplow's DebugAuthz on `POST /debug/shadow-parity`, which evaluates the
+    non-resource URL through `rbac.EvaluateRBAC` (schema/v1.yaml cites
+    snowplow `219a076e`, `go/snowplow/debug_routes.go:211`, `:308`, and
+    `internal/handlers/middleware/debugauthz.go:85-88`, `:93-99`). An
+    authority's 403, such as the apiserver answering 403, is not this
+    reason: it stays a failure with the authority's status code, as before.
   - Compatibility: `testdata/v0.12.0/` (29 records audit v0.12.0's own
     `Emit` wrote, the v0.12.0 shapes included) gives v0.12.0's own report,
     and every earlier replay is unchanged.

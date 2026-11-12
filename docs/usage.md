@@ -482,6 +482,13 @@ v0.13.0 is additive: a plain bump changes no record and no content hash.
 - **The content hash.** Form c1 hashes the declared annotations and no
   label: a form is fixed. The labels' carrier, the session Secret, is a
   credential target, which carries no content hash.
+- **The writer's own RBAC refusal.** `audit.DenialReasonRbacNotAllowed`
+  (`rbac_not_allowed`), a request denial reason: the writer itself
+  evaluated Kubernetes RBAC for a verified caller and refused before any
+  dial. A denied record with no status code. In snowplow, DebugAuthz
+  refusing `POST /debug/shadow-parity` (schema/v1.yaml cites the sites).
+  An authority's 403, such as the apiserver answering 403, is not this
+  reason: it stays a failure with the authority's status code.
 
 ## Testing a writer
 
