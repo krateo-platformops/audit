@@ -201,7 +201,7 @@ func TestCheck_UsernameCheckRefusalsAndTheResultOnlyOnSuccess(t *testing.T) {
 // enforcing literals, this test and the registry's text change together.
 func TestCheck_ActionLiteralsAreNotEnforced(t *testing.T) {
 	ctrl := baseRecord(WriterController)
-	for _, a := range []string{"helm.install", "helm.upgrade", "helm.reconcile", "helm.uninstall", "example.unregistered"} {
+	for _, a := range []string{"helm.install", "helm.upgrade", "helm.reconcile", "helm.rollback", "helm.uninstall", "example.unregistered"} {
 		if got := Check(WriterController, with(ctrl, attribute.String(KeyAction, a))); len(got) != 0 {
 			t.Errorf("krateo.action %q: %v", a, got)
 		}

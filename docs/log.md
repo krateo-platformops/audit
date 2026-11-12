@@ -27,6 +27,29 @@ timestamp: 2026-11-12T00:00:00Z
   derived name only when `MakeDNS1123Compatible(username) == username`,
   otherwise the resource with no name, because the derivation aliases
   distinct usernames. Additive, so a minor version per docs/release.md.
+- **2026-11-12**: [coverage.md](./coverage.md), authn's rows refreshed from
+  authn's code at authn@0fa999e0 (authn#123 merged; audit v0.8.0), each row
+  citing its emit site and recorder by file and line, and the authn PR that
+  shipped it (authn#123, authn#131, authn#133): the four logins, the
+  ServiceAccount login, the mapping-lookup refusals and failures (marked
+  incomplete by design), the step-up, `/delegate`, the step-up sweep, the
+  service certificate, and two controller rows the inventory lacked:
+  `authn.identity.backfilled` (which answers open question 1) and
+  `authn.servicecert.annotated`. `/usernames/check` is listed from authn#136
+  at `751f089d`, pending its merge. Docs only.
+- **2026-11-12**: docs and the action-literal registry only, no release (no
+  exported API, schema rule or record changes). The registry gains the
+  controller literal `helm.rollback` (cdc: Observe clearing a release stuck
+  pending past the grace, and Delete's rollback; real child patches, creates
+  and deletes, from plumbing#140's per-child verdicts), pinned by
+  `TestActionLiterals_RegistryIsWellFormed`. [coverage.md](./coverage.md):
+  the cdc and core-provider notes state two expected cases (a child never
+  attempted after a failed create gets no record, the AUDIT-4 lead's ruling of
+  2026-11-12 in reply to core-provider#423; a child whose Namespace
+  can't be read is marked `incomplete=preview`, never guessed `false`), and
+  authn's `/delegate` row now matches authn's shipped record (verb `create`
+  on the mapping's `token` subresource, authn@0fa999e0
+  `internal/auditlog/delegate.go:39-44`).
 - **2026-11-12**: v0.9.1 (audit#26, audit#25). A fix in `audittest`, no
   schema or record change.
   - `AssertRemovalDetected`, and so `AssertRequiredKeysDetected`, failed on
