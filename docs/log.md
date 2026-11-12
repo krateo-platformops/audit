@@ -56,13 +56,15 @@ timestamp: 2026-11-12T00:00:00Z
     `TestEmit_InvalidInboundSessionIDConformsMarked` and the fuzz test
     `FuzzEmit_RecordPassesItsOwnCheck` (for any inbound value, the record
     passes its own `Check`).
-  - observability's gateway projection: **not conformant** at this
-    release's head for odd baggage. It copies `baggage_session` verbatim, so
-    an inbound value outside the format becomes a `session.id` that `Check`
-    reports `bad-format`; the evidence went to observability. observability
-    is changing it to copy only a value of the format and omit it otherwise.
-    This note states the status at tag time: the commit that fixes it if it
-    has landed, otherwise "not conformant" with this evidence.
+  - observability's gateway projection: conformant. It copies
+    `baggage_session` into `session.id` only when the value matches the
+    format, and otherwise writes nothing and sets no marker
+    (krateo-platformops/observability `6f5c2b15603a9166d8d1ad5fdcc6e20ed1ca8825`,
+    "write session.id only in the session_id format (0.1.29)", #166,
+    `charts/otel-collector-daemonset/values.yaml:621`). The earlier 0.1.28
+    copied any non-empty value (`a73bda4`, `values.yaml:616`), so an inbound
+    value outside the format would have become a `session.id` that `Check`
+    reports `bad-format`.
   - The gateway and action writers' `session.id` is conditional on inbound
     baggage carrying a `session_id`-formatted value: a malformed client
     value is omitted plainly, with no marker. Only the request writer's
