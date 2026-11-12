@@ -152,9 +152,11 @@ func AssertViolation(t testing.TB, w audit.Writer, attrs []attribute.KeyValue, k
 // AssertRemovalDetected is the falsifier for one key: rec must conform (opts
 // as for AssertConformant), and the same attributes without key must make
 // audit.Check newly report key missing. Any other new violation must name key,
-// a v0.3 key it replaces, the target rule when key is a target key, or a key
-// whose only_when condition held and no longer does once key is gone; anything
-// else means the removal broke more than the one key.
+// a v0.3 key it replaces, the target rule when key is a target key, a key
+// whose only_when condition held and no longer does once key is gone, or,
+// when key is krateo.action, a key whose closed set depends on the action
+// (krateo.audit.check_result); anything else means the removal broke more
+// than the one key.
 //
 // It mutates the checker's input, never its logic, so a green arm shows the
 // check fails when the site stops writing key.
@@ -169,7 +171,7 @@ func AssertRemovalDetected(t testing.TB, w audit.Writer, rec sdklog.Record, key 
 		t.Fatalf("audittest: the record does not carry %s, so removing it proves nothing", key)
 	}
 	removed := Without(attrs, key)
-	related := relatedTo(key, attrs, removed)
+	related := relatedTo(w, key, attrs, removed)
 	if slices.Contains(audit.Target().Keys, key) {
 		related[audit.RuleTarget] = true
 	}
@@ -187,18 +189,24 @@ func AssertRemovalDetected(t testing.TB, w audit.Writer, rec sdklog.Record, key 
 	}
 }
 
-// relatedTo is the keys a change to key from attrs to mutated may newly
-// report besides key itself: its v0.3 name, every key written only under a
-// condition that held on attrs and no longer does (krateo.audit.dry_run once
-// krateo.audit.verb is gone, krateo.audit.denial_reason once the outcome is
-// not denied). A key's not_when condition (http.response.status_code's
+// relatedTo is the keys a change to key from attrs to mutated, on a record of
+// writer w, may newly report besides key itself: its v0.3 name, every key
+// written only under a condition that held on attrs and no longer does
+// (krateo.audit.dry_run once krateo.audit.verb is gone,
+// krateo.audit.denial_reason once the outcome is not denied), and, when key
+// is krateo.action, every key whose closed set w declares per action
+// (Requirement.ActionValues: krateo.audit.check_result is then not-for-action
+// or bad-enum, as the schema says). All three are read from the schema. A key's not_when condition (http.response.status_code's
 // denied, the client keys' client_rejected) never turns true under these
 // mutations: removing a key or writing a value outside a closed set makes
 // neither an outcome denied nor a header rejected.
-func relatedTo(key string, attrs, mutated []attribute.KeyValue) map[string]bool {
+func relatedTo(w audit.Writer, key string, attrs, mutated []attribute.KeyValue) map[string]bool {
 	related := map[string]bool{key: true}
 	for _, k := range audit.Keys() {
 		if k.ReplacedBy == key {
+			related[k.Name] = true
+		}
+		if key == audit.KeyAction && len(k.Writers[w].ActionValues) > 0 {
 			related[k.Name] = true
 		}
 		if k.OnlyWhen != "" && audit.Holds(k.OnlyWhen, attrs) && !audit.Holds(k.OnlyWhen, mutated) {
@@ -219,7 +227,8 @@ const outsideTheSet = "audittest.outside-the-closed-set"
 // action, as for krateo.audit.check_result), the same attributes with that
 // value replaced by one outside the set must make audit.Check newly report
 // the key bad-enum. Any other new violation must name the key, its v0.3 name,
-// or a key whose only_when condition the new value turned false.
+// a key whose only_when condition the new value turned false, or, for
+// krateo.action, a key whose closed set depends on the action.
 //
 // It mutates the checker's input, never its logic, so a green arm shows the
 // check fails when the site writes a value the schema does not allow.
@@ -253,7 +262,7 @@ func AssertEnumsDetected(t testing.TB, w audit.Writer, rec sdklog.Record, opts .
 		tested = append(tested, spec.Name)
 		mutated := slices.Clone(attrs)
 		mutated[i] = attribute.KeyValue{Key: kv.Key, Value: bad}
-		related := relatedTo(spec.Name, attrs, mutated)
+		related := relatedTo(w, spec.Name, attrs, mutated)
 
 		fresh := slices.DeleteFunc(audit.Check(w, mutated), func(v audit.Violation) bool {
 			return slices.Contains(base, v)

@@ -201,11 +201,12 @@ writers spell each value through its generated constant.
 ## `krateo.action` literals
 
 `krateo.action` is the emit site's own literal. Schema v1 does not enforce
-its values: `Check` accepts any non-empty literal. The only rule that
-reads it is a per-action closed set (above): `krateo.audit.check_result`
-on `authn.username.check`. The literals below are registered so that
-writers spell the same action the same way and readers can query by it. A
-writer registers a literal by adding it here, in `internal/schemagen/doc.go`.
+its values: `Check` accepts any non-empty literal.
+The only rule that reads it is a per-action closed set (above): `krateo.audit.check_result` on `authn.username.check`.
+The literals below are registered so that writers spell the same action the
+same way and readers can query by it. A writer registers a literal by adding
+it here, in `internal/schemagen/doc.go`; every action a per-action set
+declares must be registered.
 
 | writer | literal | the action |
 |---|---|---|
