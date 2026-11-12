@@ -42,7 +42,14 @@ timestamp: 2026-11-12T00:00:00Z
     snowplow 401 is pre-verification. The pre-verification causes
     (TokenMissing, TokenInvalid, TokenExpired, KeyNotPublished) are counted;
     a verified caller refused for a missing session or step-up credential
-    gets a row.
+    gets a row, owned by snowplow#1381. snowplow's rows are re-derived from
+    snowplow `main` at `219a076e` with file:line. snowplow writes with this
+    library since snowplow#1348 (audit v0.6.0), so the "own emitter" text is
+    gone. The `/call`, `/call/dry-run` and `/export` rows stay non-conformant,
+    pending snowplow#1379. The RESTAction stage row is audited, though the
+    endpointRef is not yet written (snowplow#1283). The inline dry-run and
+    refused-before-dial stage rows are now not audited (snowplow#1381's
+    rule: a refused request gets a row when admitted it would have had one). The reads row is split by identity.
   - The registry accepts camel-case words in a literal (`call.dryRun`,
     `debug.shadowParity`). The SQL column-count test now matches whole
     aliases, since `endpoint_ref.name`'s prefixes `endpoint_ref.namespace`'s.
