@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"maps"
 	"regexp"
 	"slices"
 	"strings"
@@ -128,21 +129,31 @@ minimum, or not below its ` + "`less_than`" + ` key, is ` + "`out-of-range`" + `
 
 	if consts := s.valueConsts(); len(consts) > 0 {
 		b.WriteString(`
-## Closed values per writer
+## Closed values per writer and per action
 
 A key whose values depend on the writer lists them per writer class. ` + "`Check`" + `
 reports any other value as ` + "`bad-enum`" + `, and the key on a writer class that
-declares none as ` + "`not-for-writer`" + `. A writer gains a value in a minor
-release, by adding it to ` + "`schema/v1.yaml`" + `. Go writers spell each value
-through its generated constant.
+declares none as ` + "`not-for-writer`" + `. A key whose values depend on the
+record's ` + "`krateo.action`" + ` lists them per action, within a writer class:
+` + "`Check`" + ` reports a value outside the set of the record's action as
+` + "`bad-enum`" + `, and the key on a record whose action declares no set
+(` + "`krateo.action`" + ` absent included) as ` + "`not-for-action`" + `. A writer or an action
+gains a value in a minor release, by adding it to ` + "`schema/v1.yaml`" + `. Go
+writers spell each value through its generated constant.
 
-| key | value | writers | Go constant |
-|---|---|---|---|
+| key | value | writers | actions | Go constant |
+|---|---|---|---|---|
 `)
 		for _, c := range consts {
-			fmt.Fprintf(&b, "| `%s` | `%s` | %s | `audit.%s` |\n", c.Key, c.Value, "`"+strings.Join(c.Writers, "`, `")+"`", c.Name)
+			actions := "any"
+			if len(c.Actions) > 0 {
+				actions = "`" + strings.Join(c.Actions, "`, `") + "`"
+			}
+			fmt.Fprintf(&b, "| `%s` | `%s` | %s | %s | `audit.%s` |\n", c.Key, c.Value, "`"+strings.Join(c.Writers, "`, `")+"`", actions, c.Name)
 		}
 	}
+
+	b.WriteString(actionLiterals)
 
 	b.WriteString(`
 ## A controller row: the object written and the object reconciled
@@ -437,6 +448,27 @@ const (
 	contentVectorHash  = "c1:e8374f859e140054ea17527c08740cd2439bc7bcad48dd777a3e3cc0921d708c"
 )
 
+// actionLiterals is the registry of krateo.action literals in docs/schema.md.
+// It documents them only: Check enforces no krateo.action value.
+const actionLiterals = `
+## ` + "`krateo.action`" + ` literals
+
+` + "`krateo.action`" + ` is the emit site's own literal. Schema v1 does not enforce
+its values: ` + "`Check`" + ` accepts any non-empty literal. The only rule that
+reads it is a per-action closed set (above): ` + "`krateo.audit.check_result`" + `
+on ` + "`authn.username.check`" + `. The literals below are registered so that
+writers spell the same action the same way and readers can query by it. A
+writer registers a literal by adding it here, in ` + "`internal/schemagen/doc.go`" + `.
+
+| writer | literal | the action |
+|---|---|---|
+| ` + "`controller`" + ` | ` + "`helm.install`" + ` | helm installs a release that does not exist yet (cdc's Create, no release) |
+| ` + "`controller`" + ` | ` + "`helm.upgrade`" + ` | helm upgrades an existing release (cdc's Create, a release exists) |
+| ` + "`controller`" + ` | ` + "`helm.reconcile`" + ` | helm reconciles a release to its desired state: Observe's self-heal or Update, through plumbing's Reconcile, a three-way merge that patches drift and prunes children |
+| ` + "`controller`" + ` | ` + "`helm.uninstall`" + ` | helm uninstalls a release (cdc's Delete) |
+| ` + "`request`" + ` | ` + "`authn.username.check`" + ` | authn's ` + "`POST /usernames/check`" + `, whether a username is free; its result is ` + "`krateo.audit.check_result`" + ` |
+`
+
 // formatDocs is what each format of `formats` requires of a value, as Check
 // enforces it. TestFormatsAreDocumented fails on a format without an entry.
 var formatDocs = map[string]string{
@@ -464,7 +496,7 @@ func levelCell(r requirement) string {
 		}
 		return "C: " + cell(r.When) + checked + mark + oneOf(r.Values)
 	case "optional":
-		return "O" + oneOf(r.Values)
+		return "O" + oneOf(r.Values) + perAction(r.Actions)
 	case "not_established":
 		return "NE"
 	}
@@ -516,6 +548,19 @@ func oneOf(values []string) string {
 		return ""
 	}
 	return ", one of `" + strings.Join(values, "`, `") + "`"
+}
+
+// perAction is a per-action closed set in a level cell: each action, sorted,
+// with its values.
+func perAction(sets map[string][]string) string {
+	if len(sets) == 0 {
+		return ""
+	}
+	var parts []string
+	for _, a := range slices.Sorted(maps.Keys(sets)) {
+		parts = append(parts, "on `"+a+"` one of `"+strings.Join(sets[a], "`, `")+"`")
+	}
+	return ", " + strings.Join(parts, "; ")
 }
 
 // exampleNames are the regions docs/schema.md shows, each marked in the

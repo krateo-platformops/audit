@@ -4,11 +4,56 @@ title: audit — log
 description: Curated history of the audit package.
 resource: github.com/krateo-platformops/audit
 tags: [library, audit, log]
-timestamp: 2026-11-11T00:00:00Z
+timestamp: 2026-11-12T00:00:00Z
 ---
 
 # Log
 
+- **2026-11-12**: v0.9.0 (audit#23). One optional key,
+  `krateo.audit.check_result` (`Event.CheckResult`): what a check the writer
+  ran concluded. Its closed set is declared per writer **and per action**
+  (`actions:` on a writer's requirement, `Requirement.ActionValues`,
+  generated `CheckResult*` constants), the way `denial_reason` is declared
+  per writer. The first action is authn's `authn.username.check` (`POST
+  /usernames/check`, which identity-lifecycle's AccessRequest controller
+  calls so it can drop its RBAC on Secrets), request writer, with the set
+  `available`, `reserved`, `name_claimed`, `name_held_legacy`,
+  `name_provisioned`, `name_bound`, `invalid`. `Check` reports a value
+  outside the record's action's set as `bad-enum`, and the key on an action
+  that declares no set (or a record with no action) as the new reason
+  `not-for-action`; every other writer class gets `not-for-writer`. The
+  key appears only on a success, when the check ran: a new condition,
+  `succeeded` (outcome `success`), is its `only_when`, so a failure (the
+  lookup failed) or a denied record (the check never ran) carrying it is
+  `unexpected`. One request denial reason for the same route,
+  `username_check_not_allowed`: the caller's TokenReview passed but its
+  mapping has not opted in (`spec.usernameCheck.allowed`), 403, naming the
+  checked name's clientconfig Secret, with no status code and no check
+  result. authn's other refusals there reuse v0.8.0's `no_mapping`,
+  `ambiguous_mapping` and `not_a_service_account`, naming the mapping
+  resource without a name. Compatibility: `testdata/v0.8.0/` holds records
+  audit v0.8.0's own `Emit` wrote (gen, pinned to v0.8.0: the content hash,
+  client provenance and its rejection, a delegated call, the denial reasons
+  v0.6.0 to v0.8.0 added, a failure row, a kept deletion), with v0.8.0's own
+  `auditschema` report on them; this release gives the same report.
+  `http.request.method`'s description now states the rule writers already
+  follow (authn's methodOf, authn@0fa999e0): the method is derived from the
+  verb of the authority request the writer sent, never the method of the
+  request it served; no rule changed.
+  docs/schema.md gains a registry of `krateo.action` literals, documentation
+  only (schema v1 enforces no literal; `TestCheck_ActionLiteralsAreNotEnforced`
+  pins that): core-provider's helm literals for cdc (core-provider#423),
+  `helm.install`, `helm.upgrade`, `helm.reconcile` and `helm.uninstall`,
+  and authn's `authn.username.check`.
+  `auditschema sql` counts both (`bad_` and `not_for_action_` columns on the
+  request writer's rules), and the column test runs them on fixture rows
+  derived from the schema: every value of every action, a value outside the
+  set, an action with no set, and no action. `audittest.AssertEnumsDetected`
+  exercises per-action sets. The collector's `logs/audit` pipeline
+  (observability@2d92f2b8) drops only attributes whose key names a
+  credential (`authorization`, `cookie`) and redacts JWT-shaped values, so
+  `krateo_audit` stores this key in `LogAttributes` with no observability
+  change. Additive, so a minor version per docs/release.md.
 - **2026-11-11**: v0.8.0 (audit#20, authn#132). The AUDIT-4 lead ruled that
   every refusal of an identity that has already verified gets a row. Six
   request-writer denial reasons for authn, each denied with no status code,

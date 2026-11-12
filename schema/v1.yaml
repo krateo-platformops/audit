@@ -29,6 +29,14 @@
 # own). Check reports any other value as bad-enum. A writer gains a value, or
 # a writer gains the key, in a minor release.
 #
+# `actions: {<krateo.action>: [...]}` on a writer's requirement is the closed
+# set per action instead: the values that writer may write for the key on a
+# record whose krateo.action is that action. Such a key has no key-level
+# `values` and no per-writer `values`. Check reports a value outside the
+# record's action's set as bad-enum, and the key on a record whose action
+# declares no set (krateo.action absent included) as not-for-action. An
+# action gains a value, or the key gains an action, in a minor release.
+#
 # `markable: true` means a writer that cannot establish the key omits it and
 # names its `marker` in krateo.audit.incomplete. The checker reports such a
 # record as incomplete, not as missing the key. A conditional key that is
@@ -67,7 +75,7 @@
 # emitted without it and names the key's marker in krateo.audit.incomplete;
 # Check reports it as incomplete.
 
-updated: "2026-11-11T00:00:00Z" # the generated docs/schema.md timestamp
+updated: "2026-11-12T00:00:00Z" # the generated docs/schema.md timestamp
 schema_version: "1"
 event_name: audit
 
@@ -148,6 +156,11 @@ conditions:
     description: >-
       The record names the confirmed set its write belongs to: any
       krateo.audit.client.confirmed_set.* key is present.
+  - id: succeeded
+    go: CondSucceeded
+    description: >-
+      krateo.audit.outcome is success: the authority answered and the action
+      completed.
 
 # Exactly one target per record: a Kubernetes object or an external endpoint.
 # A controller's record may name both: the object it wrote in object_ref and
@@ -441,9 +454,13 @@ keys:
     values: [CONNECT, DELETE, GET, HEAD, OPTIONS, PATCH, POST, PUT, QUERY, TRACE, _OTHER]
     marker: method
     description: >-
-      The HTTP method the writer sent or proxied; _OTHER for a method semconv
-      does not name (lowercase included), with the method as given in
-      http.request.method_original.
+      The HTTP method the writer sent or proxied, derived from the verb of the
+      authority request the writer sent: for a Kubernetes target, create is
+      POST, update PUT, patch PATCH, delete DELETE, get GET. Never the method
+      of the request the writer served (krateo.request.uri records what it
+      received). A writer that knows no verb omits it and marks it. _OTHER
+      for a method semconv does not name (lowercase included), with the
+      method as given in http.request.method_original.
     writers:
       request: {level: required, markable: true}
       gateway: {level: required, markable: true}
@@ -558,7 +575,15 @@ keys:
       #   ambiguous_mapping (AmbiguousMapping): "ambiguous ServiceAccount
       #   mapping": more than one mapping names it.
       #   The ServiceAccount cases name the mapping resource without a name,
-      #   as name_missing names the Secret resource.
+      #   as name_missing names the Secret resource. authn's POST
+      #   /usernames/check (krateo.action authn.username.check, audit#23)
+      #   refuses its caller with the same three reasons, the same way.
+      # POST /usernames/check, after the TokenReview passed and one mapping
+      # admits the ServiceAccount (audit#23):
+      #   username_check_not_allowed: the mapping has not opted in
+      #   (spec.usernameCheck.allowed), so authn refuses the check (403). The
+      #   record names the checked name's clientconfig Secret, carries no
+      #   status code, and no check_result: the check never ran.
       # Not denial reasons:
       #   AudienceMismatch is part of verifying the token, so it is a counted
       #   pre-verification refusal and never a row.
@@ -569,12 +594,39 @@ keys:
       #   StepUpMisconfigured is a failure row with no status code: no
       #   authority answered. authn's own HTTP status (500) is never
       #   http.response.status_code.
-      request: {level: optional, values: [name_reserved, name_claimed, name_held_legacy, name_provisioned, name_bound, system_group, group_not_allowed, delegation_not_allowed, delegation_too_deep, platform_group, name_missing, subject_token_expired, subject_token_invalid, stepup_not_enabled, insufficient_assurance, stale_authentication, no_mapping, ambiguous_mapping, not_a_service_account]}
+      request: {level: optional, values: [name_reserved, name_claimed, name_held_legacy, name_provisioned, name_bound, system_group, group_not_allowed, delegation_not_allowed, delegation_too_deep, platform_group, name_missing, subject_token_expired, subject_token_invalid, stepup_not_enabled, insufficient_assurance, stale_authentication, no_mapping, ambiguous_mapping, not_a_service_account, username_check_not_allowed]}
       gateway: not_applicable
       action: not_applicable
       # kept_resource_policy: helm declined a delete because the object carries
       # helm.sh/resource-policy: keep (verb delete, outcome denied).
       controller: {level: optional, values: [kept_resource_policy]}
+
+  - name: krateo.audit.check_result
+    go: CheckResult
+    type: string
+    semconv: none
+    description: >-
+      What a check the writer ran for the caller concluded, when the record's
+      action is a check: one of the closed values its krateo.action declares,
+      never free text. It is the check's answer, not the record's outcome: a
+      check that completed is a success whatever it concluded. Optional: a
+      record without it conforms. Only on a success, when the check ran: a
+      denied record (the check never ran) and a failure (the lookup failed)
+      carry none. An action with no declared set cannot write it.
+    only_when: succeeded
+    writers:
+      # authn.username.check (audit#23): authn's POST /usernames/check, which
+      # identity-lifecycle's AccessRequest controller calls to learn whether a
+      # username is free. The record is a request row, verb get, targeting
+      # the clientconfig Secret the name guard protects; outcome success when
+      # the check completed, failure when a lookup failed, never denied.
+      # authn owns each value's meaning: available, or the name guard's
+      # answer (reserved, name_claimed, name_held_legacy, name_provisioned,
+      # name_bound), or invalid.
+      request: {level: optional, actions: {authn.username.check: [available, reserved, name_claimed, name_held_legacy, name_provisioned, name_bound, invalid]}}
+      gateway: not_applicable
+      action: not_applicable
+      controller: not_applicable
 
   - name: http.response.status_code
     go: HTTPStatusCode

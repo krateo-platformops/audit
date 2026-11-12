@@ -58,8 +58,12 @@ const (
 	// when the method is not recognised.
 	KeyVerb = "krateo.audit.verb"
 	// KeyHTTPMethod is "http.request.method". The HTTP method the writer sent or
-	// proxied; _OTHER for a method semconv does not name (lowercase included),
-	// with the method as given in http.request.method_original.
+	// proxied, derived from the verb of the authority request the writer sent: for
+	// a Kubernetes target, create is POST, update PUT, patch PATCH, delete DELETE,
+	// get GET. Never the method of the request the writer served
+	// (krateo.request.uri records what it received). A writer that knows no verb
+	// omits it and marks it. _OTHER for a method semconv does not name (lowercase
+	// included), with the method as given in http.request.method_original.
 	KeyHTTPMethod = "http.request.method"
 	// KeyHTTPMethodOriginal is "http.request.method_original". The HTTP method
 	// exactly as the writer was given it, when http.request.method records it as
@@ -84,6 +88,15 @@ const (
 	// audit reader gets the reason. Optional: a denied record without it conforms.
 	// A writer class with no declared value cannot write it.
 	KeyDenialReason = "krateo.audit.denial_reason"
+	// KeyCheckResult is "krateo.audit.check_result". What a check the writer ran
+	// for the caller concluded, when the record's action is a check: one of the
+	// closed values its krateo.action declares, never free text. It is the check's
+	// answer, not the record's outcome: a check that completed is a success
+	// whatever it concluded. Optional: a record without it conforms. Only on a
+	// success, when the check ran: a denied record (the check never ran) and a
+	// failure (the lookup failed) carry none. An action with no declared set
+	// cannot write it.
+	KeyCheckResult = "krateo.audit.check_result"
 	// KeyHTTPStatusCode is "http.response.status_code". The status code the
 	// authority answered (Kubernetes responseStatus.code). Never on a denied
 	// record: denied means the writer itself refused, so no authority answered.
@@ -311,8 +324,10 @@ const (
 	KeyLegacyObjectResourceVersion = "k8s.object.resource_version"
 )
 
-// The closed values of the keys whose values depend on the writer. Check
-// reports any other value, and a value written by a writer it does not list.
+// The closed values of the keys whose values depend on the writer, or on the
+// record's krateo.action. Check reports any other value, a value written by a
+// writer it does not list, and a per-action value on an action it does not
+// list.
 const (
 	// DenialReasonNameReserved is "name_reserved", a krateo.audit.denial_reason
 	// value of writer request.
@@ -371,9 +386,34 @@ const (
 	// DenialReasonNotAServiceAccount is "not_a_service_account", a
 	// krateo.audit.denial_reason value of writer request.
 	DenialReasonNotAServiceAccount = "not_a_service_account"
+	// DenialReasonUsernameCheckNotAllowed is "username_check_not_allowed", a
+	// krateo.audit.denial_reason value of writer request.
+	DenialReasonUsernameCheckNotAllowed = "username_check_not_allowed"
 	// DenialReasonKeptResourcePolicy is "kept_resource_policy", a
 	// krateo.audit.denial_reason value of writer controller.
 	DenialReasonKeptResourcePolicy = "kept_resource_policy"
+	// CheckResultAvailable is "available", a krateo.audit.check_result value of
+	// action authn.username.check (writer request).
+	CheckResultAvailable = "available"
+	// CheckResultReserved is "reserved", a krateo.audit.check_result value of
+	// action authn.username.check (writer request).
+	CheckResultReserved = "reserved"
+	// CheckResultNameClaimed is "name_claimed", a krateo.audit.check_result value
+	// of action authn.username.check (writer request).
+	CheckResultNameClaimed = "name_claimed"
+	// CheckResultNameHeldLegacy is "name_held_legacy", a krateo.audit.check_result
+	// value of action authn.username.check (writer request).
+	CheckResultNameHeldLegacy = "name_held_legacy"
+	// CheckResultNameProvisioned is "name_provisioned", a
+	// krateo.audit.check_result value of action authn.username.check (writer
+	// request).
+	CheckResultNameProvisioned = "name_provisioned"
+	// CheckResultNameBound is "name_bound", a krateo.audit.check_result value of
+	// action authn.username.check (writer request).
+	CheckResultNameBound = "name_bound"
+	// CheckResultInvalid is "invalid", a krateo.audit.check_result value of action
+	// authn.username.check (writer request).
+	CheckResultInvalid = "invalid"
 )
 
 // The writer classes.
@@ -426,11 +466,14 @@ const (
 	// CondConfirmedSet: The record names the confirmed set its write belongs to:
 	// any krateo.audit.client.confirmed_set.* key is present.
 	CondConfirmedSet Condition = "confirmed_set"
+	// CondSucceeded: krateo.audit.outcome is success: the authority answered and
+	// the action completed.
+	CondSucceeded Condition = "succeeded"
 )
 
 var schemaWriters = []Writer{WriterRequest, WriterGateway, WriterAction, WriterController}
 
-var schemaConditions = []Condition{CondK8sTarget, CondWrite, CondMethodOther, CondDelegated, CondImpersonated, CondCaused, CondDenied, CondContentWrite, CondClientRejected, CondClientProvenance, CondConfirmedSet}
+var schemaConditions = []Condition{CondK8sTarget, CondWrite, CondMethodOther, CondDelegated, CondImpersonated, CondCaused, CondDenied, CondContentWrite, CondClientRejected, CondClientProvenance, CondConfirmedSet, CondSucceeded}
 
 var schemaMarkers = []string{"actor", "actor_class", "action", "verb", "method", "preview", "target"}
 
@@ -775,7 +818,7 @@ var schemaKeys = []KeySpec{
 		CredentialFree: false,
 		Min:            nil,
 		LessThan:       "",
-		Description:    "The HTTP method the writer sent or proxied; _OTHER for a method semconv does not name (lowercase included), with the method as given in http.request.method_original.",
+		Description:    "The HTTP method the writer sent or proxied, derived from the verb of the authority request the writer sent: for a Kubernetes target, create is POST, update PUT, patch PATCH, delete DELETE, get GET. Never the method of the request the writer served (krateo.request.uri records what it received). A writer that knows no verb omits it and marks it. _OTHER for a method semconv does not name (lowercase included), with the method as given in http.request.method_original.",
 		Writers: map[Writer]Requirement{
 			WriterRequest:    {Level: LevelRequired, Markable: true},
 			WriterGateway:    {Level: LevelRequired, Markable: true},
@@ -873,10 +916,34 @@ var schemaKeys = []KeySpec{
 		LessThan:       "",
 		Description:    "Why the writer itself refused, on a denied record only: one of the closed values its writer class declares, never free text. The caller's answer can stay opaque while the audit reader gets the reason. Optional: a denied record without it conforms. A writer class with no declared value cannot write it.",
 		Writers: map[Writer]Requirement{
-			WriterRequest:    {Level: LevelOptional, Values: []string{"name_reserved", "name_claimed", "name_held_legacy", "name_provisioned", "name_bound", "system_group", "group_not_allowed", "delegation_not_allowed", "delegation_too_deep", "platform_group", "name_missing", "subject_token_expired", "subject_token_invalid", "stepup_not_enabled", "insufficient_assurance", "stale_authentication", "no_mapping", "ambiguous_mapping", "not_a_service_account"}},
+			WriterRequest:    {Level: LevelOptional, Values: []string{"name_reserved", "name_claimed", "name_held_legacy", "name_provisioned", "name_bound", "system_group", "group_not_allowed", "delegation_not_allowed", "delegation_too_deep", "platform_group", "name_missing", "subject_token_expired", "subject_token_invalid", "stepup_not_enabled", "insufficient_assurance", "stale_authentication", "no_mapping", "ambiguous_mapping", "not_a_service_account", "username_check_not_allowed"}},
 			WriterGateway:    {Level: LevelNotApplicable},
 			WriterAction:     {Level: LevelNotApplicable},
 			WriterController: {Level: LevelOptional, Values: []string{"kept_resource_policy"}},
+		},
+	},
+	{
+		Name:           KeyCheckResult,
+		Type:           TypeString,
+		Semconv:        "none",
+		Values:         nil,
+		Format:         "",
+		Marker:         "",
+		Identity:       false,
+		Asserted:       false,
+		ReplacedBy:     "",
+		DualWrite:      false,
+		OnlyWhen:       CondSucceeded,
+		NotWhen:        "",
+		CredentialFree: false,
+		Min:            nil,
+		LessThan:       "",
+		Description:    "What a check the writer ran for the caller concluded, when the record's action is a check: one of the closed values its krateo.action declares, never free text. It is the check's answer, not the record's outcome: a check that completed is a success whatever it concluded. Optional: a record without it conforms. Only on a success, when the check ran: a denied record (the check never ran) and a failure (the lookup failed) carry none. An action with no declared set cannot write it.",
+		Writers: map[Writer]Requirement{
+			WriterRequest:    {Level: LevelOptional, ActionValues: map[string][]string{"authn.username.check": {"available", "reserved", "name_claimed", "name_held_legacy", "name_provisioned", "name_bound", "invalid"}}},
+			WriterGateway:    {Level: LevelNotApplicable},
+			WriterAction:     {Level: LevelNotApplicable},
+			WriterController: {Level: LevelNotApplicable},
 		},
 	},
 	{

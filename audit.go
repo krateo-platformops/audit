@@ -144,7 +144,13 @@ type Event struct {
 	// free text; Check reports any other value, or the key on a record that is
 	// not denied.
 	DenialReason string
-	Preview      Preview
+	// CheckResult is what a check the writer ran concluded, on a record whose
+	// Action is a check -> krateo.audit.check_result. One of the closed values
+	// that action declares (the generated CheckResult* constants, e.g. for
+	// authn.username.check), never free text; Check reports any other value,
+	// or the key on an action that declares none.
+	CheckResult string
+	Preview     Preview
 	// DryRun marks a write the authority was asked to validate and not
 	// persist (Kubernetes dryRun=All) -> krateo.audit.dry_run=true. A request
 	// or action writer (WithWriter) gets dry_run=false on every other write
@@ -451,6 +457,7 @@ func attributes(ctx context.Context, ev Event, actor principal) []attribute.KeyV
 	num(KeyHTTPStatusCode, int64(ev.StatusCode))
 	add(KeyOutcome, ev.Outcome)
 	add(KeyDenialReason, ev.DenialReason)
+	add(KeyCheckResult, ev.CheckResult)
 	if ev.Preview != PreviewUnknown {
 		attrs = append(attrs, attribute.Bool(KeyPreview, ev.Preview == PreviewTrue))
 	}
