@@ -172,7 +172,7 @@ func AssertRemovalDetected(t testing.TB, w audit.Writer, rec sdklog.Record, key 
 	}
 	removed := Without(attrs, key)
 	related := relatedTo(w, key, attrs, removed)
-	if slices.Contains(audit.Target().Keys, key) {
+	if slices.Contains(audit.Target().KeysFor(w), key) {
 		related[audit.RuleTarget] = true
 	}
 

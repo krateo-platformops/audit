@@ -1,7 +1,7 @@
 ---
 type: Usage
 title: audit — usage
-description: Install the package, when and how to emit, who the actor is, adopting v0.4.0, v0.5.0, v0.6.0, v0.7.0, v0.8.0, v0.9.0, v0.10.0 and v0.11.0, testing a writer against the schema, and checking the live table.
+description: Install the package, when and how to emit, who the actor is, adopting v0.4.0, v0.5.0, v0.6.0, v0.7.0, v0.8.0, v0.9.0, v0.10.0, v0.11.0 and v0.12.0, testing a writer against the schema, and checking the live table.
 resource: github.com/krateo-platformops/audit
 tags: [library, audit, usage]
 timestamp: 2026-11-12T00:00:00Z
@@ -375,6 +375,71 @@ that isn't of format `session_id` is left out of the record, per writer:
 record puts a valid one on the context first, as authn's request middleware
 does: it keeps a valid inbound id and mints one otherwise. Every `session.id` that v0.4.0, v0.5.0, v0.8.0, v0.9.1 and
 v0.10.0 wrote in this module's compatibility fixtures is of the format.
+
+## Adopting v0.12.0
+
+v0.12.0 is additive (audit#22): a plain bump changes no record.
+
+- **Which endpointRef a stage dialled through.** `Event.EndpointRefNamespace`
+  and `Event.EndpointRefName` (`krateo.audit.endpoint_ref.*`, request writer,
+  optional), only on a record whose target is `ServerAddress`; `Check`
+  reports them anywhere else as `unexpected`. They name the Endpoint
+  reference, never credential data. The name is never a per-user clientconfig
+  Secret's (one ending in `-clientconfig` or `-clientconfig-stepup` embeds a
+  username): `Check` reports it `bad-format`, and `Emit` never writes it.
+- **A non-resource path as the target.** `Event.URLPath` (`url.path`, OTel
+  semconv) is the request writer's third target form, for a route it served
+  that names no object and no endpoint, such as snowplow's
+  `POST /debug/shadow-parity` (action `debug.shadowParity`, verb `post`). The
+  request writer's target rule is now exactly one of `object_ref`,
+  `server.address` and `url.path`; `TargetRule.KeysFor(w)` lists a writer's
+  target keys. Every other writer keeps its two, and `url.path` there is
+  `not-for-writer`.
+- **snowplow's refusals.** Twelve request denial reasons, each a denied
+  record with no status code: `destination_refused`,
+  `per_user_credential_ref`, `endpoint_ref_malformed`,
+  `internal_identity_context`, `write_refused`, `dry_run_not_executed`,
+  `dependency_failed`, `uaf_on_write_verb`, `invalid_path`, `template_error`,
+  `session_credential_missing`, `step_up_required` (schema/v1.yaml cites
+  each refusal site in snowplow). A refusal before the endpoint is resolved
+  may know no address: the record marks `target` rather than invent one.
+  `per_user_credential_ref` never names the Secret it refused.
+  `write_refused` is written only when the refused write had a requester:
+  in snowplow, an export's read (snowplow#970). Background work has none and
+  writes no record (snowplow#1381). Not denials: a
+  Secret the apiserver answered NotFound or Forbidden for, a page-budget
+  cut, and a refused 3xx redirect stay failures with the authority's code.
+- **A controller's own actor.** `audit.ControllerActor()` returns
+  `system:serviceaccount:<namespace>:<name>` from the downward-API variables
+  `audit.EnvPodNamespace` (`POD_NAMESPACE`) and `audit.EnvPodServiceAccount`
+  (`POD_SERVICE_ACCOUNT`), and `""` when either is unset or is not a name
+  Kubernetes gives (a DNS-1123 label for the namespace, a DNS-1123
+  subdomain for the ServiceAccount). With `""`, pass no `WithActor`: every
+  record is then marked `actor`, and names no principal it is not.
+  `audit.ServiceAccountActor(namespace, name)` is the same rule on values
+  in hand. It replaces each controller's own copy (access-review and
+  identity-lifecycle carry one). The chart sets both from the pod's own
+  fields, and should refuse an override of either (an `extraEnv` entry, say):
+
+  ```yaml
+  env:
+    - name: POD_NAMESPACE
+      valueFrom:
+        fieldRef:
+          fieldPath: metadata.namespace
+    - name: POD_SERVICE_ACCOUNT
+      valueFrom:
+        fieldRef:
+          fieldPath: spec.serviceAccountName
+  ```
+
+  ```go
+  opts := []audit.Option{audit.WithWriter(audit.WriterController)}
+  if actor := audit.ControllerActor(); actor != "" {
+  	opts = append(opts, audit.WithActor(actor, audit.ClassController))
+  }
+  emitter := audit.New(logger, opts...)
+  ```
 
 ## Testing a writer
 

@@ -180,6 +180,25 @@ const (
 	// KeyServerAddress is "server.address". The external endpoint the action was
 	// sent to, host[:port] only.
 	KeyServerAddress = "server.address"
+	// KeyURLPath is "url.path". The path of a route the writer served that names
+	// no Kubernetes object and no external endpoint (a non-resource path, as the
+	// apiserver calls it), e.g. snowplow's /debug/shadow-parity. The request
+	// writer's third target form: never beside object_ref or server.address. No
+	// query.
+	KeyURLPath = "url.path"
+	// KeyEndpointRefNamespace is "krateo.audit.endpoint_ref.namespace". The
+	// namespace of the endpointRef a RESTAction stage named when it dialled an
+	// external endpoint (server.address). It names the Endpoint reference, never
+	// credential data. Optional: whether the stage named an endpointRef is not
+	// visible on the record.
+	KeyEndpointRefNamespace = "krateo.audit.endpoint_ref.namespace"
+	// KeyEndpointRefName is "krateo.audit.endpoint_ref.name". The name of the
+	// endpointRef (its Secret) a RESTAction stage named when it dialled an
+	// external endpoint (server.address). Never a per-user clientconfig Secret's
+	// name: that name embeds a username, so Check refuses it (format
+	// endpoint_ref_name) and Emit never writes it. A refusal of such a reference
+	// (per_user_credential_ref) names none. Optional, as for the namespace.
+	KeyEndpointRefName = "krateo.audit.endpoint_ref.name"
 	// KeyRequestURI is "krateo.request.uri". The path and query the writer
 	// received (Kubernetes requestURI). Never a scheme or host.
 	KeyRequestURI = "krateo.request.uri"
@@ -371,10 +390,10 @@ const (
 	DenialReasonNameMissing = "name_missing"
 	// DenialReasonSubjectTokenExpired is "subject_token_expired", a
 	// krateo.audit.denial_reason value of writer request.
-	DenialReasonSubjectTokenExpired = "subject_token_expired"
+	DenialReasonSubjectTokenExpired = "subject_token_expired" // #nosec G101 -- a name schema/v1.yaml declares, never a credential
 	// DenialReasonSubjectTokenInvalid is "subject_token_invalid", a
 	// krateo.audit.denial_reason value of writer request.
-	DenialReasonSubjectTokenInvalid = "subject_token_invalid"
+	DenialReasonSubjectTokenInvalid = "subject_token_invalid" // #nosec G101 -- a name schema/v1.yaml declares, never a credential
 	// DenialReasonStepupNotEnabled is "stepup_not_enabled", a
 	// krateo.audit.denial_reason value of writer request.
 	DenialReasonStepupNotEnabled = "stepup_not_enabled"
@@ -402,6 +421,42 @@ const (
 	// DenialReasonNameNotIssued is "name_not_issued", a krateo.audit.denial_reason
 	// value of writer request.
 	DenialReasonNameNotIssued = "name_not_issued"
+	// DenialReasonDestinationRefused is "destination_refused", a
+	// krateo.audit.denial_reason value of writer request.
+	DenialReasonDestinationRefused = "destination_refused"
+	// DenialReasonPerUserCredentialRef is "per_user_credential_ref", a
+	// krateo.audit.denial_reason value of writer request.
+	DenialReasonPerUserCredentialRef = "per_user_credential_ref" // #nosec G101 -- a name schema/v1.yaml declares, never a credential
+	// DenialReasonEndpointRefMalformed is "endpoint_ref_malformed", a
+	// krateo.audit.denial_reason value of writer request.
+	DenialReasonEndpointRefMalformed = "endpoint_ref_malformed"
+	// DenialReasonInternalIdentityContext is "internal_identity_context", a
+	// krateo.audit.denial_reason value of writer request.
+	DenialReasonInternalIdentityContext = "internal_identity_context"
+	// DenialReasonWriteRefused is "write_refused", a krateo.audit.denial_reason
+	// value of writer request.
+	DenialReasonWriteRefused = "write_refused"
+	// DenialReasonDryRunNotExecuted is "dry_run_not_executed", a
+	// krateo.audit.denial_reason value of writer request.
+	DenialReasonDryRunNotExecuted = "dry_run_not_executed"
+	// DenialReasonDependencyFailed is "dependency_failed", a
+	// krateo.audit.denial_reason value of writer request.
+	DenialReasonDependencyFailed = "dependency_failed"
+	// DenialReasonUafOnWriteVerb is "uaf_on_write_verb", a
+	// krateo.audit.denial_reason value of writer request.
+	DenialReasonUafOnWriteVerb = "uaf_on_write_verb"
+	// DenialReasonInvalidPath is "invalid_path", a krateo.audit.denial_reason
+	// value of writer request.
+	DenialReasonInvalidPath = "invalid_path"
+	// DenialReasonTemplateError is "template_error", a krateo.audit.denial_reason
+	// value of writer request.
+	DenialReasonTemplateError = "template_error"
+	// DenialReasonSessionCredentialMissing is "session_credential_missing", a
+	// krateo.audit.denial_reason value of writer request.
+	DenialReasonSessionCredentialMissing = "session_credential_missing" // #nosec G101 -- a name schema/v1.yaml declares, never a credential
+	// DenialReasonStepUpRequired is "step_up_required", a
+	// krateo.audit.denial_reason value of writer request.
+	DenialReasonStepUpRequired = "step_up_required"
 	// DenialReasonKeptResourcePolicy is "kept_resource_policy", a
 	// krateo.audit.denial_reason value of writer controller.
 	DenialReasonKeptResourcePolicy = "kept_resource_policy"
@@ -453,20 +508,35 @@ const (
 	// the id's origin, accepts and mints (audit#32): its minted ids, a trace id, a
 	// UUID all fit.
 	FormatSessionID = "session_id"
+	// FormatK8sNamespace is the format "k8s_namespace": a Kubernetes namespace
+	// name: a DNS-1123 label, 1 to 63 of `[a-z0-9-]`, starting and ending with a
+	// letter or digit.
+	FormatK8sNamespace = "k8s_namespace"
+	// FormatEndpointRefName is the format "endpoint_ref_name": the name of the
+	// Secret an endpointRef names: 1 to 253 of `[a-z0-9.-]`, starting and ending
+	// with a letter or digit, and never a per-user clientconfig Secret's name (one
+	// ending in `-clientconfig` or `-clientconfig-stepup`), which embeds a
+	// username.
+	FormatEndpointRefName = "endpoint_ref_name"
+	// FormatURLPath is the format "url_path": a URL path: `/` and up to 1000 more
+	// characters, no query, no fragment, no whitespace.
+	FormatURLPath = "url_path"
 	// FormatRFC3339 is the format "rfc3339": an RFC 3339 timestamp, with or
 	// without fractional seconds.
 	FormatRFC3339 = "rfc3339"
 )
 
-var schemaFormats = []string{FormatDelegationLink, FormatMarkerList, FormatSHA256Hex, FormatContentHash, FormatUUID, FormatOpaqueID, FormatSessionID, FormatRFC3339}
+var schemaFormats = []string{FormatDelegationLink, FormatMarkerList, FormatSHA256Hex, FormatContentHash, FormatUUID, FormatOpaqueID, FormatSessionID, FormatK8sNamespace, FormatEndpointRefName, FormatURLPath, FormatRFC3339}
 
 // formatPatterns holds the formats whose whole rule is a regular expression,
 // compiled once from schema/v1.yaml's patterns.
 var formatPatterns = map[string]*regexp.Regexp{
-	FormatSHA256Hex: regexp.MustCompile("^[0-9a-f]{64}$"),
-	FormatUUID:      regexp.MustCompile("^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"),
-	FormatOpaqueID:  regexp.MustCompile("^[A-Za-z0-9_-]{1,128}$"),
-	FormatSessionID: regexp.MustCompile("^[A-Za-z0-9._-]{1,128}$"),
+	FormatSHA256Hex:    regexp.MustCompile("^[0-9a-f]{64}$"),
+	FormatUUID:         regexp.MustCompile("^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"),
+	FormatOpaqueID:     regexp.MustCompile("^[A-Za-z0-9_-]{1,128}$"),
+	FormatSessionID:    regexp.MustCompile("^[A-Za-z0-9._-]{1,128}$"),
+	FormatK8sNamespace: regexp.MustCompile("^([a-z0-9]|[a-z0-9][-a-z0-9]{0,61}[a-z0-9])$"),
+	FormatURLPath:      regexp.MustCompile("^/[^?#\\s]{0,1000}$"),
 }
 
 // ValidDelegationLink reports whether s is of format delegation_link, as Check enforces it:
@@ -502,20 +572,40 @@ func ValidOpaqueID(s string) bool { return ValidFormat(FormatOpaqueID, s) }
 // its minted ids, a trace id, a UUID all fit.
 func ValidSessionID(s string) bool { return ValidFormat(FormatSessionID, s) }
 
+// ValidK8sNamespace reports whether s is of format k8s_namespace, as Check enforces it:
+// a Kubernetes namespace name: a DNS-1123 label, 1 to 63 of `[a-z0-9-]`,
+// starting and ending with a letter or digit.
+func ValidK8sNamespace(s string) bool { return ValidFormat(FormatK8sNamespace, s) }
+
+// ValidEndpointRefName reports whether s is of format endpoint_ref_name, as Check enforces it:
+// the name of the Secret an endpointRef names: 1 to 253 of `[a-z0-9.-]`,
+// starting and ending with a letter or digit, and never a per-user
+// clientconfig Secret's name (one ending in `-clientconfig` or
+// `-clientconfig-stepup`), which embeds a username.
+func ValidEndpointRefName(s string) bool { return ValidFormat(FormatEndpointRefName, s) }
+
+// ValidURLPath reports whether s is of format url_path, as Check enforces it:
+// a URL path: `/` and up to 1000 more characters, no query, no fragment, no
+// whitespace.
+func ValidURLPath(s string) bool { return ValidFormat(FormatURLPath, s) }
+
 // ValidRFC3339 reports whether s is of format rfc3339, as Check enforces it:
 // an RFC 3339 timestamp, with or without fractional seconds.
 func ValidRFC3339(s string) bool { return ValidFormat(FormatRFC3339, s) }
 
 // formatValidators is each format's generated validator.
 var formatValidators = map[string]func(string) bool{
-	FormatDelegationLink: ValidDelegationLink,
-	FormatMarkerList:     ValidMarkerList,
-	FormatSHA256Hex:      ValidSHA256Hex,
-	FormatContentHash:    ValidContentHash,
-	FormatUUID:           ValidUUID,
-	FormatOpaqueID:       ValidOpaqueID,
-	FormatSessionID:      ValidSessionID,
-	FormatRFC3339:        ValidRFC3339,
+	FormatDelegationLink:  ValidDelegationLink,
+	FormatMarkerList:      ValidMarkerList,
+	FormatSHA256Hex:       ValidSHA256Hex,
+	FormatContentHash:     ValidContentHash,
+	FormatUUID:            ValidUUID,
+	FormatOpaqueID:        ValidOpaqueID,
+	FormatSessionID:       ValidSessionID,
+	FormatK8sNamespace:    ValidK8sNamespace,
+	FormatEndpointRefName: ValidEndpointRefName,
+	FormatURLPath:         ValidURLPath,
+	FormatRFC3339:         ValidRFC3339,
 }
 
 // The writer classes.
@@ -568,6 +658,9 @@ const (
 	// CondConfirmedSet: The record names the confirmed set its write belongs to:
 	// any krateo.audit.client.confirmed_set.* key is present.
 	CondConfirmedSet Condition = "confirmed_set"
+	// CondEndpointTarget: The record's target is an external endpoint:
+	// server.address is present.
+	CondEndpointTarget Condition = "endpoint_target"
 	// CondSucceeded: krateo.audit.outcome is success: the authority answered and
 	// the action completed.
 	CondSucceeded Condition = "succeeded"
@@ -575,13 +668,16 @@ const (
 
 var schemaWriters = []Writer{WriterRequest, WriterGateway, WriterAction, WriterController}
 
-var schemaConditions = []Condition{CondK8sTarget, CondWrite, CondMethodOther, CondDelegated, CondImpersonated, CondCaused, CondDenied, CondContentWrite, CondClientRejected, CondClientProvenance, CondConfirmedSet, CondSucceeded}
+var schemaConditions = []Condition{CondK8sTarget, CondWrite, CondMethodOther, CondDelegated, CondImpersonated, CondCaused, CondDenied, CondContentWrite, CondClientRejected, CondClientProvenance, CondConfirmedSet, CondEndpointTarget, CondSucceeded}
 
 var schemaMarkers = []string{"actor", "actor_class", "action", "verb", "method", "preview", "session", "target"}
 
 var schemaTarget = TargetRule{
 	Marker: "target",
 	Keys:   []string{"krateo.audit.object_ref.resource", "server.address"},
+	WriterKeys: map[Writer][]string{
+		WriterRequest: []string{"url.path"},
+	},
 	Writers: map[Writer]TargetMode{
 		WriterRequest:    TargetExactlyOne,
 		WriterGateway:    TargetExactlyOne,
@@ -1018,7 +1114,7 @@ var schemaKeys = []KeySpec{
 		LessThan:       "",
 		Description:    "Why the writer itself refused, on a denied record only: one of the closed values its writer class declares, never free text. The caller's answer can stay opaque while the audit reader gets the reason. Optional: a denied record without it conforms. A writer class with no declared value cannot write it.",
 		Writers: map[Writer]Requirement{
-			WriterRequest:    {Level: LevelOptional, Values: []string{"name_reserved", "name_claimed", "name_held_legacy", "name_provisioned", "name_bound", "system_group", "group_not_allowed", "delegation_not_allowed", "delegation_too_deep", "platform_group", "name_missing", "subject_token_expired", "subject_token_invalid", "stepup_not_enabled", "insufficient_assurance", "stale_authentication", "no_mapping", "ambiguous_mapping", "not_a_service_account", "username_check_not_allowed", "invalid_request", "name_not_issued"}},
+			WriterRequest:    {Level: LevelOptional, Values: []string{"name_reserved", "name_claimed", "name_held_legacy", "name_provisioned", "name_bound", "system_group", "group_not_allowed", "delegation_not_allowed", "delegation_too_deep", "platform_group", "name_missing", "subject_token_expired", "subject_token_invalid", "stepup_not_enabled", "insufficient_assurance", "stale_authentication", "no_mapping", "ambiguous_mapping", "not_a_service_account", "username_check_not_allowed", "invalid_request", "name_not_issued", "destination_refused", "per_user_credential_ref", "endpoint_ref_malformed", "internal_identity_context", "write_refused", "dry_run_not_executed", "dependency_failed", "uaf_on_write_verb", "invalid_path", "template_error", "session_credential_missing", "step_up_required"}},
 			WriterGateway:    {Level: LevelNotApplicable},
 			WriterAction:     {Level: LevelNotApplicable},
 			WriterController: {Level: LevelOptional, Values: []string{"kept_resource_policy"}},
@@ -1546,10 +1642,82 @@ var schemaKeys = []KeySpec{
 		LessThan:       "",
 		Description:    "The external endpoint the action was sent to, host[:port] only.",
 		Writers: map[Writer]Requirement{
-			WriterRequest:    {Level: LevelConditional, When: "the target is not a Kubernetes object"},
+			WriterRequest:    {Level: LevelConditional, When: "the target is an external endpoint (neither a Kubernetes object nor a non-resource path)"},
 			WriterGateway:    {Level: LevelRequired},
 			WriterAction:     {Level: LevelConditional, When: "the target is not a Kubernetes object"},
 			WriterController: {Level: LevelConditional, When: "the controller wrote to an external endpoint"},
+		},
+	},
+	{
+		Name:           KeyURLPath,
+		Type:           TypeString,
+		Semconv:        "stable",
+		Values:         nil,
+		Format:         "url_path",
+		Marker:         "",
+		Identity:       false,
+		Asserted:       false,
+		ReplacedBy:     "",
+		DualWrite:      false,
+		OnlyWhen:       "",
+		NotWhen:        "",
+		CredentialFree: false,
+		Min:            nil,
+		LessThan:       "",
+		Description:    "The path of a route the writer served that names no Kubernetes object and no external endpoint (a non-resource path, as the apiserver calls it), e.g. snowplow's /debug/shadow-parity. The request writer's third target form: never beside object_ref or server.address. No query.",
+		Writers: map[Writer]Requirement{
+			WriterRequest:    {Level: LevelOptional},
+			WriterGateway:    {Level: LevelNotApplicable},
+			WriterAction:     {Level: LevelNotApplicable},
+			WriterController: {Level: LevelNotApplicable},
+		},
+	},
+	{
+		Name:           KeyEndpointRefNamespace,
+		Type:           TypeString,
+		Semconv:        "none",
+		Values:         nil,
+		Format:         "k8s_namespace",
+		Marker:         "",
+		Identity:       false,
+		Asserted:       false,
+		ReplacedBy:     "",
+		DualWrite:      false,
+		OnlyWhen:       CondEndpointTarget,
+		NotWhen:        "",
+		CredentialFree: true,
+		Min:            nil,
+		LessThan:       "",
+		Description:    "The namespace of the endpointRef a RESTAction stage named when it dialled an external endpoint (server.address). It names the Endpoint reference, never credential data. Optional: whether the stage named an endpointRef is not visible on the record.",
+		Writers: map[Writer]Requirement{
+			WriterRequest:    {Level: LevelOptional},
+			WriterGateway:    {Level: LevelNotApplicable},
+			WriterAction:     {Level: LevelNotApplicable},
+			WriterController: {Level: LevelNotApplicable},
+		},
+	},
+	{
+		Name:           KeyEndpointRefName,
+		Type:           TypeString,
+		Semconv:        "none",
+		Values:         nil,
+		Format:         "endpoint_ref_name",
+		Marker:         "",
+		Identity:       false,
+		Asserted:       false,
+		ReplacedBy:     "",
+		DualWrite:      false,
+		OnlyWhen:       CondEndpointTarget,
+		NotWhen:        "",
+		CredentialFree: true,
+		Min:            nil,
+		LessThan:       "",
+		Description:    "The name of the endpointRef (its Secret) a RESTAction stage named when it dialled an external endpoint (server.address). Never a per-user clientconfig Secret's name: that name embeds a username, so Check refuses it (format endpoint_ref_name) and Emit never writes it. A refusal of such a reference (per_user_credential_ref) names none. Optional, as for the namespace.",
+		Writers: map[Writer]Requirement{
+			WriterRequest:    {Level: LevelOptional},
+			WriterGateway:    {Level: LevelNotApplicable},
+			WriterAction:     {Level: LevelNotApplicable},
+			WriterController: {Level: LevelNotApplicable},
 		},
 	},
 	{

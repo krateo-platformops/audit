@@ -256,9 +256,11 @@ func TestSchema_V060(t *testing.T) {
 			t.Errorf("IsCredentialTarget(%q, %q, %q) = %v", tc.g, tc.r, tc.s, got)
 		}
 	}
-	// Only content_sha256 is credential-free.
+	// content_sha256 is credential-free, and from v0.12.0 the endpoint_ref
+	// keys (they name an Endpoint reference, never credential data).
+	credentialFree := []string{KeyObjectContentSHA256, KeyEndpointRefNamespace, KeyEndpointRefName}
 	for _, k := range Keys() {
-		if k.CredentialFree != (k.Name == KeyObjectContentSHA256) {
+		if k.CredentialFree != slices.Contains(credentialFree, k.Name) {
 			t.Errorf("%s: CredentialFree = %v", k.Name, k.CredentialFree)
 		}
 	}

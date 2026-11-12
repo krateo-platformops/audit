@@ -78,13 +78,16 @@ through the generated `+"`audit.Key*`"+` constants and test their records with
 ## The target rule
 
 Every record names its target: `+"`%s`"+` (a Kubernetes object) or `+"`%s`"+`
-(an external endpoint). Marker `+"`%s`"+`.
+(an external endpoint), and, for a writer that lists more, one of its own
+target keys (`+"`url.path`"+`, a non-resource path, for the request writer).
+Marker `+"`%s`"+`.
 
-| writer | targets |
-|---|---|
+| writer | targets | of the keys |
+|---|---|---|
 `, s.Target.Keys[0], s.Target.Keys[1], s.Target.Marker)
 	for _, w := range s.Writers {
-		fmt.Fprintf(&b, "| `%s` | %s |\n", w.ID, strings.ReplaceAll(s.Target.Writers[w.ID], "_", " "))
+		keys := append(slices.Clone(s.Target.Keys), s.Target.WriterKeys[w.ID]...)
+		fmt.Fprintf(&b, "| `%s` | %s | `%s` |\n", w.ID, strings.ReplaceAll(s.Target.Writers[w.ID], "_", " "), strings.Join(keys, "`, `"))
 	}
 
 	b.WriteString(`
@@ -467,6 +470,7 @@ var actionLiterals = []actionLiteral{
 	{"controller", "helm.rollback", "helm rolls a release back: Observe clearing a release stuck pending past the grace, and Delete's rollback; real child patches, creates and deletes (plumbing#140 per-child verdicts)"},
 	{"controller", "helm.uninstall", "helm uninstalls a release (cdc's Delete)"},
 	{"request", "authn.username.check", "authn's `POST /usernames/check`, whether a username is free; its result is `krateo.audit.check_result`"},
+	{"request", "debug.shadowParity", "snowplow's `POST /debug/shadow-parity`, which toggles a per-process dark parity measurement; its target is the non-resource path, `url.path` (v0.12.0)"},
 }
 
 // actionReaders is the sentence naming the rules that read krateo.action,

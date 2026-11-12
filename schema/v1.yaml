@@ -156,6 +156,11 @@ conditions:
     description: >-
       The record names the confirmed set its write belongs to: any
       krateo.audit.client.confirmed_set.* key is present.
+  - id: endpoint_target
+    go: CondEndpointTarget
+    description: >-
+      The record's target is an external endpoint: server.address is
+      present.
   - id: succeeded
     go: CondSucceeded
     description: >-
@@ -204,18 +209,42 @@ formats:
       1 to 128 of `[A-Za-z0-9._-]`: a correlation id safe in W3C baggage and on
       a log line. The shape snowplow, the id's origin, accepts and mints
       (audit#32): its minted ids, a trace id, a UUID all fit.
+  - id: k8s_namespace
+    go: K8sNamespace
+    pattern: '^([a-z0-9]|[a-z0-9][-a-z0-9]{0,61}[a-z0-9])$'
+    description: >-
+      a Kubernetes namespace name: a DNS-1123 label, 1 to 63 of `[a-z0-9-]`,
+      starting and ending with a letter or digit.
+  - id: endpoint_ref_name
+    go: EndpointRefName
+    description: >-
+      the name of the Secret an endpointRef names: 1 to 253 of `[a-z0-9.-]`,
+      starting and ending with a letter or digit, and never a per-user
+      clientconfig Secret's name (one ending in `-clientconfig` or
+      `-clientconfig-stepup`), which embeds a username.
+  - id: url_path
+    go: URLPath
+    pattern: '^/[^?#\s]{0,1000}$'
+    description: >-
+      a URL path: `/` and up to 1000 more characters, no query, no fragment,
+      no whitespace.
   - id: rfc3339
     go: RFC3339
     description: an RFC 3339 timestamp, with or without fractional seconds.
 
-# Exactly one target per record: a Kubernetes object or an external endpoint.
-# A controller's record may name both: the object it wrote in object_ref and
-# the endpoint it wrote to in server.address (a v0.4 controller record named
-# the object it reconciled in object_ref beside the endpoint; v0.5 names that
-# object in cause_ref), so it needs at least one.
+# Exactly one target per record: a Kubernetes object or an external endpoint,
+# and for the request writer also a non-resource path (url.path, v0.12.0: a
+# route the writer served that names no object, such as snowplow's
+# /debug/shadow-parity). A controller's record may name both an object and
+# an endpoint: the object it wrote in object_ref and the endpoint it wrote to
+# in server.address (a v0.4 controller record named the object it reconciled
+# in object_ref beside the endpoint; v0.5 names that object in cause_ref), so
+# it needs at least one. `writer_keys` are target keys of one writer only.
 target:
   marker: target
   keys: [krateo.audit.object_ref.resource, server.address]
+  writer_keys:
+    request: [url.path]
   writers:
     request: exactly_one
     gateway: exactly_one
@@ -657,7 +686,52 @@ keys:
       #   StepUpMisconfigured is a failure row with no status code: no
       #   authority answered. authn's own HTTP status (500) is never
       #   http.response.status_code.
-      request: {level: optional, values: [name_reserved, name_claimed, name_held_legacy, name_provisioned, name_bound, system_group, group_not_allowed, delegation_not_allowed, delegation_too_deep, platform_group, name_missing, subject_token_expired, subject_token_invalid, stepup_not_enabled, insufficient_assurance, stale_authentication, no_mapping, ambiguous_mapping, not_a_service_account, username_check_not_allowed, invalid_request, name_not_issued]}
+      # snowplow's refusals (audit#22, v0.12.0), each a denied record with no
+      # status code; files under snowplow 219a076e, go/snowplow/internal/. A refusal before
+      # the endpoint is resolved (per_user_credential_ref,
+      # endpoint_ref_malformed, internal_identity_context, invalid_path,
+      # template_error) may know no server.address: the record then marks
+      # target (krateo.audit.incomplete) rather than invent one.
+      # endpointRef refusals:
+      #   destination_refused: snowplow's destination policy refused the
+      #   address (credhttp/send.go:371, credhttp/answer.go:86-87).
+      #   per_user_credential_ref: the stage's endpointRef names a per-user
+      #   credential Secret (resolvers/restactions/api/per_user_ref.go:52-56);
+      #   the record never names that Secret (endpoint_ref.name).
+      #   endpoint_ref_malformed: the endpointRef's Secret is malformed
+      #   (resolvers/restactions/api/endpoints.go:125-127, :150).
+      #   internal_identity_context: a caller-supplied RESTAction resolved on
+      #   a context carrying snowplow's internal identity
+      #   (resolvers/restactions/api/provenance.go:32-38).
+      # write-stage refusals:
+      #   write_refused: a write stage refused because the resolve is not
+      #   the customer's own write
+      #   (resolvers/restactions/api/background_write.go:155-173). Of its
+      #   origins (cache/background_writes.go:129-147), only an export's
+      #   read (snowplow#970) has a requester, and only it is a denied
+      #   record. Background work (the refresher, a cohort seed, a prewarm,
+      #   a demand revalidation, a background hop; snowplow#903) has no
+      #   requester and writes no record (snowplow#1381).
+      #   dry_run_not_executed: a write stage in a dry run
+      #   (resolvers/restactions/api/resolve.go:831-840).
+      #   dependency_failed: the stage the write depends on did not succeed
+      #   (resolvers/restactions/api/dependent_write.go:49).
+      #   uaf_on_write_verb: a write verb on a UAF-governed stage
+      #   (resolvers/restactions/api/uaf_non_read.go:66-69).
+      #   invalid_path, template_error: the write's rendered path, or a
+      #   template, failed before the dial
+      #   (resolvers/restactions/api/undialled_write.go:70-90).
+      # a verified caller with no credential:
+      #   session_credential_missing, step_up_required: the token verified
+      #   but the caller's session (or step-up) credential Secret is not
+      #   there (handlers/middleware/credential_status.go:195-199, via
+      #   handlers/middleware/userconfig.go:363-364). A refusal before
+      #   verification (TokenMissing, TokenInvalid, TokenExpired,
+      #   KeyNotPublished, credential_status.go:64-80) is counted, never a row.
+      # Not denial reasons: a Secret the apiserver answered NotFound or
+      # Forbidden for, a page-budget cut, and a refused 3xx redirect are
+      # failures with the authority's code (or none), never denied.
+      request: {level: optional, values: [name_reserved, name_claimed, name_held_legacy, name_provisioned, name_bound, system_group, group_not_allowed, delegation_not_allowed, delegation_too_deep, platform_group, name_missing, subject_token_expired, subject_token_invalid, stepup_not_enabled, insufficient_assurance, stale_authentication, no_mapping, ambiguous_mapping, not_a_service_account, username_check_not_allowed, invalid_request, name_not_issued, destination_refused, per_user_credential_ref, endpoint_ref_malformed, internal_identity_context, write_refused, dry_run_not_executed, dependency_failed, uaf_on_write_verb, invalid_path, template_error, session_credential_missing, step_up_required]}
       gateway: not_applicable
       action: not_applicable
       # kept_resource_policy: helm declined a delete because the object carries
@@ -948,10 +1022,54 @@ keys:
     semconv: stable
     description: The external endpoint the action was sent to, host[:port] only.
     writers:
-      request: {level: conditional, when: the target is not a Kubernetes object}
+      request: {level: conditional, when: the target is an external endpoint (neither a Kubernetes object nor a non-resource path)}
       gateway: required
       action: {level: conditional, when: the target is not a Kubernetes object}
       controller: {level: conditional, when: the controller wrote to an external endpoint}
+
+  # --- which target: a non-resource path (v0.12.0) ---------------------------
+  - name: url.path
+    go: URLPath
+    type: string
+    semconv: stable
+    format: url_path
+    description: >-
+      The path of a route the writer served that names no Kubernetes object
+      and no external endpoint (a non-resource path, as the apiserver calls
+      it), e.g. snowplow's /debug/shadow-parity. The request writer's third
+      target form: never beside object_ref or server.address. No query.
+    writers: {request: optional, gateway: not_applicable, action: not_applicable, controller: not_applicable}
+
+  # --- which endpointRef (v0.12.0, snowplow#1283) ----------------------------
+  - name: krateo.audit.endpoint_ref.namespace
+    go: EndpointRefNamespace
+    type: string
+    semconv: none
+    format: k8s_namespace
+    only_when: endpoint_target
+    credential_free: true
+    description: >-
+      The namespace of the endpointRef a RESTAction stage named when it
+      dialled an external endpoint (server.address). It names the Endpoint
+      reference, never credential data. Optional: whether the stage named an
+      endpointRef is not visible on the record.
+    writers: {request: optional, gateway: not_applicable, action: not_applicable, controller: not_applicable}
+
+  - name: krateo.audit.endpoint_ref.name
+    go: EndpointRefName
+    type: string
+    semconv: none
+    format: endpoint_ref_name
+    only_when: endpoint_target
+    credential_free: true
+    description: >-
+      The name of the endpointRef (its Secret) a RESTAction stage named when
+      it dialled an external endpoint (server.address). Never a per-user
+      clientconfig Secret's name: that name embeds a username, so Check
+      refuses it (format endpoint_ref_name) and Emit never writes it. A
+      refusal of such a reference (per_user_credential_ref) names none.
+      Optional, as for the namespace.
+    writers: {request: optional, gateway: not_applicable, action: not_applicable, controller: not_applicable}
 
   # --- the request received -------------------------------------------------
   - name: krateo.request.uri

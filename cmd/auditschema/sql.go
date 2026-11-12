@@ -33,6 +33,7 @@ var conditionSQL = map[audit.Condition]string{
 	audit.CondClientRejected:   "(" + attr(audit.KeyClientRejected) + " != '')",
 	audit.CondClientProvenance: clientProvenanceSQL(),
 	audit.CondConfirmedSet:     "arrayExists(k -> startsWith(k, 'krateo.audit.client.confirmed_set.'), mapKeys(LogAttributes))",
+	audit.CondEndpointTarget:   "(" + attr(audit.KeyServerAddress) + " != '')",
 	audit.CondSucceeded:        "(" + attr(audit.KeyOutcome) + " = " + lit(audit.OutcomeSuccess) + ")",
 }
 
@@ -169,15 +170,18 @@ func rulesSQL(w audit.Writer) string {
 	add := func(name, pred string) { cols = append(cols, fmt.Sprintf("  countIf(%s) AS %s", pred, name)) }
 
 	target := audit.Target()
-	var none, all []string
-	for _, k := range target.Keys {
+	keys := target.KeysFor(w)
+	var none, pairs []string
+	for i, k := range keys {
 		none = append(none, attr(k)+" = ''")
-		all = append(all, attr(k)+" != ''")
+		for _, k2 := range keys[i+1:] {
+			pairs = append(pairs, "("+attr(k)+" != '' AND "+attr(k2)+" != '')")
+		}
 	}
 	add("no_target", strings.Join(none, " AND ")+" AND NOT "+marked(target.Marker))
 	add("target_marked_incomplete", strings.Join(none, " AND ")+" AND "+marked(target.Marker))
 	if target.Writers[w] == audit.TargetExactlyOne {
-		add("two_targets", strings.Join(all, " AND "))
+		add("two_targets", strings.Join(pairs, " OR "))
 	}
 
 	var allKeys, notForWriter []string

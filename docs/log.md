@@ -9,6 +9,70 @@ timestamp: 2026-11-12T00:00:00Z
 
 # Log
 
+- **2026-11-12**: v0.12.0 (audit#22, for snowplow#1283 and snowplow's
+  adoption). Additive.
+  - `krateo.audit.endpoint_ref.{namespace,name}` (`Event.EndpointRefNamespace`,
+    `EndpointRefName`), request writer, optional: the endpointRef a
+    RESTAction stage dialled `server.address` through. Only when
+    `server.address` is the target (a new condition, `endpoint_target`), and
+    credential-free. New formats `k8s_namespace` (a DNS-1123 label) and
+    `endpoint_ref_name` (1 to 253 of `[a-z0-9.-]`, never a per-user
+    clientconfig Secret's name: one ending in `-clientconfig` or
+    `-clientconfig-stepup` embeds a username). `Emit` never writes such a
+    name.
+  - `url.path` (`Event.URLPath`, OTel semconv; format `url_path`, `/` and up
+    to 1000 more, no query, fragment or whitespace): the request writer's
+    third target form. The target rule gains `writer_keys` (request:
+    `url.path`), `TargetRule.WriterKeys` and `KeysFor(w)`. `Check`, the
+    marker logic, the falsifier and the live SQL count a writer's own
+    target keys; `two_targets` is now any pair. Every other writer keeps
+    `object_ref` and `server.address`, and `url.path` is `not-for-writer`
+    there. First user: snowplow's `POST /debug/shadow-parity`, whose literal
+    `debug.shadowParity` joins the registry.
+  - The request writer's denial reasons gain snowplow's twelve, each cited
+    in schema/v1.yaml at snowplow `219a076e`: `destination_refused`,
+    `per_user_credential_ref`, `endpoint_ref_malformed`,
+    `internal_identity_context`, `write_refused`, `dry_run_not_executed`,
+    `dependency_failed`, `uaf_on_write_verb`, `invalid_path`,
+    `template_error`, `session_credential_missing`, `step_up_required`. A
+    refusal before resolution may know no address and marks `target`; a
+    NotFound or Forbidden Secret, a page-budget cut and a refused redirect
+    stay failures.
+  - [coverage.md](./coverage.md): the Exclusions no longer say every
+    snowplow 401 is pre-verification. The pre-verification causes
+    (TokenMissing, TokenInvalid, TokenExpired, KeyNotPublished) are counted;
+    a verified caller refused for a missing session or step-up credential
+    gets a row, owned by snowplow#1381. snowplow's rows are re-derived from
+    snowplow `main` at `219a076e` with file:line. snowplow writes with this
+    library since snowplow#1348 (audit v0.6.0), so the "own emitter" text is
+    gone. The `/call`, `/call/dry-run` and `/export` rows stay non-conformant,
+    pending snowplow#1379. The RESTAction stage row is audited, though the
+    endpointRef is not yet written (snowplow#1283). The inline dry-run and
+    refused-before-dial stage rows are now not audited (snowplow#1381's
+    rule: a refused request gets a row when admitted it would have had one).
+    `write_refused` has a requester only on an export's read (a new row, not
+    audited, snowplow#1381); background work has none and stays rowless. The reads row is split by identity.
+  - The registry accepts camel-case words in a literal (`call.dryRun`,
+    `debug.shadowParity`). The SQL column-count test now matches whole
+    aliases, since `endpoint_ref.name`'s prefixes `endpoint_ref.namespace`'s.
+  - A controller's own actor: `ControllerActor()`, `ServiceAccountActor`,
+    `EnvPodNamespace` (`POD_NAMESPACE`) and `EnvPodServiceAccount`
+    (`POD_SERVICE_ACCOUNT`). It returns `system:serviceaccount:<ns>:<name>`
+    from the chart's downward API, or `""` when either is unset or not a
+    name Kubernetes gives; then no `WithActor`, and records are marked
+    `actor`. It replaces the copies in access-review
+    (`internal/auditing/auditing.go`, `Actor`, at `e986af18`) and
+    identity-lifecycle (same file, at `8f9bb41a`), which return `""` only
+    when a part is unset; core-provider and oasgen-provider adopt it
+    instead of copying.
+  - authn is on v0.11.0: authn#139 merged as
+    `07b288d26bba0670f2631106ccc6023427373c22`, whose session.id check is
+    `return v, audit.ValidSessionID(v)` in `SessionID`
+    (`go/authn/internal/auditlog/middleware.go:37`). The v0.11.0 entry's
+    citation of `498828bf` stays true for that commit.
+  - Compatibility: `testdata/v0.11.0/` (25 records audit v0.11.0's own `Emit`
+    wrote) gives v0.11.0's own report, and every earlier replay is
+    unchanged.
 - **2026-11-12**: v0.11.0 (audit#32, for authn#139). The schema's value
   formats become exported validators, generated from a new `formats:`
   section of schema/v1.yaml (id, Go name, description, and the pattern when a

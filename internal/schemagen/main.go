@@ -123,6 +123,9 @@ type target struct {
 	Marker  string            `yaml:"marker"`
 	Keys    []string          `yaml:"keys"`
 	Writers map[string]string `yaml:"writers"`
+	// WriterKeys are target keys of one writer only (url.path, the request
+	// writer's non-resource path).
+	WriterKeys map[string][]string `yaml:"writer_keys"`
 }
 
 type population struct {
@@ -218,9 +221,10 @@ var (
 	goIdent          = regexp.MustCompile(`^[A-Z][A-Za-z0-9]*$`)
 	markerName       = regexp.MustCompile(`^[a-z][a-z_]*$`)
 	valueName        = regexp.MustCompile(`^[a-z][a-z0-9]*(_[a-z0-9]+)*$`)
-	// actionName is a krateo.action literal a per-action set is declared
-	// for: dot-separated lower_snake_case words (authn.username.check).
-	actionName = regexp.MustCompile(`^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)*$`)
+	// actionName is a krateo.action literal: dot-separated words, each
+	// starting with a lowercase letter (authn.username.check, call.dryRun,
+	// debug.shadowParity).
+	actionName = regexp.MustCompile(`^[a-z][A-Za-z0-9_]*(\.[a-z][A-Za-z0-9_]*)*$`)
 )
 
 func parse(raw []byte) (*schema, error) {
@@ -404,6 +408,20 @@ func (s *schema) validate() error {
 	for _, w := range s.Writers {
 		if _, ok := modes[s.Target.Writers[w.ID]]; !ok {
 			return fmt.Errorf("target: writer %q has no mode", w.ID)
+		}
+	}
+	for w, keys := range s.Target.WriterKeys {
+		if !writerIDs[w] {
+			return fmt.Errorf("target: writer_keys names unknown writer %q", w)
+		}
+		for _, k := range keys {
+			n := names[k]
+			if n == nil || slices.Contains(s.Target.Keys, k) {
+				return fmt.Errorf("target: writer %q's key %q is unknown or already a target key of every writer", w, k)
+			}
+			if lv := n.Writers[w].Level; lv == "not_applicable" || lv == "not_established" {
+				return fmt.Errorf("target: writer %q's key %q is one that writer cannot write", w, k)
+			}
 		}
 	}
 	seenTargets := map[credentialTarget]bool{}
@@ -611,6 +629,23 @@ func (s *schema) requirementsOf(k key) map[string]requirement {
 	return out
 }
 
+// g101Name is gosec's G101 (hardcoded credentials) name pattern, as of
+// gosec v2.30.0 (rules/hardcoded_credentials.go:401). G101 reports a string
+// constant whose name matches it and whose value its entropy test passes.
+var g101Name = regexp.MustCompile(`(?i)passwd|pass|password|pwd|secret|token|pw|apiKey|bearer|cred`)
+
+// nosecG101 is the trailing directive of a generated string constant whose
+// name G101 matches (DenialReasonPerUserCredentialRef): such a constant is a
+// name schema/v1.yaml declares, never a credential. Every other constant gets
+// none, so no other finding is suppressed. Whether G101 then reports it rests
+// on its value's entropy, so every constant the name test reaches carries it.
+func nosecG101(name string) string {
+	if !g101Name.MatchString(name) {
+		return ""
+	}
+	return " // #nosec G101 -- a name schema/v1.yaml declares, never a credential"
+}
+
 func render(s *schema) ([]byte, error) {
 	funcs := template.FuncMap{
 		"q":        strconv.Quote,
@@ -627,6 +662,7 @@ func render(s *schema) ([]byte, error) {
 		"actions":  actionSets,
 		"join":     strings.Join,
 		"deref":    func(p *int64) int64 { return *p },
+		"nosec":    nosecG101,
 	}
 	t, err := template.New("gen").Funcs(funcs).Parse(tmpl)
 	if err != nil {
@@ -706,7 +742,7 @@ const (
 	// Deprecated: the v0.3 name of {{.ReplacedBy}}, removed when
 	// migration window W1 closes. Read {{.ReplacedBy}}.
 {{- end}}
-	Key{{.Go}} = {{q .Name}}
+	Key{{.Go}} = {{q .Name}}{{nosec (printf "Key%s" .Go)}}
 {{- end}}
 )
 
@@ -723,7 +759,7 @@ const (
 {{- else}}
 	{{doc (printf "%s is %q," .Name .Value) (printf "a %s value of writer %s." .Key (join .Writers ", "))}}
 {{- end}}
-	{{.Name}} = {{q .Value}}
+	{{.Name}} = {{q .Value}}{{nosec .Name}}
 {{- end}}
 )
 {{- end}}
@@ -732,7 +768,7 @@ const (
 const (
 {{- range .Formats}}
 	{{doc (printf "Format%s is the format %q:" .Go .ID) .Description}}
-	Format{{.Go}} = {{q .ID}}
+	Format{{.Go}} = {{q .ID}}{{nosec (printf "Format%s" .Go)}}
 {{- end}}
 )
 
@@ -781,6 +817,11 @@ var schemaMarkers = {{strs markers}}
 var schemaTarget = TargetRule{
 	Marker: {{q .Target.Marker}},
 	Keys:   {{strs .Target.Keys}},
+	WriterKeys: map[Writer][]string{
+{{- range $.Writers}}{{if index $.Target.WriterKeys .ID}}
+		{{.Go}}: {{strs (index $.Target.WriterKeys .ID)}},
+{{- end}}{{end}}
+	},
 	Writers: map[Writer]TargetMode{
 {{- range $.Writers}}
 		{{.Go}}: {{mode (index $.Target.Writers .ID)}},
