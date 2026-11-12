@@ -120,6 +120,50 @@ func TestEmit_InvalidInboundSessionIDIsOmittedAndMarked(t *testing.T) {
 	}
 }
 
+// For the gateway and action writers, session.id is conditional on inbound
+// baggage carrying a session_id-formatted value: a malformed client value is
+// refused input, omitted plainly with no marker. The action record, emitted
+// through the real Emit, then passes Check clean; the gateway's (whose own
+// keys, its route, Emit does not write) reports nothing about session.id.
+func TestEmit_GatewayAndActionOmitAnInvalidSessionIDPlainly(t *testing.T) {
+	for _, v := range []string{"a:b", "a+b=c", "a b", "x/y@z"} {
+		ctx, ok := withRawSession(t, spanCtx(t), v)
+		if !ok {
+			t.Fatalf("%q: no baggage member", v)
+		}
+		for _, tc := range []struct {
+			w     Writer
+			opts  []Option
+			ev    Event
+			clean bool
+		}{
+			{WriterAction, []Option{WithWriter(WriterAction), WithActor("example-agent", ClassAgent)},
+				Event{Action: "tool.k8s.create", Verb: "create", Outcome: OutcomeSuccess, DryRun: true,
+					Namespace: "example-preview", Version: "v1", Resource: "configmaps", ObjectName: "example-draft", Preview: PreviewTrue}, true},
+			{WriterGateway, []Option{WithWriter(WriterGateway)},
+				Event{UserName: "example-user", ActorClass: ClassHuman, Action: "gateway.mcp", Verb: "post", HTTPMethod: "POST",
+					Outcome: OutcomeSuccess, ServerAddress: "mcp.example.com:8443", SourceIPs: []string{"192.0.2.10"}}, false},
+		} {
+			e, rec := newEmitter(t, tc.opts...)
+			e.Emit(ctx, tc.ev)
+			got := attrs(only(t, rec))
+			if _, here := got[KeySessionID]; here {
+				t.Errorf("%s, %q: session.id written", tc.w, v)
+			}
+			if inc, ok := got[KeyIncomplete]; ok && slices.Contains(strings.Split(inc.AsString(), ","), "session") {
+				t.Errorf("%s, %q: marked session; a refused client value is no gap for this writer", tc.w, v)
+			}
+			vs := Check(tc.w, kvs(got))
+			if tc.clean && len(vs) > 0 {
+				t.Errorf("%s, %q: Check = %v, want clean", tc.w, v, vs)
+			}
+			if slices.ContainsFunc(vs, func(x Violation) bool { return x.Key == KeySessionID }) {
+				t.Errorf("%s, %q: Check reports session.id: %v", tc.w, v, vs)
+			}
+		}
+	}
+}
+
 // For any inbound session.id, Emit's record passes its own Check: the record
 // conforms with the id, or carries only the session mark without it.
 func FuzzEmit_RecordPassesItsOwnCheck(f *testing.F) {
@@ -147,6 +191,19 @@ func FuzzEmit_RecordPassesItsOwnCheck(f *testing.F) {
 			if !slices.Equal(vs, []Violation{{Key: KeySessionID, Reason: ReasonIncomplete}}) {
 				t.Fatalf("invalid %q: Check = %v, want only session.id marked incomplete", v, vs)
 			}
+		}
+
+		// The action writer: whatever the inbound value, the record passes
+		// Check clean (a valid id written, a malformed one omitted plainly).
+		ae, arec := newEmitter(t, WithWriter(WriterAction), WithActor("example-agent", ClassAgent))
+		ae.Emit(ctx, Event{Action: "tool.k8s.create", Verb: "create", Outcome: OutcomeSuccess, DryRun: true,
+			Namespace: "example-preview", Version: "v1", Resource: "configmaps", ObjectName: "example-draft", Preview: PreviewTrue})
+		agot := attrs(only(t, arec))
+		if avs := Check(WriterAction, kvs(agot)); len(avs) > 0 {
+			t.Fatalf("action, %q: Check = %v, want clean", v, avs)
+		}
+		if _, here := agot[KeySessionID]; here != ValidSessionID(v) {
+			t.Fatalf("action, %q: session.id written %v, want %v", v, here, ValidSessionID(v))
 		}
 	})
 }

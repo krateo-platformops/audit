@@ -637,12 +637,16 @@ keys:
       #   to name: the record names the Secret resource without a name, as
       #   name_missing does.
       #   name_not_issued (audit#29; plumbing usernames.ErrNotIssued, "authn
-      #   would issue the username in another form"): a sign-in for a
-      #   username authn would issue in another form, one the clientconfig
-      #   Secret's name derivation would rewrite. Denied, no status code, no
-      #   check_result. The derived name would be another username's, so the
-      #   record names the Secret resource without a name (coverage.md,
-      #   "Naming a derived credential Secret").
+      #   would issue the username in another form"): a sign-in whose
+      #   username an identity source chose, one the clientconfig Secret's
+      #   name derivation would rewrite (authn#141 at 2fb07895,
+      #   internal/helpers/kube/config/guard.go:57-65, :126, :143-152).
+      #   Denied, no status code, no check_result. The derived name would be
+      #   another username's, so the record names the Secret resource without
+      #   a name (coverage.md, "Naming a derived credential Secret"). An
+      #   administrator-provisioned name (a basic User, a ServiceAccount
+      #   mapping) is not refused: it keeps signing in, and its records stay
+      #   nameless under the same rule (authn#140).
       # Not denial reasons:
       #   AudienceMismatch is part of verifying the token, so it is a counted
       #   pre-verification refusal and never a row.
@@ -1007,12 +1011,15 @@ keys:
       key a client can set: never identity, never a policy key. Of format
       session_id (v0.11.0): a writer refuses an inbound value of any other
       shape, with audit.ValidSessionID, before writing it. Emit never writes
-      an invalid one: it omits the key and, where the writer must write it,
-      marks it session.
+      an invalid one. The request writer must establish a valid id (keep a
+      valid inbound one or mint one): with none on ctx, Emit omits the key
+      and marks it session. For the gateway and action writers a malformed
+      client value is refused input, not a gap: it is omitted plainly, with
+      no marker.
     writers:
       request: {level: required, markable: true}
-      gateway: {level: conditional, when: inbound baggage carries it}
-      action: {level: conditional, when: inbound baggage carries it}
+      gateway: {level: conditional, when: inbound baggage carries a session_id-formatted value}
+      action: {level: conditional, when: inbound baggage carries a session_id-formatted value}
       controller: not_applicable
 
   - name: krateo.restaction.namespace

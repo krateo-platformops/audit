@@ -198,8 +198,10 @@ const (
 	// baggage. A correlation key a client can set: never identity, never a policy
 	// key. Of format session_id (v0.11.0): a writer refuses an inbound value of
 	// any other shape, with audit.ValidSessionID, before writing it. Emit never
-	// writes an invalid one: it omits the key and, where the writer must write it,
-	// marks it session.
+	// writes an invalid one. The request writer must establish a valid id (keep a
+	// valid inbound one or mint one): with none on ctx, Emit omits the key and
+	// marks it session. For the gateway and action writers a malformed client
+	// value is refused input, not a gap: it is omitted plainly, with no marker.
 	KeySessionID = "session.id"
 	// KeyRESTActionNamespace is "krateo.restaction.namespace". The namespace of
 	// the RESTAction whose stage performed the action.
@@ -1662,11 +1664,11 @@ var schemaKeys = []KeySpec{
 		CredentialFree: false,
 		Min:            nil,
 		LessThan:       "",
-		Description:    "The business/session correlation id from W3C baggage. A correlation key a client can set: never identity, never a policy key. Of format session_id (v0.11.0): a writer refuses an inbound value of any other shape, with audit.ValidSessionID, before writing it. Emit never writes an invalid one: it omits the key and, where the writer must write it, marks it session.",
+		Description:    "The business/session correlation id from W3C baggage. A correlation key a client can set: never identity, never a policy key. Of format session_id (v0.11.0): a writer refuses an inbound value of any other shape, with audit.ValidSessionID, before writing it. Emit never writes an invalid one. The request writer must establish a valid id (keep a valid inbound one or mint one): with none on ctx, Emit omits the key and marks it session. For the gateway and action writers a malformed client value is refused input, not a gap: it is omitted plainly, with no marker.",
 		Writers: map[Writer]Requirement{
 			WriterRequest:    {Level: LevelRequired, Markable: true},
-			WriterGateway:    {Level: LevelConditional, When: "inbound baggage carries it"},
-			WriterAction:     {Level: LevelConditional, When: "inbound baggage carries it"},
+			WriterGateway:    {Level: LevelConditional, When: "inbound baggage carries a session_id-formatted value"},
+			WriterAction:     {Level: LevelConditional, When: "inbound baggage carries a session_id-formatted value"},
 			WriterController: {Level: LevelNotApplicable},
 		},
 	},

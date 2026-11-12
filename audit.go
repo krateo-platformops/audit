@@ -318,8 +318,10 @@ func New(logger log.Logger, opts ...Option) *Emitter {
 //     writer's tests, never a reason not to emit;
 //   - it never writes an inbound session.id its own Check rejects: a baggage
 //     session.id that is not of format session_id (ValidSessionID) is
-//     omitted, and marked session where the writer must write it. A writer
-//     that wants an id there puts a valid one on ctx first, as authn's
+//     omitted. The request writer must establish a valid id, so its record
+//     is then marked session; for the gateway and action writers a
+//     malformed client value is refused input, omitted plainly with no
+//     marker. A request writer puts a valid id on ctx first, as authn's
 //     request middleware does (it keeps a valid inbound id and mints one
 //     otherwise);
 //   - it sets the LogRecord EventName and the event.name attribute, stamps

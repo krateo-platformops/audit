@@ -56,10 +56,17 @@ timestamp: 2026-11-12T00:00:00Z
     `TestEmit_InvalidInboundSessionIDConformsMarked` and the fuzz test
     `FuzzEmit_RecordPassesItsOwnCheck` (for any inbound value, the record
     passes its own `Check`).
-  - observability's gateway projection: **not conformant** for odd baggage.
-    It copies `baggage_session` verbatim, so an inbound value outside the
-    format becomes a `session.id` that `Check` reports `bad-format`. The
-    evidence went to observability before the tag.
+  - observability's gateway projection: **not conformant** at this
+    release's head for odd baggage. It copies `baggage_session` verbatim, so
+    an inbound value outside the format becomes a `session.id` that `Check`
+    reports `bad-format`; the evidence went to observability. observability
+    is changing it to copy only a value of the format and omit it otherwise.
+    This note states the status at tag time: the commit that fixes it if it
+    has landed, otherwise "not conformant" with this evidence.
+  - The gateway and action writers' `session.id` is conditional on inbound
+    baggage carrying a `session_id`-formatted value: a malformed client
+    value is omitted plainly, with no marker. Only the request writer's
+    missing id is marked `session`.
   - The compatibility fixtures v0.4.0 to v0.10.0 hold only
     `example-session`, so their replays don't prove that real writers fit;
     the per-writer evidence above does.

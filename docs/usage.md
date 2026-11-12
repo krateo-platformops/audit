@@ -320,9 +320,12 @@ gains a value, or the key gains an action, in a minor release.
 v0.10.0 is additive: a plain bump changes no record. It adds two request
 denial reasons (audit#29).
 
-`DenialReasonNameNotIssued` (`name_not_issued`) is for a sign-in with a
-username authn would issue in another form, one the clientconfig Secret's
-name derivation would rewrite. The record is denied, with no status code and
+`DenialReasonNameNotIssued` (`name_not_issued`) is for a sign-in whose
+username an identity source chose and authn would issue in another form, one
+the clientconfig Secret's name derivation would rewrite (authn#141 at `2fb07895`, `internal/helpers/kube/config/guard.go:57-65`, `:126`, `:143-152`).
+An administrator-provisioned name (a basic User, a ServiceAccount mapping) is
+not refused: it keeps signing in, and its records stay nameless under the
+same naming rule (authn#140). The record is denied, with no status code and
 no `check_result`, and names the Secret resource without a name: the derived
 name would be another username's (coverage.md, "Naming a derived credential
 Secret").
@@ -360,10 +363,15 @@ format (`ValidSessionID`, or `ValidValue(KeySessionID, s)`) and mints its
 own instead.
 
 **Emit never writes an invalid inbound `session.id`.** A baggage `session.id`
-that isn't of format `session_id` is left out of the record, and marked
-`session` in `krateo.audit.incomplete` where the writer must write it (the
-request writer: the key is markable from v0.11.0). The gap is stated, never
-filled with a value `Check` would refuse. A writer that wants an id on the
+that isn't of format `session_id` is left out of the record, per writer:
+- the request writer must establish a valid id, so with none on the context
+  Emit omits the key and marks it `session` in `krateo.audit.incomplete` (the
+  key is markable for it from v0.11.0): the gap is stated, never filled with
+  a value `Check` would refuse;
+- for the gateway and action writers the key is conditional on inbound
+  baggage carrying a `session_id`-formatted value, so a malformed client
+  value is refused input, not a gap: Emit omits it plainly, with no marker.
+ A writer that wants an id on the
 record puts a valid one on the context first, as authn's request middleware
 does: it keeps a valid inbound id and mints one otherwise. Every `session.id` that v0.4.0, v0.5.0, v0.8.0, v0.9.1 and
 v0.10.0 wrote in this module's compatibility fixtures is of the format.
