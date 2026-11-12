@@ -1,6 +1,7 @@
 package audit
 
 import (
+	"encoding/json"
 	"errors"
 	"io/fs"
 	"os"
@@ -57,6 +58,18 @@ var formatCases = map[string][]struct {
 		{"abc\ndef", false}, {"abc\n", false}, {"\nabc", false}, // a newline, inside and at either end
 		{"séance", false}, {"日本", false}, // unicode
 		{" a", false}, {"a.b", false}, {"a/b", false},
+	},
+	// session_id (audit#32): snowplow's shape, the id's origin.
+	FormatSessionID: {
+		{"a", true}, {"example.session-1_x", true}, // dotted
+		{"00000000-0000-4000-8000-0000000000aa", true}, // a UUID (an AccessRequest UID)
+		{"0123456789abcdef", true},                     // 16 hex chars, as snowplow mints
+		{"4bf92f3577b34da6a3ce929d0e0e4736", true},     // a trace id
+		{strings.Repeat("a", 128), true}, {strings.Repeat("a", 129), false}, {"", false},
+		{" ", false}, {"a b", false}, {"a\tb", false}, {"a\n", false}, // whitespace
+		{"a;b", false}, {"a,b", false}, {"a=b", false}, // baggage's own separators
+		{"séance", false}, {"日本", false}, // non-ASCII
+		{"name@example.com", false},
 	},
 	FormatUUID: {
 		{"00000000-0000-4000-8000-0000000000aa", true},
@@ -123,8 +136,9 @@ func TestFormats_CheckAndTheExportsAgree(t *testing.T) {
 				if (err == nil) != row.valid || (err != nil && (!errors.As(err, &fe) || fe.Key != k.Name || fe.Format != f)) {
 					t.Errorf("ValidValue(%s, %q) = %v; want valid %v", k.Name, row.value, err, row.valid)
 				}
-				if err != nil && row.value != "" && strings.Contains(err.Error(), row.value) {
-					t.Errorf("ValidValue's error carries the value: %v", err)
+				// The error is exactly the key and the format: it carries no value.
+				if err != nil && err.Error() != "audit: the value of "+k.Name+" is not of format "+f {
+					t.Errorf("ValidValue's error is %q: it must name only the key and the format", err)
 				}
 				w, ok := writerOf(k)
 				if !ok {
@@ -181,6 +195,66 @@ func TestFormats_EveryElementOfAListIsChecked(t *testing.T) {
 	}
 }
 
+// Tightening session.id (any value, then session_id in v0.11.0) breaks no
+// record an earlier release wrote: every session.id in every compatibility
+// fixture (testdata/<version>/*.json, written by that version's own Emit) is
+// of format session_id. The replays (cmd/auditschema, Test*RecordsStayValid)
+// show the same through Check.
+func TestFormats_EveryFixtureSessionIDFits(t *testing.T) {
+	files, err := filepath.Glob("testdata/*/*.json")
+	if err != nil || len(files) == 0 {
+		t.Fatalf("fixtures: %v, %v", files, err)
+	}
+	type attr struct {
+		Key   string `json:"key"`
+		Value struct {
+			StringValue *string `json:"stringValue"`
+		} `json:"value"`
+	}
+	type doc struct {
+		ResourceLogs []struct {
+			ScopeLogs []struct {
+				LogRecords []struct {
+					Attributes []attr `json:"attributes"`
+				} `json:"logRecords"`
+			} `json:"scopeLogs"`
+		} `json:"resourceLogs"`
+	}
+	ids, versions := 0, map[string]bool{}
+	for _, f := range files {
+		raw, err := os.ReadFile(f)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var d doc
+		if err := json.Unmarshal(raw, &d); err != nil {
+			t.Fatalf("%s: %v", f, err)
+		}
+		for _, rl := range d.ResourceLogs {
+			for _, sl := range rl.ScopeLogs {
+				for _, lr := range sl.LogRecords {
+					for _, a := range lr.Attributes {
+						if a.Key != KeySessionID {
+							continue
+						}
+						ids++
+						versions[filepath.Base(filepath.Dir(f))] = true
+						if a.Value.StringValue == nil || !ValidSessionID(*a.Value.StringValue) {
+							t.Errorf("%s: a session.id that is not of format session_id", f)
+						}
+					}
+				}
+			}
+		}
+	}
+	for _, v := range []string{"v0.4.0", "v0.5.0", "v0.8.0", "v0.9.1", "v0.10.0"} {
+		if !versions[v] {
+			t.Errorf("no session.id read from the %s fixture: the check would not cover it", v)
+		}
+	}
+	t.Logf("%d session.id values across %d fixture versions, all of format session_id", ids, len(versions))
+}
+
 // writerOf is a writer class that may write k.
 func writerOf(k KeySpec) (Writer, bool) {
 	for _, w := range Writers() {
@@ -206,6 +280,17 @@ func TestValidValue(t *testing.T) {
 	}
 	if !ValidOpaqueID("example-session") || ValidOpaqueID("name@example.com") {
 		t.Error("ValidOpaqueID")
+	}
+	// session.id declares session_id (v0.11.0): ValidValue and Check refuse a
+	// baggage separator in it, and accept a dotted id.
+	if err := ValidValue(KeySessionID, "a;b"); err == nil {
+		t.Error("session.id accepts a baggage separator")
+	}
+	if err := ValidValue(KeySessionID, "example.session"); err != nil {
+		t.Errorf("session.id refuses a dotted id: %v", err)
+	}
+	if k, _ := LookupKey(KeySessionID); k.Format != FormatSessionID {
+		t.Errorf("session.id declares format %q, want %s", k.Format, FormatSessionID)
 	}
 }
 

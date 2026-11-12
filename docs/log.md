@@ -25,9 +25,19 @@ timestamp: 2026-11-12T00:00:00Z
   table (an email, a newline inside and at either end, 128 and 129
   characters, empty, unicode, and each format's boundaries) runs through
   `Check` and every export, and they agree; every element of a list is
-  checked. Compatibility: `testdata/v0.10.0/` holds 25 records audit
-  v0.10.0's own `Emit` wrote, and this release gives v0.10.0's own report.
-  No record or rule changes; new API, so a minor version per
+  checked. **One rule tightens** (the AUDIT-4 lead's ruling, 2026-11-12):
+  `session.id` declares the new format `session_id`, 1 to 128 of
+  `[A-Za-z0-9._-]` (`ValidSessionID`), where any value passed before. The
+  shape is snowplow's (it accepts and mints it), and identity-lifecycle's
+  UUIDs fit it; `Check` reports any other value as `bad-format` on every
+  writer of the key. Its rows: a dotted id, a UUID, 16 hex characters, a
+  trace id, 128 and 129 characters, empty, whitespace, `;`, `,`, `=`,
+  non-ASCII, an email. Every `session.id` in the v0.4.0, v0.5.0, v0.8.0,
+  v0.9.1 and v0.10.0 compatibility fixtures (65 values) is of the format,
+  and every replay gives its version's own report. Compatibility:
+  `testdata/v0.10.0/` holds 25 records audit v0.10.0's own `Emit` wrote,
+  and this release gives v0.10.0's own report. New API and one tightened
+  rule that no recorded writer's output breaks: a minor version per
   docs/release.md.
 - **2026-11-12**: v0.10.0 (audit#29, authn#136). Two request-writer denial
   reasons. `name_not_issued` (`DenialReasonNameNotIssued`, plumbing's

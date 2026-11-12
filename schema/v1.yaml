@@ -197,6 +197,13 @@ formats:
     go: OpaqueID
     pattern: '^[A-Za-z0-9_-]{1,128}$'
     description: 1 to 128 of `[A-Za-z0-9_-]`.
+  - id: session_id
+    go: SessionID
+    pattern: '^[A-Za-z0-9._-]{1,128}$'
+    description: >-
+      1 to 128 of `[A-Za-z0-9._-]`: a correlation id safe in W3C baggage and on
+      a log line. The shape snowplow, the id's origin, accepts and mints
+      (audit#32): its minted ids, a trace id, a UUID all fit.
   - id: rfc3339
     go: RFC3339
     description: an RFC 3339 timestamp, with or without fractional seconds.
@@ -993,9 +1000,12 @@ keys:
     go: SessionID
     type: string
     semconv: development
+    format: session_id
     description: >-
       The business/session correlation id from W3C baggage. A correlation
-      key a client can set: never identity, never a policy key.
+      key a client can set: never identity, never a policy key. Of format
+      session_id (v0.11.0): a writer refuses an inbound value of any other
+      shape, with audit.ValidSessionID, before writing it.
     writers:
       request: required
       gateway: {level: conditional, when: inbound baggage carries it}

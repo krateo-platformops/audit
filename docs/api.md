@@ -147,6 +147,7 @@ its own copy of a pattern.
 ```go
 const FormatOpaqueID = "opaque_id"     // ... one Format* constant per format, generated
 func ValidOpaqueID(s string) bool      // ... one Valid* function per format, generated
+func ValidSessionID(s string) bool     // session.id's format (v0.11.0): 1 to 128 of [A-Za-z0-9._-]
 func ValidFormat(format, value string) bool // value of format, as Check enforces it; false for an undeclared format
 func ValidValue(key, value string) error    // key's declared format: nil, *FormatError, or ErrUnknownKey wrapped
 func Formats() []string                // every declared format, in schema order

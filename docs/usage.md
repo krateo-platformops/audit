@@ -347,9 +347,18 @@ format, never the value. `Check` uses exactly these.
 
 A writer that takes a value from an untrusted source validates it with them
 before writing it, and drops any copy of a pattern it keeps (authn, snowplow,
-the gateway). `session.id` declares no format in schema v1, so
-`ValidValue(KeySessionID, s)` accepts any value; a writer that wants to
-refuse a non-opaque session id calls `ValidOpaqueID` itself.
+the gateway).
+
+**One rule tightens: `session.id` is now of format `session_id`**, 1 to 128
+of `[A-Za-z0-9._-]` (`audit.ValidSessionID`). Until v0.11.0 any value
+passed. The shape is snowplow's, the id's origin: its minted ids (16 hex
+characters, or the request's trace id) and identity-lifecycle's (a UUID) fit
+it, and dots are safe in baggage and on a log line. `Check` now reports any
+other `session.id` as `bad-format`, on every writer that writes it. A writer
+that takes the id from inbound baggage refuses a value that isn't of this
+format (`ValidSessionID`, or `ValidValue(KeySessionID, s)`) and mints its
+own instead. Every `session.id` that v0.4.0, v0.5.0, v0.8.0, v0.9.1 and
+v0.10.0 wrote in this module's compatibility fixtures is of the format.
 
 ## Testing a writer
 

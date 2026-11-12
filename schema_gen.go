@@ -196,7 +196,8 @@ const (
 	KeyRequestReceivedTime = "krateo.request.received_time_unix_nano"
 	// KeySessionID is "session.id". The business/session correlation id from W3C
 	// baggage. A correlation key a client can set: never identity, never a policy
-	// key.
+	// key. Of format session_id (v0.11.0): a writer refuses an inbound value of
+	// any other shape, with audit.ValidSessionID, before writing it.
 	KeySessionID = "session.id"
 	// KeyRESTActionNamespace is "krateo.restaction.namespace". The namespace of
 	// the RESTAction whose stage performed the action.
@@ -443,12 +444,17 @@ const (
 	FormatUUID = "uuid"
 	// FormatOpaqueID is the format "opaque_id": 1 to 128 of `[A-Za-z0-9_-]`.
 	FormatOpaqueID = "opaque_id"
+	// FormatSessionID is the format "session_id": 1 to 128 of `[A-Za-z0-9._-]`: a
+	// correlation id safe in W3C baggage and on a log line. The shape snowplow,
+	// the id's origin, accepts and mints (audit#32): its minted ids, a trace id, a
+	// UUID all fit.
+	FormatSessionID = "session_id"
 	// FormatRFC3339 is the format "rfc3339": an RFC 3339 timestamp, with or
 	// without fractional seconds.
 	FormatRFC3339 = "rfc3339"
 )
 
-var schemaFormats = []string{FormatDelegationLink, FormatMarkerList, FormatSHA256Hex, FormatContentHash, FormatUUID, FormatOpaqueID, FormatRFC3339}
+var schemaFormats = []string{FormatDelegationLink, FormatMarkerList, FormatSHA256Hex, FormatContentHash, FormatUUID, FormatOpaqueID, FormatSessionID, FormatRFC3339}
 
 // formatPatterns holds the formats whose whole rule is a regular expression,
 // compiled once from schema/v1.yaml's patterns.
@@ -456,6 +462,7 @@ var formatPatterns = map[string]*regexp.Regexp{
 	FormatSHA256Hex: regexp.MustCompile("^[0-9a-f]{64}$"),
 	FormatUUID:      regexp.MustCompile("^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"),
 	FormatOpaqueID:  regexp.MustCompile("^[A-Za-z0-9_-]{1,128}$"),
+	FormatSessionID: regexp.MustCompile("^[A-Za-z0-9._-]{1,128}$"),
 }
 
 // ValidDelegationLink reports whether s is of format delegation_link, as Check enforces it:
@@ -485,6 +492,12 @@ func ValidUUID(s string) bool { return ValidFormat(FormatUUID, s) }
 // 1 to 128 of `[A-Za-z0-9_-]`.
 func ValidOpaqueID(s string) bool { return ValidFormat(FormatOpaqueID, s) }
 
+// ValidSessionID reports whether s is of format session_id, as Check enforces it:
+// 1 to 128 of `[A-Za-z0-9._-]`: a correlation id safe in W3C baggage and on a
+// log line. The shape snowplow, the id's origin, accepts and mints (audit#32):
+// its minted ids, a trace id, a UUID all fit.
+func ValidSessionID(s string) bool { return ValidFormat(FormatSessionID, s) }
+
 // ValidRFC3339 reports whether s is of format rfc3339, as Check enforces it:
 // an RFC 3339 timestamp, with or without fractional seconds.
 func ValidRFC3339(s string) bool { return ValidFormat(FormatRFC3339, s) }
@@ -497,6 +510,7 @@ var formatValidators = map[string]func(string) bool{
 	FormatContentHash:    ValidContentHash,
 	FormatUUID:           ValidUUID,
 	FormatOpaqueID:       ValidOpaqueID,
+	FormatSessionID:      ValidSessionID,
 	FormatRFC3339:        ValidRFC3339,
 }
 
@@ -1635,7 +1649,7 @@ var schemaKeys = []KeySpec{
 		Type:           TypeString,
 		Semconv:        "development",
 		Values:         nil,
-		Format:         "",
+		Format:         "session_id",
 		Marker:         "",
 		Identity:       false,
 		Asserted:       false,
@@ -1646,7 +1660,7 @@ var schemaKeys = []KeySpec{
 		CredentialFree: false,
 		Min:            nil,
 		LessThan:       "",
-		Description:    "The business/session correlation id from W3C baggage. A correlation key a client can set: never identity, never a policy key.",
+		Description:    "The business/session correlation id from W3C baggage. A correlation key a client can set: never identity, never a policy key. Of format session_id (v0.11.0): a writer refuses an inbound value of any other shape, with audit.ValidSessionID, before writing it.",
 		Writers: map[Writer]Requirement{
 			WriterRequest:    {Level: LevelRequired},
 			WriterGateway:    {Level: LevelConditional, When: "inbound baggage carries it"},
