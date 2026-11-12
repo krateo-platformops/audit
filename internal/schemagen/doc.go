@@ -462,6 +462,7 @@ var actionLiterals = []actionLiteral{
 	{"controller", "helm.install", "helm installs a release that does not exist yet (cdc's Create, no release)"},
 	{"controller", "helm.upgrade", "helm upgrades an existing release (cdc's Create, a release exists)"},
 	{"controller", "helm.reconcile", "helm reconciles a release to its desired state: Observe's self-heal or Update, through plumbing's Reconcile, a three-way merge that patches drift and prunes children"},
+	{"controller", "helm.rollback", "helm rolls a release back: Observe clearing a release stuck pending past the grace, and Delete's rollback; real child patches, creates and deletes (plumbing#140 per-child verdicts)"},
 	{"controller", "helm.uninstall", "helm uninstalls a release (cdc's Delete)"},
 	{"request", "authn.username.check", "authn's `POST /usernames/check`, whether a username is free; its result is `krateo.audit.check_result`"},
 }

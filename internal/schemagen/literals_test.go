@@ -113,3 +113,38 @@ func TestActionLiterals_ReadersAreDerived(t *testing.T) {
 		t.Error("the registry still names check_result as a reader once the schema has no per-action set")
 	}
 }
+
+// The registry is well formed: each row names a writer class of the schema
+// and a literal of krateo.action's form, once per writer. cdc's helm
+// literals (core-provider#423) are registered under the controller, written
+// out by hand so a dropped row is caught.
+func TestActionLiterals_RegistryIsWellFormed(t *testing.T) {
+	raw, err := os.ReadFile("../../schema/v1.yaml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := parseSchema(t, string(raw))
+	writers := map[string]bool{}
+	for _, w := range s.Writers {
+		writers[w.ID] = true
+	}
+	seen := map[string]bool{}
+	for _, l := range actionLiterals {
+		if !writers[l.Writer] || !actionName.MatchString(l.Literal) || l.Action == "" {
+			t.Errorf("row %+v: an unknown writer, a malformed literal or no meaning", l)
+		}
+		if seen[l.Writer+" "+l.Literal] {
+			t.Errorf("row %+v: registered twice", l)
+		}
+		seen[l.Writer+" "+l.Literal] = true
+	}
+	for _, lit := range []string{"helm.install", "helm.upgrade", "helm.reconcile", "helm.rollback", "helm.uninstall"} {
+		if !seen["controller "+lit] {
+			t.Errorf("%s is not registered under the controller", lit)
+		}
+	}
+	doc := actionLiteralsDoc(s)
+	if !strings.Contains(doc, "| `controller` | `helm.rollback` | ") {
+		t.Errorf("the registry section does not show helm.rollback:\n%s", doc)
+	}
+}

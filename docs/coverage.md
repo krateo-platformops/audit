@@ -4,7 +4,7 @@ title: audit — coverage
 description: The cross-component audit inventory (AUDIT-4, installer#410). Every mutating path of every Krateo component, per writer class, with its identity source, status, owner issue, and the scope, action, verb and outcomes its records carry.
 resource: github.com/krateo-platformops/audit
 tags: [library, audit, coverage, inventory]
-timestamp: 2026-11-11T00:00:00Z
+timestamp: 2026-11-12T00:00:00Z
 ---
 
 # Coverage
@@ -147,8 +147,12 @@ wrote, and its verb is the verb authn sent for that Secret. The CSR that a
 login creates, approves and deletes is an intermediate step, not a row.
 ui-token-hop's own `POST` to authn's LoginURL, which mints the bearer it
 then sends on, is one of these logins: the login rows cover it. A
-`/delegate` record targets the actor's `serviceaccount.authn.krateo.io`
-mapping. Its refusals get their own `denial_reason` values in v0.6.0
+`/delegate` record is shaped as a Kubernetes TokenRequest: verb `create`,
+method `POST`, on the `token` subresource of the actor's
+`serviceaccount.authn.krateo.io` mapping, with no status code (authn issues
+the token itself, so no authority answers). That is authn's shipped record
+(authn@0fa999e0, `internal/auditlog/delegate.go:38-42`, `:59-60`); the verb
+`get` in [authn#119]'s text is superseded by it. Its refusals get their own `denial_reason` values in v0.6.0
 (`delegation_not_allowed`, `delegation_too_deep`), as does the refusal of
 an IdP-asserted `krateo:` group (`platform_group`) ([audit#12]). Until
 then a refusal is a `denied` record with no reason, which is valid.
@@ -166,7 +170,7 @@ then a refusal is a `denied` record with no reason, which is valid.
 | authn | basic, LDAP, OAuth and OIDC login: creates or updates the user's clientconfig Secret | request | the identity the strategy verified; a row only after verification | not audited | [authn#119] | `github.com/krateo-platformops/authn/audit` | `authn.login.{basic,ldap,oauth,oidc}` | create, update | success, denied, failure |
 | authn | ServiceAccount login: creates or updates the clientconfig Secret owned by the mapping | request | the verified ServiceAccount token and its mapping | not audited | [authn#119] | `github.com/krateo-platformops/authn/audit` | `authn.login.serviceaccount` | create, update | success, denied, failure |
 | authn | OIDC step-up: creates or updates the user's step-up clientconfig Secret | request | the identity the IdP verified | not audited | [authn#119] | `github.com/krateo-platformops/authn/audit` | `authn.stepup.oidc` | create, update | success, denied, failure |
-| authn | `POST /delegate`: writes nothing; signs a delegated JWT, authorised by the actor's mapping | request | the verified actor; the subject goes to `on_behalf_of`, the chain to `delegation` | not audited | [authn#119] | `github.com/krateo-platformops/authn/audit` | `authn.delegate` | get | success, denied, failure |
+| authn | `POST /delegate`: signs a delegated JWT, authorised by the actor's mapping; recorded as a create on the mapping's `token` subresource | request | the verified actor; the subject goes to `on_behalf_of`, the chain to `delegation` | not audited | [authn#119] | `github.com/krateo-platformops/authn/audit` | `authn.delegate` | create | success, denied, failure |
 | kagent-controller | its REST writes (sessions, runs, agent edits), reached from the kagent UI through ui-token-hop and the agent gateway | request | the Krateo bearer ui-token-hop mints and swaps in | not audited | [kagent#31] | | | | |
 
 ## gateway (G)
@@ -218,7 +222,15 @@ the predicate drops, by reason.
   `spec.principal: controller` on every cdc authn mapping, so cdc's tokens
   carry the class `controller`, not `service`. The installer's pin flips,
   which prune and recreate leaves, are executed by cdc and core-provider,
-  so their rows cover them.
+  so their rows cover them. Two cases are expected, not gaps:
+  - A child helm never attempted, because an earlier create failed, gets
+    **no** record. The failed create is the record; the count of children
+    not attempted belongs to the Composition's status and metric, not to
+    the trail.
+  - A child whose Namespace can't be read (one an uninstall's cascade
+    deleted included) is recorded with preview unknown: the record omits
+    `krateo.audit.preview` and marks it, `krateo.audit.incomplete=preview`.
+    It is never guessed `false`.
 - **rest-dynamic-controller** emits on audit v0.3.0. **oasgen-provider**
   emits nothing.
 - **access-review** emits on audit v0.3.0, under the shared scope (split by
