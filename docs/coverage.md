@@ -120,7 +120,9 @@ usernames can alias: `Alice@Example` derives the Secret of the user
   derivation leaves the username unchanged
   (`MakeDNS1123Compatible(username) == username`).
 - Otherwise the record names the Secret resource with no name, as a
-  `name_missing` record does.
+  `name_missing` record does. A sign-in for such a username is refused with
+  `name_not_issued` (audit v0.10.0): authn would issue the username in
+  another form.
 
 The reason is aliasing: a query for one user's Secret must never show checks
 or refusals for names that weren't theirs.

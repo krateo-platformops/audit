@@ -317,13 +317,22 @@ gains a value, or the key gains an action, in a minor release.
 
 ## Adopting v0.10.0
 
-v0.10.0 is additive: a plain bump changes no record. It adds one request
-denial reason, `DenialReasonInvalidRequest` (`invalid_request`, audit#29),
-for authn's `authn.username.check`: a verified, mapped and opted-in caller
+v0.10.0 is additive: a plain bump changes no record. It adds two request
+denial reasons (audit#29).
+
+`DenialReasonNameNotIssued` (`name_not_issued`) is for a sign-in with a
+username authn would issue in another form, one the clientconfig Secret's
+name derivation would rewrite. The record is denied, with no status code and
+no `check_result`, and names the Secret resource without a name: the derived
+name would be another username's (coverage.md, "Naming a derived credential
+Secret").
+
+`DenialReasonInvalidRequest` (`invalid_request`) is for authn's
+`authn.username.check`: a verified, mapped and opted-in caller
 sent a body with no username, or one that isn't JSON, so authn answers 400
 and the check never runs. The record is denied, with no status code and no
 `check_result`. With no username it names the Secret resource without a
-name, as `name_missing` does. Like every denial reason it is the request
+name, as `name_missing` does. Like every denial reason, both are the request
 writer's alone: `Check` reports it `bad-enum` on a controller and
 `not-for-writer` on the gateway and action writers.
 

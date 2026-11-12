@@ -28,6 +28,11 @@ func TestCheck_V0100InvalidRequest(t *testing.T) {
 	// authn's refusal: denied, the Secret resource with no name, no result.
 	refused := sub(sub(sub(usernameCheck, checkOutcome, `{"key":"krateo.audit.outcome","value":{"stringValue":"denied"}},`), checkResult, reason),
 		`{"key":"krateo.audit.object_ref.name","value":{"stringValue":"example-user-clientconfig"}},`, "")
+	// A sign-in refused with name_not_issued: authn's denied login, the
+	// Secret resource with no name.
+	notIssued := sub(sub(sub(authnDenied, "name_held_legacy", "name_not_issued"),
+		`{"key":"krateo.audit.object_ref.name","value":{"stringValue":"example-user-clientconfig"}},`, ""),
+		`"authn.login.oidc"`, `"authn.login.basic"`)
 	for _, tc := range []struct {
 		name, writer, record string
 		want                 []string
@@ -39,6 +44,15 @@ func TestCheck_V0100InvalidRequest(t *testing.T) {
 		{"on a success", "request", sub(refused, `{"key":"krateo.audit.outcome","value":{"stringValue":"denied"}},`, checkOutcome),
 			[]string{"krateo.audit.denial_reason: unexpected"}},
 		{"on a controller", "controller", sub(sub(controllerRecord, pruned, keptOutcome), "kept_resource_policy", "invalid_request"),
+			[]string{"krateo.audit.denial_reason: bad-enum"}},
+		// name_not_issued: a sign-in for a username authn would issue in
+		// another form, naming the Secret resource with no name.
+		{"name not issued", "request", notIssued, nil},
+		{"name not issued, with a status code", "request",
+			sub(notIssued, `{"key":"krateo.audit.denial_reason","value":{"stringValue":"name_not_issued"}},`,
+				`{"key":"krateo.audit.denial_reason","value":{"stringValue":"name_not_issued"}},{"key":"http.response.status_code","value":{"intValue":"403"}},`),
+			[]string{"http.response.status_code: unexpected"}},
+		{"name not issued, on a controller", "controller", sub(sub(controllerRecord, pruned, keptOutcome), "kept_resource_policy", "name_not_issued"),
 			[]string{"krateo.audit.denial_reason: bad-enum"}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
