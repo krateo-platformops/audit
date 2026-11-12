@@ -147,13 +147,13 @@ listed matches the resource and every subresource of it.
 A value that breaks its key's format is `bad-format`; an int below its
 minimum, or not below its `less_than` key, is `out-of-range`.
 
-- `delegation_link`: `<class>:<subject>`, the class one of the actor classes or empty, the subject not empty.
-- `marker_list`: comma-separated markers of the schema, each at most once.
-- `sha256_hex`: 64 lowercase hex digits.
-- `content_hash`: `c1:` and 64 lowercase hex digits: the content hash in form c1 (below). Any other form prefix is refused: a stored hash is read only with the form that made it.
-- `uuid`: a UUID in its canonical textual form, lowercase (8-4-4-4-12 hex digits).
-- `opaque_id`: 1 to 128 of `[A-Za-z0-9_-]`.
-- `rfc3339`: an RFC 3339 timestamp, with or without fractional seconds.
+- `delegation_link` (`audit.ValidDelegationLink`): `<class>:<subject>`, the class one of the actor classes or empty, the subject not empty.
+- `marker_list` (`audit.ValidMarkerList`): comma-separated markers of the schema, each at most once.
+- `sha256_hex` (`audit.ValidSHA256Hex`): 64 lowercase hex digits. Pattern `^[0-9a-f]{64}$`.
+- `content_hash` (`audit.ValidContentHash`): `c1:` and 64 lowercase hex digits: the content hash in form c1 (below). Any other form prefix is refused: a stored hash is read only with the form that made it.
+- `uuid` (`audit.ValidUUID`): a UUID in its canonical textual form, lowercase (8-4-4-4-12 hex digits). Pattern `^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`.
+- `opaque_id` (`audit.ValidOpaqueID`): 1 to 128 of `[A-Za-z0-9_-]`. Pattern `^[A-Za-z0-9_-]{1,128}$`.
+- `rfc3339` (`audit.ValidRFC3339`): an RFC 3339 timestamp, with or without fractional seconds.
 
 ## Closed values per writer and per action
 

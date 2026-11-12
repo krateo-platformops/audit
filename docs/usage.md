@@ -1,7 +1,7 @@
 ---
 type: Usage
 title: audit — usage
-description: Install the package, when and how to emit, who the actor is, adopting v0.4.0, v0.5.0, v0.6.0, v0.7.0, v0.8.0, v0.9.0 and v0.10.0, testing a writer against the schema, and checking the live table.
+description: Install the package, when and how to emit, who the actor is, adopting v0.4.0, v0.5.0, v0.6.0, v0.7.0, v0.8.0, v0.9.0, v0.10.0 and v0.11.0, testing a writer against the schema, and checking the live table.
 resource: github.com/krateo-platformops/audit
 tags: [library, audit, usage]
 timestamp: 2026-11-12T00:00:00Z
@@ -335,6 +335,21 @@ and the check never runs. The record is denied, with no status code and no
 name, as `name_missing` does. Like every denial reason, both are the request
 writer's alone: `Check` reports it `bad-enum` on a controller and
 `not-for-writer` on the gateway and action writers.
+
+## Adopting v0.11.0
+
+v0.11.0 adds API and changes no record or rule. The schema's value formats are
+exported validators, generated from schema/v1.yaml (audit#32):
+`audit.ValidOpaqueID(s)` and one `Valid*` per format, the generic
+`audit.ValidFormat(format, s)`, and `audit.ValidValue(key, s)`, which applies
+a key's declared format and returns a `*FormatError` naming the key and the
+format, never the value. `Check` uses exactly these.
+
+A writer that takes a value from an untrusted source validates it with them
+before writing it, and drops any copy of a pattern it keeps (authn, snowplow,
+the gateway). `session.id` declares no format in schema v1, so
+`ValidValue(KeySessionID, s)` accepts any value; a writer that wants to
+refuse a non-opaque session id calls `ValidOpaqueID` itself.
 
 ## Testing a writer
 

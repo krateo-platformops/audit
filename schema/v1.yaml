@@ -162,6 +162,45 @@ conditions:
       krateo.audit.outcome is success: the authority answered and the action
       completed.
 
+# The value formats a key may declare (`format:` on the key). Each is one
+# exported validator, generated: audit.Valid<go>(s) (ValidOpaqueID), behind
+# audit.ValidFormat(format, s); audit.ValidValue(key, s) applies a key's
+# format. Check uses exactly these, so a writer that validates an untrusted
+# value with them agrees with Check. `pattern` is the format's whole rule when
+# a regular expression states it (RE2, matched against the whole value); a
+# format without one is a rule in format.go, which a test holds to this list.
+# A format of a string-list key applies to each element.
+formats:
+  - id: delegation_link
+    go: DelegationLink
+    description: >-
+      `<class>:<subject>`, the class one of the actor classes or empty, the
+      subject not empty.
+  - id: marker_list
+    go: MarkerList
+    description: comma-separated markers of the schema, each at most once.
+  - id: sha256_hex
+    go: SHA256Hex
+    pattern: '^[0-9a-f]{64}$'
+    description: 64 lowercase hex digits.
+  - id: content_hash
+    go: ContentHash
+    description: >-
+      `c1:` and 64 lowercase hex digits: the content hash in form c1 (below).
+      Any other form prefix is refused: a stored hash is read only with the
+      form that made it.
+  - id: uuid
+    go: UUID
+    pattern: '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+    description: a UUID in its canonical textual form, lowercase (8-4-4-4-12 hex digits).
+  - id: opaque_id
+    go: OpaqueID
+    pattern: '^[A-Za-z0-9_-]{1,128}$'
+    description: 1 to 128 of `[A-Za-z0-9_-]`.
+  - id: rfc3339
+    go: RFC3339
+    description: an RFC 3339 timestamp, with or without fractional seconds.
+
 # Exactly one target per record: a Kubernetes object or an external endpoint.
 # A controller's record may name both: the object it wrote in object_ref and
 # the endpoint it wrote to in server.address (a v0.4 controller record named

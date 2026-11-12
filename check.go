@@ -1,11 +1,9 @@
 package audit
 
 import (
-	"regexp"
 	"slices"
 	"strconv"
 	"strings"
-	"time"
 	"unicode/utf8"
 
 	"go.opentelemetry.io/otel/attribute"
@@ -530,67 +528,20 @@ func checkValue(spec *KeySpec, r Requirement, v attribute.Value) (Reason, bool) 
 			return ReasonOutOfRange, true
 		}
 	}
-	switch spec.Format {
-	case "delegation_link":
-		for _, l := range stringList(v) {
-			c, sub, ok := strings.Cut(l, ":")
-			if !ok || sub == "" || (c != "" && !Class(c).Known()) {
+	if spec.Format != "" {
+		// The format's exported validator (ValidFormat), the one rule writers
+		// use too; a string list's format applies to each element.
+		values := []string{v.AsString()}
+		if spec.Type == TypeStringSlice {
+			values = stringList(v)
+		}
+		for _, e := range values {
+			if !ValidFormat(spec.Format, e) {
 				return ReasonBadFormat, true
 			}
-		}
-	case "marker_list":
-		seen := map[string]bool{}
-		for _, m := range strings.Split(v.AsString(), ",") {
-			if seen[m] || !slices.Contains(schemaMarkers, m) {
-				return ReasonBadFormat, true
-			}
-			seen[m] = true
-		}
-	case "sha256_hex":
-		if !lowerHex(v.AsString(), 64) {
-			return ReasonBadFormat, true
-		}
-	case "content_hash":
-		// Only the forms this library defines: a form it does not know has
-		// no rule to check a stored hash with.
-		form, sum, ok := strings.Cut(v.AsString(), ":")
-		if !ok || form != ContentFormC1 || !lowerHex(sum, 64) {
-			return ReasonBadFormat, true
-		}
-	case "uuid":
-		if !uuidForm.MatchString(v.AsString()) {
-			return ReasonBadFormat, true
-		}
-	case "opaque_id":
-		if !opaqueID.MatchString(v.AsString()) {
-			return ReasonBadFormat, true
-		}
-	case "rfc3339":
-		if _, err := time.Parse(time.RFC3339, v.AsString()); err != nil {
-			return ReasonBadFormat, true
 		}
 	}
 	return "", false
-}
-
-var (
-	// uuidForm is a UUID in its canonical textual form, lowercase.
-	uuidForm = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`)
-	// opaqueID is 1 to 128 of [A-Za-z0-9_-].
-	opaqueID = regexp.MustCompile(`^[A-Za-z0-9_-]{1,128}$`)
-)
-
-// lowerHex reports whether s is exactly n lowercase hex digits.
-func lowerHex(s string, n int) bool {
-	if len(s) != n {
-		return false
-	}
-	for i := 0; i < len(s); i++ {
-		if c := s[i]; (c < '0' || c > '9') && (c < 'a' || c > 'f') {
-			return false
-		}
-	}
-	return true
 }
 
 // hasType reports whether v is of type t. A string list is a STRINGSLICE or a

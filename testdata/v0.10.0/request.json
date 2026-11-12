@@ -1,0 +1,3212 @@
+{
+  "resourceLogs": [
+    {
+      "scopeLogs": [
+        {
+          "logRecords": [
+            {
+              "attributes": [
+                {
+                  "key": "event.name",
+                  "value": {
+                    "stringValue": "audit"
+                  }
+                },
+                {
+                  "key": "krateo.audit.schema_version",
+                  "value": {
+                    "stringValue": "1"
+                  }
+                },
+                {
+                  "key": "user.name",
+                  "value": {
+                    "stringValue": "system:serviceaccount:example-system:example-controller"
+                  }
+                },
+                {
+                  "key": "krateo.audit.actor_class",
+                  "value": {
+                    "stringValue": "service"
+                  }
+                },
+                {
+                  "key": "krateo.action",
+                  "value": {
+                    "stringValue": "authn.username.check"
+                  }
+                },
+                {
+                  "key": "krateo.audit.verb",
+                  "value": {
+                    "stringValue": "get"
+                  }
+                },
+                {
+                  "key": "http.request.method",
+                  "value": {
+                    "stringValue": "GET"
+                  }
+                },
+                {
+                  "key": "krateo.audit.outcome",
+                  "value": {
+                    "stringValue": "success"
+                  }
+                },
+                {
+                  "key": "krateo.audit.check_result",
+                  "value": {
+                    "stringValue": "available"
+                  }
+                },
+                {
+                  "key": "krateo.audit.preview",
+                  "value": {
+                    "boolValue": false
+                  }
+                },
+                {
+                  "key": "k8s.namespace.name",
+                  "value": {
+                    "stringValue": "example-system"
+                  }
+                },
+                {
+                  "key": "krateo.audit.object_ref.api_version",
+                  "value": {
+                    "stringValue": "v1"
+                  }
+                },
+                {
+                  "key": "krateo.audit.object_ref.resource",
+                  "value": {
+                    "stringValue": "secrets"
+                  }
+                },
+                {
+                  "key": "krateo.audit.object_ref.name",
+                  "value": {
+                    "stringValue": "example-user-clientconfig"
+                  }
+                },
+                {
+                  "key": "krateo.request.uri",
+                  "value": {
+                    "stringValue": "/usernames/check"
+                  }
+                },
+                {
+                  "key": "krateo.request.source_ips",
+                  "value": {
+                    "arrayValue": {
+                      "values": [
+                        {
+                          "stringValue": "192.0.2.10"
+                        }
+                      ]
+                    }
+                  }
+                },
+                {
+                  "key": "session.id",
+                  "value": {
+                    "stringValue": "example-session"
+                  }
+                },
+                {
+                  "key": "outcome",
+                  "value": {
+                    "stringValue": "success"
+                  }
+                },
+                {
+                  "key": "k8s.resource.version",
+                  "value": {
+                    "stringValue": "v1"
+                  }
+                },
+                {
+                  "key": "k8s.resource.resource",
+                  "value": {
+                    "stringValue": "secrets"
+                  }
+                },
+                {
+                  "key": "k8s.resource.name",
+                  "value": {
+                    "stringValue": "example-user-clientconfig"
+                  }
+                }
+              ],
+              "body": {
+                "stringValue": ""
+              },
+              "eventName": "audit"
+            },
+            {
+              "attributes": [
+                {
+                  "key": "event.name",
+                  "value": {
+                    "stringValue": "audit"
+                  }
+                },
+                {
+                  "key": "krateo.audit.schema_version",
+                  "value": {
+                    "stringValue": "1"
+                  }
+                },
+                {
+                  "key": "user.name",
+                  "value": {
+                    "stringValue": "system:serviceaccount:example-system:example-controller"
+                  }
+                },
+                {
+                  "key": "krateo.audit.actor_class",
+                  "value": {
+                    "stringValue": "service"
+                  }
+                },
+                {
+                  "key": "krateo.action",
+                  "value": {
+                    "stringValue": "authn.username.check"
+                  }
+                },
+                {
+                  "key": "krateo.audit.verb",
+                  "value": {
+                    "stringValue": "get"
+                  }
+                },
+                {
+                  "key": "http.request.method",
+                  "value": {
+                    "stringValue": "GET"
+                  }
+                },
+                {
+                  "key": "krateo.audit.outcome",
+                  "value": {
+                    "stringValue": "success"
+                  }
+                },
+                {
+                  "key": "krateo.audit.check_result",
+                  "value": {
+                    "stringValue": "reserved"
+                  }
+                },
+                {
+                  "key": "krateo.audit.preview",
+                  "value": {
+                    "boolValue": false
+                  }
+                },
+                {
+                  "key": "k8s.namespace.name",
+                  "value": {
+                    "stringValue": "example-system"
+                  }
+                },
+                {
+                  "key": "krateo.audit.object_ref.api_version",
+                  "value": {
+                    "stringValue": "v1"
+                  }
+                },
+                {
+                  "key": "krateo.audit.object_ref.resource",
+                  "value": {
+                    "stringValue": "secrets"
+                  }
+                },
+                {
+                  "key": "krateo.audit.object_ref.name",
+                  "value": {
+                    "stringValue": "example-user-clientconfig"
+                  }
+                },
+                {
+                  "key": "krateo.request.uri",
+                  "value": {
+                    "stringValue": "/usernames/check"
+                  }
+                },
+                {
+                  "key": "krateo.request.source_ips",
+                  "value": {
+                    "arrayValue": {
+                      "values": [
+                        {
+                          "stringValue": "192.0.2.10"
+                        }
+                      ]
+                    }
+                  }
+                },
+                {
+                  "key": "session.id",
+                  "value": {
+                    "stringValue": "example-session"
+                  }
+                },
+                {
+                  "key": "outcome",
+                  "value": {
+                    "stringValue": "success"
+                  }
+                },
+                {
+                  "key": "k8s.resource.version",
+                  "value": {
+                    "stringValue": "v1"
+                  }
+                },
+                {
+                  "key": "k8s.resource.resource",
+                  "value": {
+                    "stringValue": "secrets"
+                  }
+                },
+                {
+                  "key": "k8s.resource.name",
+                  "value": {
+                    "stringValue": "example-user-clientconfig"
+                  }
+                }
+              ],
+              "body": {
+                "stringValue": ""
+              },
+              "eventName": "audit"
+            },
+            {
+              "attributes": [
+                {
+                  "key": "event.name",
+                  "value": {
+                    "stringValue": "audit"
+                  }
+                },
+                {
+                  "key": "krateo.audit.schema_version",
+                  "value": {
+                    "stringValue": "1"
+                  }
+                },
+                {
+                  "key": "user.name",
+                  "value": {
+                    "stringValue": "system:serviceaccount:example-system:example-controller"
+                  }
+                },
+                {
+                  "key": "krateo.audit.actor_class",
+                  "value": {
+                    "stringValue": "service"
+                  }
+                },
+                {
+                  "key": "krateo.action",
+                  "value": {
+                    "stringValue": "authn.username.check"
+                  }
+                },
+                {
+                  "key": "krateo.audit.verb",
+                  "value": {
+                    "stringValue": "get"
+                  }
+                },
+                {
+                  "key": "http.request.method",
+                  "value": {
+                    "stringValue": "GET"
+                  }
+                },
+                {
+                  "key": "krateo.audit.outcome",
+                  "value": {
+                    "stringValue": "success"
+                  }
+                },
+                {
+                  "key": "krateo.audit.check_result",
+                  "value": {
+                    "stringValue": "name_claimed"
+                  }
+                },
+                {
+                  "key": "krateo.audit.preview",
+                  "value": {
+                    "boolValue": false
+                  }
+                },
+                {
+                  "key": "k8s.namespace.name",
+                  "value": {
+                    "stringValue": "example-system"
+                  }
+                },
+                {
+                  "key": "krateo.audit.object_ref.api_version",
+                  "value": {
+                    "stringValue": "v1"
+                  }
+                },
+                {
+                  "key": "krateo.audit.object_ref.resource",
+                  "value": {
+                    "stringValue": "secrets"
+                  }
+                },
+                {
+                  "key": "krateo.audit.object_ref.name",
+                  "value": {
+                    "stringValue": "example-user-clientconfig"
+                  }
+                },
+                {
+                  "key": "krateo.request.uri",
+                  "value": {
+                    "stringValue": "/usernames/check"
+                  }
+                },
+                {
+                  "key": "krateo.request.source_ips",
+                  "value": {
+                    "arrayValue": {
+                      "values": [
+                        {
+                          "stringValue": "192.0.2.10"
+                        }
+                      ]
+                    }
+                  }
+                },
+                {
+                  "key": "session.id",
+                  "value": {
+                    "stringValue": "example-session"
+                  }
+                },
+                {
+                  "key": "outcome",
+                  "value": {
+                    "stringValue": "success"
+                  }
+                },
+                {
+                  "key": "k8s.resource.version",
+                  "value": {
+                    "stringValue": "v1"
+                  }
+                },
+                {
+                  "key": "k8s.resource.resource",
+                  "value": {
+                    "stringValue": "secrets"
+                  }
+                },
+                {
+                  "key": "k8s.resource.name",
+                  "value": {
+                    "stringValue": "example-user-clientconfig"
+                  }
+                }
+              ],
+              "body": {
+                "stringValue": ""
+              },
+              "eventName": "audit"
+            },
+            {
+              "attributes": [
+                {
+                  "key": "event.name",
+                  "value": {
+                    "stringValue": "audit"
+                  }
+                },
+                {
+                  "key": "krateo.audit.schema_version",
+                  "value": {
+                    "stringValue": "1"
+                  }
+                },
+                {
+                  "key": "user.name",
+                  "value": {
+                    "stringValue": "system:serviceaccount:example-system:example-controller"
+                  }
+                },
+                {
+                  "key": "krateo.audit.actor_class",
+                  "value": {
+                    "stringValue": "service"
+                  }
+                },
+                {
+                  "key": "krateo.action",
+                  "value": {
+                    "stringValue": "authn.username.check"
+                  }
+                },
+                {
+                  "key": "krateo.audit.verb",
+                  "value": {
+                    "stringValue": "get"
+                  }
+                },
+                {
+                  "key": "http.request.method",
+                  "value": {
+                    "stringValue": "GET"
+                  }
+                },
+                {
+                  "key": "krateo.audit.outcome",
+                  "value": {
+                    "stringValue": "success"
+                  }
+                },
+                {
+                  "key": "krateo.audit.check_result",
+                  "value": {
+                    "stringValue": "name_held_legacy"
+                  }
+                },
+                {
+                  "key": "krateo.audit.preview",
+                  "value": {
+                    "boolValue": false
+                  }
+                },
+                {
+                  "key": "k8s.namespace.name",
+                  "value": {
+                    "stringValue": "example-system"
+                  }
+                },
+                {
+                  "key": "krateo.audit.object_ref.api_version",
+                  "value": {
+                    "stringValue": "v1"
+                  }
+                },
+                {
+                  "key": "krateo.audit.object_ref.resource",
+                  "value": {
+                    "stringValue": "secrets"
+                  }
+                },
+                {
+                  "key": "krateo.audit.object_ref.name",
+                  "value": {
+                    "stringValue": "example-user-clientconfig"
+                  }
+                },
+                {
+                  "key": "krateo.request.uri",
+                  "value": {
+                    "stringValue": "/usernames/check"
+                  }
+                },
+                {
+                  "key": "krateo.request.source_ips",
+                  "value": {
+                    "arrayValue": {
+                      "values": [
+                        {
+                          "stringValue": "192.0.2.10"
+                        }
+                      ]
+                    }
+                  }
+                },
+                {
+                  "key": "session.id",
+                  "value": {
+                    "stringValue": "example-session"
+                  }
+                },
+                {
+                  "key": "outcome",
+                  "value": {
+                    "stringValue": "success"
+                  }
+                },
+                {
+                  "key": "k8s.resource.version",
+                  "value": {
+                    "stringValue": "v1"
+                  }
+                },
+                {
+                  "key": "k8s.resource.resource",
+                  "value": {
+                    "stringValue": "secrets"
+                  }
+                },
+                {
+                  "key": "k8s.resource.name",
+                  "value": {
+                    "stringValue": "example-user-clientconfig"
+                  }
+                }
+              ],
+              "body": {
+                "stringValue": ""
+              },
+              "eventName": "audit"
+            },
+            {
+              "attributes": [
+                {
+                  "key": "event.name",
+                  "value": {
+                    "stringValue": "audit"
+                  }
+                },
+                {
+                  "key": "krateo.audit.schema_version",
+                  "value": {
+                    "stringValue": "1"
+                  }
+                },
+                {
+                  "key": "user.name",
+                  "value": {
+                    "stringValue": "system:serviceaccount:example-system:example-controller"
+                  }
+                },
+                {
+                  "key": "krateo.audit.actor_class",
+                  "value": {
+                    "stringValue": "service"
+                  }
+                },
+                {
+                  "key": "krateo.action",
+                  "value": {
+                    "stringValue": "authn.username.check"
+                  }
+                },
+                {
+                  "key": "krateo.audit.verb",
+                  "value": {
+                    "stringValue": "get"
+                  }
+                },
+                {
+                  "key": "http.request.method",
+                  "value": {
+                    "stringValue": "GET"
+                  }
+                },
+                {
+                  "key": "krateo.audit.outcome",
+                  "value": {
+                    "stringValue": "success"
+                  }
+                },
+                {
+                  "key": "krateo.audit.check_result",
+                  "value": {
+                    "stringValue": "name_provisioned"
+                  }
+                },
+                {
+                  "key": "krateo.audit.preview",
+                  "value": {
+                    "boolValue": false
+                  }
+                },
+                {
+                  "key": "k8s.namespace.name",
+                  "value": {
+                    "stringValue": "example-system"
+                  }
+                },
+                {
+                  "key": "krateo.audit.object_ref.api_version",
+                  "value": {
+                    "stringValue": "v1"
+                  }
+                },
+                {
+                  "key": "krateo.audit.object_ref.resource",
+                  "value": {
+                    "stringValue": "secrets"
+                  }
+                },
+                {
+                  "key": "krateo.audit.object_ref.name",
+                  "value": {
+                    "stringValue": "example-user-clientconfig"
+                  }
+                },
+                {
+                  "key": "krateo.request.uri",
+                  "value": {
+                    "stringValue": "/usernames/check"
+                  }
+                },
+                {
+                  "key": "krateo.request.source_ips",
+                  "value": {
+                    "arrayValue": {
+                      "values": [
+                        {
+                          "stringValue": "192.0.2.10"
+                        }
+                      ]
+                    }
+                  }
+                },
+                {
+                  "key": "session.id",
+                  "value": {
+                    "stringValue": "example-session"
+                  }
+                },
+                {
+                  "key": "outcome",
+                  "value": {
+                    "stringValue": "success"
+                  }
+                },
+                {
+                  "key": "k8s.resource.version",
+                  "value": {
+                    "stringValue": "v1"
+                  }
+                },
+                {
+                  "key": "k8s.resource.resource",
+                  "value": {
+                    "stringValue": "secrets"
+                  }
+                },
+                {
+                  "key": "k8s.resource.name",
+                  "value": {
+                    "stringValue": "example-user-clientconfig"
+                  }
+                }
+              ],
+              "body": {
+                "stringValue": ""
+              },
+              "eventName": "audit"
+            },
+            {
+              "attributes": [
+                {
+                  "key": "event.name",
+                  "value": {
+                    "stringValue": "audit"
+                  }
+                },
+                {
+                  "key": "krateo.audit.schema_version",
+                  "value": {
+                    "stringValue": "1"
+                  }
+                },
+                {
+                  "key": "user.name",
+                  "value": {
+                    "stringValue": "system:serviceaccount:example-system:example-controller"
+                  }
+                },
+                {
+                  "key": "krateo.audit.actor_class",
+                  "value": {
+                    "stringValue": "service"
+                  }
+                },
+                {
+                  "key": "krateo.action",
+                  "value": {
+                    "stringValue": "authn.username.check"
+                  }
+                },
+                {
+                  "key": "krateo.audit.verb",
+                  "value": {
+                    "stringValue": "get"
+                  }
+                },
+                {
+                  "key": "http.request.method",
+                  "value": {
+                    "stringValue": "GET"
+                  }
+                },
+                {
+                  "key": "krateo.audit.outcome",
+                  "value": {
+                    "stringValue": "success"
+                  }
+                },
+                {
+                  "key": "krateo.audit.check_result",
+                  "value": {
+                    "stringValue": "name_bound"
+                  }
+                },
+                {
+                  "key": "krateo.audit.preview",
+                  "value": {
+                    "boolValue": false
+                  }
+                },
+                {
+                  "key": "k8s.namespace.name",
+                  "value": {
+                    "stringValue": "example-system"
+                  }
+                },
+                {
+                  "key": "krateo.audit.object_ref.api_version",
+                  "value": {
+                    "stringValue": "v1"
+                  }
+                },
+                {
+                  "key": "krateo.audit.object_ref.resource",
+                  "value": {
+                    "stringValue": "secrets"
+                  }
+                },
+                {
+                  "key": "krateo.audit.object_ref.name",
+                  "value": {
+                    "stringValue": "example-user-clientconfig"
+                  }
+                },
+                {
+                  "key": "krateo.request.uri",
+                  "value": {
+                    "stringValue": "/usernames/check"
+                  }
+                },
+                {
+                  "key": "krateo.request.source_ips",
+                  "value": {
+                    "arrayValue": {
+                      "values": [
+                        {
+                          "stringValue": "192.0.2.10"
+                        }
+                      ]
+                    }
+                  }
+                },
+                {
+                  "key": "session.id",
+                  "value": {
+                    "stringValue": "example-session"
+                  }
+                },
+                {
+                  "key": "outcome",
+                  "value": {
+                    "stringValue": "success"
+                  }
+                },
+                {
+                  "key": "k8s.resource.version",
+                  "value": {
+                    "stringValue": "v1"
+                  }
+                },
+                {
+                  "key": "k8s.resource.resource",
+                  "value": {
+                    "stringValue": "secrets"
+                  }
+                },
+                {
+                  "key": "k8s.resource.name",
+                  "value": {
+                    "stringValue": "example-user-clientconfig"
+                  }
+                }
+              ],
+              "body": {
+                "stringValue": ""
+              },
+              "eventName": "audit"
+            },
+            {
+              "attributes": [
+                {
+                  "key": "event.name",
+                  "value": {
+                    "stringValue": "audit"
+                  }
+                },
+                {
+                  "key": "krateo.audit.schema_version",
+                  "value": {
+                    "stringValue": "1"
+                  }
+                },
+                {
+                  "key": "user.name",
+                  "value": {
+                    "stringValue": "system:serviceaccount:example-system:example-controller"
+                  }
+                },
+                {
+                  "key": "krateo.audit.actor_class",
+                  "value": {
+                    "stringValue": "service"
+                  }
+                },
+                {
+                  "key": "krateo.action",
+                  "value": {
+                    "stringValue": "authn.username.check"
+                  }
+                },
+                {
+                  "key": "krateo.audit.verb",
+                  "value": {
+                    "stringValue": "get"
+                  }
+                },
+                {
+                  "key": "http.request.method",
+                  "value": {
+                    "stringValue": "GET"
+                  }
+                },
+                {
+                  "key": "krateo.audit.outcome",
+                  "value": {
+                    "stringValue": "success"
+                  }
+                },
+                {
+                  "key": "krateo.audit.check_result",
+                  "value": {
+                    "stringValue": "invalid"
+                  }
+                },
+                {
+                  "key": "krateo.audit.preview",
+                  "value": {
+                    "boolValue": false
+                  }
+                },
+                {
+                  "key": "k8s.namespace.name",
+                  "value": {
+                    "stringValue": "example-system"
+                  }
+                },
+                {
+                  "key": "krateo.audit.object_ref.api_version",
+                  "value": {
+                    "stringValue": "v1"
+                  }
+                },
+                {
+                  "key": "krateo.audit.object_ref.resource",
+                  "value": {
+                    "stringValue": "secrets"
+                  }
+                },
+                {
+                  "key": "krateo.audit.object_ref.name",
+                  "value": {
+                    "stringValue": "example-user-clientconfig"
+                  }
+                },
+                {
+                  "key": "krateo.request.uri",
+                  "value": {
+                    "stringValue": "/usernames/check"
+                  }
+                },
+                {
+                  "key": "krateo.request.source_ips",
+                  "value": {
+                    "arrayValue": {
+                      "values": [
+                        {
+                          "stringValue": "192.0.2.10"
+                        }
+                      ]
+                    }
+                  }
+                },
+                {
+                  "key": "session.id",
+                  "value": {
+                    "stringValue": "example-session"
+                  }
+                },
+                {
+                  "key": "outcome",
+                  "value": {
+                    "stringValue": "success"
+                  }
+                },
+                {
+                  "key": "k8s.resource.version",
+                  "value": {
+                    "stringValue": "v1"
+                  }
+                },
+                {
+                  "key": "k8s.resource.resource",
+                  "value": {
+                    "stringValue": "secrets"
+                  }
+                },
+                {
+                  "key": "k8s.resource.name",
+                  "value": {
+                    "stringValue": "example-user-clientconfig"
+                  }
+                }
+              ],
+              "body": {
+                "stringValue": ""
+              },
+              "eventName": "audit"
+            },
+            {
+              "attributes": [
+                {
+                  "key": "event.name",
+                  "value": {
+                    "stringValue": "audit"
+                  }
+                },
+                {
+                  "key": "krateo.audit.schema_version",
+                  "value": {
+                    "stringValue": "1"
+                  }
+                },
+                {
+                  "key": "user.name",
+                  "value": {
+                    "stringValue": "system:serviceaccount:example-system:example-controller"
+                  }
+                },
+                {
+                  "key": "krateo.audit.actor_class",
+                  "value": {
+                    "stringValue": "service"
+                  }
+                },
+                {
+                  "key": "krateo.action",
+                  "value": {
+                    "stringValue": "authn.username.check"
+                  }
+                },
+                {
+                  "key": "krateo.audit.verb",
+                  "value": {
+                    "stringValue": "get"
+                  }
+                },
+                {
+                  "key": "http.request.method",
+                  "value": {
+                    "stringValue": "GET"
+                  }
+                },
+                {
+                  "key": "krateo.audit.outcome",
+                  "value": {
+                    "stringValue": "denied"
+                  }
+                },
+                {
+                  "key": "krateo.audit.denial_reason",
+                  "value": {
+                    "stringValue": "username_check_not_allowed"
+                  }
+                },
+                {
+                  "key": "krateo.audit.preview",
+                  "value": {
+                    "boolValue": false
+                  }
+                },
+                {
+                  "key": "k8s.namespace.name",
+                  "value": {
+                    "stringValue": "example-system"
+                  }
+                },
+                {
+                  "key": "krateo.audit.object_ref.api_version",
+                  "value": {
+                    "stringValue": "v1"
+                  }
+                },
+                {
+                  "key": "krateo.audit.object_ref.resource",
+                  "value": {
+                    "stringValue": "secrets"
+                  }
+                },
+                {
+                  "key": "krateo.audit.object_ref.name",
+                  "value": {
+                    "stringValue": "example-user-clientconfig"
+                  }
+                },
+                {
+                  "key": "krateo.request.uri",
+                  "value": {
+                    "stringValue": "/usernames/check"
+                  }
+                },
+                {
+                  "key": "krateo.request.source_ips",
+                  "value": {
+                    "arrayValue": {
+                      "values": [
+                        {
+                          "stringValue": "192.0.2.10"
+                        }
+                      ]
+                    }
+                  }
+                },
+                {
+                  "key": "session.id",
+                  "value": {
+                    "stringValue": "example-session"
+                  }
+                },
+                {
+                  "key": "outcome",
+                  "value": {
+                    "stringValue": "denied"
+                  }
+                },
+                {
+                  "key": "k8s.resource.version",
+                  "value": {
+                    "stringValue": "v1"
+                  }
+                },
+                {
+                  "key": "k8s.resource.resource",
+                  "value": {
+                    "stringValue": "secrets"
+                  }
+                },
+                {
+                  "key": "k8s.resource.name",
+                  "value": {
+                    "stringValue": "example-user-clientconfig"
+                  }
+                }
+              ],
+              "body": {
+                "stringValue": ""
+              },
+              "eventName": "audit"
+            },
+            {
+              "attributes": [
+                {
+                  "key": "event.name",
+                  "value": {
+                    "stringValue": "audit"
+                  }
+                },
+                {
+                  "key": "krateo.audit.schema_version",
+                  "value": {
+                    "stringValue": "1"
+                  }
+                },
+                {
+                  "key": "user.name",
+                  "value": {
+                    "stringValue": "system:serviceaccount:example-system:example-controller"
+                  }
+                },
+                {
+                  "key": "krateo.audit.actor_class",
+                  "value": {
+                    "stringValue": "service"
+                  }
+                },
+                {
+                  "key": "krateo.action",
+                  "value": {
+                    "stringValue": "authn.username.check"
+                  }
+                },
+                {
+                  "key": "krateo.audit.verb",
+                  "value": {
+                    "stringValue": "get"
+                  }
+                },
+                {
+                  "key": "http.request.method",
+                  "value": {
+                    "stringValue": "GET"
+                  }
+                },
+                {
+                  "key": "http.response.status_code",
+                  "value": {
+                    "intValue": "503"
+                  }
+                },
+                {
+                  "key": "krateo.audit.outcome",
+                  "value": {
+                    "stringValue": "failure"
+                  }
+                },
+                {
+                  "key": "krateo.audit.preview",
+                  "value": {
+                    "boolValue": false
+                  }
+                },
+                {
+                  "key": "k8s.namespace.name",
+                  "value": {
+                    "stringValue": "example-system"
+                  }
+                },
+                {
+                  "key": "krateo.audit.object_ref.api_version",
+                  "value": {
+                    "stringValue": "v1"
+                  }
+                },
+                {
+                  "key": "krateo.audit.object_ref.resource",
+                  "value": {
+                    "stringValue": "secrets"
+                  }
+                },
+                {
+                  "key": "krateo.audit.object_ref.name",
+                  "value": {
+                    "stringValue": "example-user-clientconfig"
+                  }
+                },
+                {
+                  "key": "krateo.request.uri",
+                  "value": {
+                    "stringValue": "/usernames/check"
+                  }
+                },
+                {
+                  "key": "krateo.request.source_ips",
+                  "value": {
+                    "arrayValue": {
+                      "values": [
+                        {
+                          "stringValue": "192.0.2.10"
+                        }
+                      ]
+                    }
+                  }
+                },
+                {
+                  "key": "session.id",
+                  "value": {
+                    "stringValue": "example-session"
+                  }
+                },
+                {
+                  "key": "outcome",
+                  "value": {
+                    "stringValue": "failure"
+                  }
+                },
+                {
+                  "key": "k8s.resource.version",
+                  "value": {
+                    "stringValue": "v1"
+                  }
+                },
+                {
+                  "key": "k8s.resource.resource",
+                  "value": {
+                    "stringValue": "secrets"
+                  }
+                },
+                {
+                  "key": "k8s.resource.name",
+                  "value": {
+                    "stringValue": "example-user-clientconfig"
+                  }
+                }
+              ],
+              "body": {
+                "stringValue": ""
+              },
+              "eventName": "audit"
+            },
+            {
+              "attributes": [
+                {
+                  "key": "event.name",
+                  "value": {
+                    "stringValue": "audit"
+                  }
+                },
+                {
+                  "key": "krateo.audit.schema_version",
+                  "value": {
+                    "stringValue": "1"
+                  }
+                },
+                {
+                  "key": "user.name",
+                  "value": {
+                    "stringValue": "system:serviceaccount:example-system:example-controller"
+                  }
+                },
+                {
+                  "key": "krateo.audit.actor_class",
+                  "value": {
+                    "stringValue": "service"
+                  }
+                },
+                {
+                  "key": "krateo.action",
+                  "value": {
+                    "stringValue": "authn.username.check"
+                  }
+                },
+                {
+                  "key": "krateo.audit.verb",
+                  "value": {
+                    "stringValue": "get"
+                  }
+                },
+                {
+                  "key": "http.request.method",
+                  "value": {
+                    "stringValue": "GET"
+                  }
+                },
+                {
+                  "key": "krateo.audit.outcome",
+                  "value": {
+                    "stringValue": "denied"
+                  }
+                },
+                {
+                  "key": "krateo.audit.denial_reason",
+                  "value": {
+                    "stringValue": "invalid_request"
+                  }
+                },
+                {
+                  "key": "krateo.audit.preview",
+                  "value": {
+                    "boolValue": false
+                  }
+                },
+                {
+                  "key": "k8s.namespace.name",
+                  "value": {
+                    "stringValue": "example-system"
+                  }
+                },
+                {
+                  "key": "krateo.audit.object_ref.api_version",
+                  "value": {
+                    "stringValue": "v1"
+                  }
+                },
+                {
+                  "key": "krateo.audit.object_ref.resource",
+                  "value": {
+                    "stringValue": "secrets"
+                  }
+                },
+                {
+                  "key": "krateo.request.uri",
+                  "value": {
+                    "stringValue": "/usernames/check"
+                  }
+                },
+                {
+                  "key": "krateo.request.source_ips",
+                  "value": {
+                    "arrayValue": {
+                      "values": [
+                        {
+                          "stringValue": "192.0.2.10"
+                        }
+                      ]
+                    }
+                  }
+                },
+                {
+                  "key": "session.id",
+                  "value": {
+                    "stringValue": "example-session"
+                  }
+                },
+                {
+                  "key": "outcome",
+                  "value": {
+                    "stringValue": "denied"
+                  }
+                },
+                {
+                  "key": "k8s.resource.version",
+                  "value": {
+                    "stringValue": "v1"
+                  }
+                },
+                {
+                  "key": "k8s.resource.resource",
+                  "value": {
+                    "stringValue": "secrets"
+                  }
+                }
+              ],
+              "body": {
+                "stringValue": ""
+              },
+              "eventName": "audit"
+            },
+            {
+              "attributes": [
+                {
+                  "key": "event.name",
+                  "value": {
+                    "stringValue": "audit"
+                  }
+                },
+                {
+                  "key": "krateo.audit.schema_version",
+                  "value": {
+                    "stringValue": "1"
+                  }
+                },
+                {
+                  "key": "user.name",
+                  "value": {
+                    "stringValue": "example-user"
+                  }
+                },
+                {
+                  "key": "krateo.audit.actor_class",
+                  "value": {
+                    "stringValue": "human"
+                  }
+                },
+                {
+                  "key": "krateo.action",
+                  "value": {
+                    "stringValue": "authn.login.basic"
+                  }
+                },
+                {
+                  "key": "krateo.audit.verb",
+                  "value": {
+                    "stringValue": "update"
+                  }
+                },
+                {
+                  "key": "http.request.method",
+                  "value": {
+                    "stringValue": "PUT"
+                  }
+                },
+                {
+                  "key": "krateo.audit.outcome",
+                  "value": {
+                    "stringValue": "denied"
+                  }
+                },
+                {
+                  "key": "krateo.audit.denial_reason",
+                  "value": {
+                    "stringValue": "name_not_issued"
+                  }
+                },
+                {
+                  "key": "krateo.audit.preview",
+                  "value": {
+                    "boolValue": false
+                  }
+                },
+                {
+                  "key": "k8s.namespace.name",
+                  "value": {
+                    "stringValue": "example-system"
+                  }
+                },
+                {
+                  "key": "krateo.audit.object_ref.api_version",
+                  "value": {
+                    "stringValue": "v1"
+                  }
+                },
+                {
+                  "key": "krateo.audit.object_ref.resource",
+                  "value": {
+                    "stringValue": "secrets"
+                  }
+                },
+                {
+                  "key": "krateo.request.uri",
+                  "value": {
+                    "stringValue": "/basic"
+                  }
+                },
+                {
+                  "key": "krateo.request.source_ips",
+                  "value": {
+                    "arrayValue": {
+                      "values": [
+                        {
+                          "stringValue": "192.0.2.10"
+                        }
+                      ]
+                    }
+                  }
+                },
+                {
+                  "key": "session.id",
+                  "value": {
+                    "stringValue": "example-session"
+                  }
+                },
+                {
+                  "key": "krateo.audit.dry_run",
+                  "value": {
+                    "boolValue": false
+                  }
+                },
+                {
+                  "key": "outcome",
+                  "value": {
+                    "stringValue": "denied"
+                  }
+                },
+                {
+                  "key": "k8s.resource.version",
+                  "value": {
+                    "stringValue": "v1"
+                  }
+                },
+                {
+                  "key": "k8s.resource.resource",
+                  "value": {
+                    "stringValue": "secrets"
+                  }
+                }
+              ],
+              "body": {
+                "stringValue": ""
+              },
+              "eventName": "audit"
+            },
+            {
+              "attributes": [
+                {
+                  "key": "event.name",
+                  "value": {
+                    "stringValue": "audit"
+                  }
+                },
+                {
+                  "key": "krateo.audit.schema_version",
+                  "value": {
+                    "stringValue": "1"
+                  }
+                },
+                {
+                  "key": "user.name",
+                  "value": {
+                    "stringValue": "example-user"
+                  }
+                },
+                {
+                  "key": "krateo.audit.actor_class",
+                  "value": {
+                    "stringValue": "human"
+                  }
+                },
+                {
+                  "key": "krateo.action",
+                  "value": {
+                    "stringValue": "call"
+                  }
+                },
+                {
+                  "key": "krateo.audit.verb",
+                  "value": {
+                    "stringValue": "create"
+                  }
+                },
+                {
+                  "key": "http.request.method",
+                  "value": {
+                    "stringValue": "POST"
+                  }
+                },
+                {
+                  "key": "http.response.status_code",
+                  "value": {
+                    "intValue": "201"
+                  }
+                },
+                {
+                  "key": "krateo.audit.outcome",
+                  "value": {
+                    "stringValue": "success"
+                  }
+                },
+                {
+                  "key": "krateo.audit.preview",
+                  "value": {
+                    "boolValue": false
+                  }
+                },
+                {
+                  "key": "k8s.namespace.name",
+                  "value": {
+                    "stringValue": "example-ns"
+                  }
+                },
+                {
+                  "key": "krateo.audit.object_ref.api_version",
+                  "value": {
+                    "stringValue": "v1"
+                  }
+                },
+                {
+                  "key": "krateo.audit.object_ref.resource",
+                  "value": {
+                    "stringValue": "configmaps"
+                  }
+                },
+                {
+                  "key": "krateo.audit.object_ref.name",
+                  "value": {
+                    "stringValue": "example-evidence"
+                  }
+                },
+                {
+                  "key": "krateo.audit.object_ref.content_sha256",
+                  "value": {
+                    "stringValue": "c1:2bbf0a0f3ccc266c6ee429376afbd9a20714a80d5b03a753bbb29ec8c1fee232"
+                  }
+                },
+                {
+                  "key": "krateo.request.uri",
+                  "value": {
+                    "stringValue": "/call"
+                  }
+                },
+                {
+                  "key": "krateo.request.source_ips",
+                  "value": {
+                    "arrayValue": {
+                      "values": [
+                        {
+                          "stringValue": "192.0.2.10"
+                        }
+                      ]
+                    }
+                  }
+                },
+                {
+                  "key": "session.id",
+                  "value": {
+                    "stringValue": "example-session"
+                  }
+                },
+                {
+                  "key": "krateo.audit.client.source",
+                  "value": {
+                    "stringValue": "portal"
+                  }
+                },
+                {
+                  "key": "krateo.audit.client.confirmation_id",
+                  "value": {
+                    "stringValue": "00000000-0000-4000-8000-0000000000aa"
+                  }
+                },
+                {
+                  "key": "krateo.audit.client.confirmed_set.count",
+                  "value": {
+                    "intValue": "3"
+                  }
+                },
+                {
+                  "key": "krateo.audit.client.confirmed_set.irreversible",
+                  "value": {
+                    "boolValue": true
+                  }
+                },
+                {
+                  "key": "krateo.audit.client.confirmed_set.sha256",
+                  "value": {
+                    "stringValue": "0a08bb91090b111f15a045b6061bccc4d0b8488d85f99ba57d8632e17061c277"
+                  }
+                },
+                {
+                  "key": "krateo.audit.client.confirmed_set.op",
+                  "value": {
+                    "intValue": "2"
+                  }
+                },
+                {
+                  "key": "krateo.audit.client.requested_at",
+                  "value": {
+                    "stringValue": "2026-11-11T10:00:00.123Z"
+                  }
+                },
+                {
+                  "key": "krateo.audit.dry_run",
+                  "value": {
+                    "boolValue": false
+                  }
+                },
+                {
+                  "key": "outcome",
+                  "value": {
+                    "stringValue": "success"
+                  }
+                },
+                {
+                  "key": "k8s.resource.version",
+                  "value": {
+                    "stringValue": "v1"
+                  }
+                },
+                {
+                  "key": "k8s.resource.resource",
+                  "value": {
+                    "stringValue": "configmaps"
+                  }
+                },
+                {
+                  "key": "k8s.resource.name",
+                  "value": {
+                    "stringValue": "example-evidence"
+                  }
+                }
+              ],
+              "body": {
+                "stringValue": ""
+              },
+              "eventName": "audit"
+            },
+            {
+              "attributes": [
+                {
+                  "key": "event.name",
+                  "value": {
+                    "stringValue": "audit"
+                  }
+                },
+                {
+                  "key": "krateo.audit.schema_version",
+                  "value": {
+                    "stringValue": "1"
+                  }
+                },
+                {
+                  "key": "user.name",
+                  "value": {
+                    "stringValue": "example-user"
+                  }
+                },
+                {
+                  "key": "krateo.audit.actor_class",
+                  "value": {
+                    "stringValue": "human"
+                  }
+                },
+                {
+                  "key": "krateo.action",
+                  "value": {
+                    "stringValue": "call"
+                  }
+                },
+                {
+                  "key": "krateo.audit.verb",
+                  "value": {
+                    "stringValue": "create"
+                  }
+                },
+                {
+                  "key": "http.request.method",
+                  "value": {
+                    "stringValue": "POST"
+                  }
+                },
+                {
+                  "key": "http.response.status_code",
+                  "value": {
+                    "intValue": "201"
+                  }
+                },
+                {
+                  "key": "krateo.audit.outcome",
+                  "value": {
+                    "stringValue": "success"
+                  }
+                },
+                {
+                  "key": "krateo.audit.preview",
+                  "value": {
+                    "boolValue": false
+                  }
+                },
+                {
+                  "key": "k8s.namespace.name",
+                  "value": {
+                    "stringValue": "example-ns"
+                  }
+                },
+                {
+                  "key": "krateo.audit.object_ref.api_version",
+                  "value": {
+                    "stringValue": "v1"
+                  }
+                },
+                {
+                  "key": "krateo.audit.object_ref.resource",
+                  "value": {
+                    "stringValue": "configmaps"
+                  }
+                },
+                {
+                  "key": "krateo.audit.object_ref.name",
+                  "value": {
+                    "stringValue": "example-cm"
+                  }
+                },
+                {
+                  "key": "krateo.request.uri",
+                  "value": {
+                    "stringValue": "/call"
+                  }
+                },
+                {
+                  "key": "krateo.request.source_ips",
+                  "value": {
+                    "arrayValue": {
+                      "values": [
+                        {
+                          "stringValue": "192.0.2.10"
+                        }
+                      ]
+                    }
+                  }
+                },
+                {
+                  "key": "session.id",
+                  "value": {
+                    "stringValue": "example-session"
+                  }
+                },
+                {
+                  "key": "krateo.audit.client.rejected",
+                  "value": {
+                    "stringValue": "schema"
+                  }
+                },
+                {
+                  "key": "krateo.audit.dry_run",
+                  "value": {
+                    "boolValue": false
+                  }
+                },
+                {
+                  "key": "outcome",
+                  "value": {
+                    "stringValue": "success"
+                  }
+                },
+                {
+                  "key": "k8s.resource.version",
+                  "value": {
+                    "stringValue": "v1"
+                  }
+                },
+                {
+                  "key": "k8s.resource.resource",
+                  "value": {
+                    "stringValue": "configmaps"
+                  }
+                },
+                {
+                  "key": "k8s.resource.name",
+                  "value": {
+                    "stringValue": "example-cm"
+                  }
+                }
+              ],
+              "body": {
+                "stringValue": ""
+              },
+              "eventName": "audit"
+            },
+            {
+              "attributes": [
+                {
+                  "key": "event.name",
+                  "value": {
+                    "stringValue": "audit"
+                  }
+                },
+                {
+                  "key": "krateo.audit.schema_version",
+                  "value": {
+                    "stringValue": "1"
+                  }
+                },
+                {
+                  "key": "user.name",
+                  "value": {
+                    "stringValue": "example-agent"
+                  }
+                },
+                {
+                  "key": "krateo.audit.actor_class",
+                  "value": {
+                    "stringValue": "agent"
+                  }
+                },
+                {
+                  "key": "krateo.audit.on_behalf_of.user.name",
+                  "value": {
+                    "stringValue": "example-user"
+                  }
+                },
+                {
+                  "key": "krateo.audit.delegation",
+                  "value": {
+                    "arrayValue": {
+                      "values": [
+                        {
+                          "stringValue": "agent:example-agent"
+                        },
+                        {
+                          "stringValue": "human:example-user"
+                        }
+                      ]
+                    }
+                  }
+                },
+                {
+                  "key": "krateo.action",
+                  "value": {
+                    "stringValue": "call"
+                  }
+                },
+                {
+                  "key": "krateo.audit.verb",
+                  "value": {
+                    "stringValue": "get"
+                  }
+                },
+                {
+                  "key": "http.request.method",
+                  "value": {
+                    "stringValue": "GET"
+                  }
+                },
+                {
+                  "key": "http.response.status_code",
+                  "value": {
+                    "intValue": "200"
+                  }
+                },
+                {
+                  "key": "krateo.audit.outcome",
+                  "value": {
+                    "stringValue": "success"
+                  }
+                },
+                {
+                  "key": "krateo.audit.preview",
+                  "value": {
+                    "boolValue": false
+                  }
+                },
+                {
+                  "key": "k8s.namespace.name",
+                  "value": {
+                    "stringValue": "example-ns"
+                  }
+                },
+                {
+                  "key": "krateo.audit.object_ref.api_version",
+                  "value": {
+                    "stringValue": "v1"
+                  }
+                },
+                {
+                  "key": "krateo.audit.object_ref.resource",
+                  "value": {
+                    "stringValue": "configmaps"
+                  }
+                },
+                {
+                  "key": "krateo.audit.object_ref.name",
+                  "value": {
+                    "stringValue": "example-cm"
+                  }
+                },
+                {
+                  "key": "krateo.request.uri",
+                  "value": {
+                    "stringValue": "/call"
+                  }
+                },
+                {
+                  "key": "krateo.request.source_ips",
+                  "value": {
+                    "arrayValue": {
+                      "values": [
+                        {
+                          "stringValue": "192.0.2.10"
+                        }
+                      ]
+                    }
+                  }
+                },
+                {
+                  "key": "session.id",
+                  "value": {
+                    "stringValue": "example-session"
+                  }
+                },
+                {
+                  "key": "outcome",
+                  "value": {
+                    "stringValue": "success"
+                  }
+                },
+                {
+                  "key": "k8s.resource.version",
+                  "value": {
+                    "stringValue": "v1"
+                  }
+                },
+                {
+                  "key": "k8s.resource.resource",
+                  "value": {
+                    "stringValue": "configmaps"
+                  }
+                },
+                {
+                  "key": "k8s.resource.name",
+                  "value": {
+                    "stringValue": "example-cm"
+                  }
+                }
+              ],
+              "body": {
+                "stringValue": ""
+              },
+              "eventName": "audit"
+            },
+            {
+              "attributes": [
+                {
+                  "key": "event.name",
+                  "value": {
+                    "stringValue": "audit"
+                  }
+                },
+                {
+                  "key": "krateo.audit.schema_version",
+                  "value": {
+                    "stringValue": "1"
+                  }
+                },
+                {
+                  "key": "user.name",
+                  "value": {
+                    "stringValue": "example-user"
+                  }
+                },
+                {
+                  "key": "krateo.audit.actor_class",
+                  "value": {
+                    "stringValue": "human"
+                  }
+                },
+                {
+                  "key": "krateo.action",
+                  "value": {
+                    "stringValue": "authn.login.ldap"
+                  }
+                },
+                {
+                  "key": "krateo.audit.verb",
+                  "value": {
+                    "stringValue": "update"
+                  }
+                },
+                {
+                  "key": "http.request.method",
+                  "value": {
+                    "stringValue": "PUT"
+                  }
+                },
+                {
+                  "key": "krateo.audit.outcome",
+                  "value": {
+                    "stringValue": "denied"
+                  }
+                },
+                {
+                  "key": "krateo.audit.denial_reason",
+                  "value": {
+                    "stringValue": "platform_group"
+                  }
+                },
+                {
+                  "key": "krateo.audit.preview",
+                  "value": {
+                    "boolValue": false
+                  }
+                },
+                {
+                  "key": "k8s.namespace.name",
+                  "value": {
+                    "stringValue": "example-system"
+                  }
+                },
+                {
+                  "key": "krateo.audit.object_ref.api_version",
+                  "value": {
+                    "stringValue": "v1"
+                  }
+                },
+                {
+                  "key": "krateo.audit.object_ref.resource",
+                  "value": {
+                    "stringValue": "secrets"
+                  }
+                },
+                {
+                  "key": "krateo.audit.object_ref.name",
+                  "value": {
+                    "stringValue": "example-user-clientconfig"
+                  }
+                },
+                {
+                  "key": "krateo.request.uri",
+                  "value": {
+                    "stringValue": "/ldap"
+                  }
+                },
+                {
+                  "key": "krateo.request.source_ips",
+                  "value": {
+                    "arrayValue": {
+                      "values": [
+                        {
+                          "stringValue": "192.0.2.10"
+                        }
+                      ]
+                    }
+                  }
+                },
+                {
+                  "key": "session.id",
+                  "value": {
+                    "stringValue": "example-session"
+                  }
+                },
+                {
+                  "key": "krateo.audit.dry_run",
+                  "value": {
+                    "boolValue": false
+                  }
+                },
+                {
+                  "key": "outcome",
+                  "value": {
+                    "stringValue": "denied"
+                  }
+                },
+                {
+                  "key": "k8s.resource.version",
+                  "value": {
+                    "stringValue": "v1"
+                  }
+                },
+                {
+                  "key": "k8s.resource.resource",
+                  "value": {
+                    "stringValue": "secrets"
+                  }
+                },
+                {
+                  "key": "k8s.resource.name",
+                  "value": {
+                    "stringValue": "example-user-clientconfig"
+                  }
+                }
+              ],
+              "body": {
+                "stringValue": ""
+              },
+              "eventName": "audit"
+            },
+            {
+              "attributes": [
+                {
+                  "key": "event.name",
+                  "value": {
+                    "stringValue": "audit"
+                  }
+                },
+                {
+                  "key": "krateo.audit.schema_version",
+                  "value": {
+                    "stringValue": "1"
+                  }
+                },
+                {
+                  "key": "user.name",
+                  "value": {
+                    "stringValue": "example-agent"
+                  }
+                },
+                {
+                  "key": "krateo.audit.actor_class",
+                  "value": {
+                    "stringValue": "agent"
+                  }
+                },
+                {
+                  "key": "krateo.action",
+                  "value": {
+                    "stringValue": "authn.delegate"
+                  }
+                },
+                {
+                  "key": "krateo.audit.verb",
+                  "value": {
+                    "stringValue": "get"
+                  }
+                },
+                {
+                  "key": "http.request.method",
+                  "value": {
+                    "stringValue": "GET"
+                  }
+                },
+                {
+                  "key": "krateo.audit.outcome",
+                  "value": {
+                    "stringValue": "denied"
+                  }
+                },
+                {
+                  "key": "krateo.audit.denial_reason",
+                  "value": {
+                    "stringValue": "delegation_not_allowed"
+                  }
+                },
+                {
+                  "key": "krateo.audit.preview",
+                  "value": {
+                    "boolValue": false
+                  }
+                },
+                {
+                  "key": "k8s.namespace.name",
+                  "value": {
+                    "stringValue": "example-system"
+                  }
+                },
+                {
+                  "key": "krateo.audit.object_ref.api_group",
+                  "value": {
+                    "stringValue": "serviceaccount.authn.krateo.io"
+                  }
+                },
+                {
+                  "key": "krateo.audit.object_ref.api_version",
+                  "value": {
+                    "stringValue": "v1alpha1"
+                  }
+                },
+                {
+                  "key": "krateo.audit.object_ref.resource",
+                  "value": {
+                    "stringValue": "serviceaccounts"
+                  }
+                },
+                {
+                  "key": "krateo.audit.object_ref.name",
+                  "value": {
+                    "stringValue": "example-agent-mapping"
+                  }
+                },
+                {
+                  "key": "krateo.request.uri",
+                  "value": {
+                    "stringValue": "/delegate"
+                  }
+                },
+                {
+                  "key": "krateo.request.source_ips",
+                  "value": {
+                    "arrayValue": {
+                      "values": [
+                        {
+                          "stringValue": "192.0.2.10"
+                        }
+                      ]
+                    }
+                  }
+                },
+                {
+                  "key": "session.id",
+                  "value": {
+                    "stringValue": "example-session"
+                  }
+                },
+                {
+                  "key": "outcome",
+                  "value": {
+                    "stringValue": "denied"
+                  }
+                },
+                {
+                  "key": "k8s.resource.group",
+                  "value": {
+                    "stringValue": "serviceaccount.authn.krateo.io"
+                  }
+                },
+                {
+                  "key": "k8s.resource.version",
+                  "value": {
+                    "stringValue": "v1alpha1"
+                  }
+                },
+                {
+                  "key": "k8s.resource.resource",
+                  "value": {
+                    "stringValue": "serviceaccounts"
+                  }
+                },
+                {
+                  "key": "k8s.resource.name",
+                  "value": {
+                    "stringValue": "example-agent-mapping"
+                  }
+                }
+              ],
+              "body": {
+                "stringValue": ""
+              },
+              "eventName": "audit"
+            },
+            {
+              "attributes": [
+                {
+                  "key": "event.name",
+                  "value": {
+                    "stringValue": "audit"
+                  }
+                },
+                {
+                  "key": "krateo.audit.schema_version",
+                  "value": {
+                    "stringValue": "1"
+                  }
+                },
+                {
+                  "key": "user.name",
+                  "value": {
+                    "stringValue": "example-agent"
+                  }
+                },
+                {
+                  "key": "krateo.audit.actor_class",
+                  "value": {
+                    "stringValue": "agent"
+                  }
+                },
+                {
+                  "key": "krateo.action",
+                  "value": {
+                    "stringValue": "authn.delegate"
+                  }
+                },
+                {
+                  "key": "krateo.audit.verb",
+                  "value": {
+                    "stringValue": "get"
+                  }
+                },
+                {
+                  "key": "http.request.method",
+                  "value": {
+                    "stringValue": "GET"
+                  }
+                },
+                {
+                  "key": "krateo.audit.outcome",
+                  "value": {
+                    "stringValue": "denied"
+                  }
+                },
+                {
+                  "key": "krateo.audit.denial_reason",
+                  "value": {
+                    "stringValue": "subject_token_expired"
+                  }
+                },
+                {
+                  "key": "krateo.audit.preview",
+                  "value": {
+                    "boolValue": false
+                  }
+                },
+                {
+                  "key": "k8s.namespace.name",
+                  "value": {
+                    "stringValue": "example-system"
+                  }
+                },
+                {
+                  "key": "krateo.audit.object_ref.api_group",
+                  "value": {
+                    "stringValue": "serviceaccount.authn.krateo.io"
+                  }
+                },
+                {
+                  "key": "krateo.audit.object_ref.api_version",
+                  "value": {
+                    "stringValue": "v1alpha1"
+                  }
+                },
+                {
+                  "key": "krateo.audit.object_ref.resource",
+                  "value": {
+                    "stringValue": "serviceaccounts"
+                  }
+                },
+                {
+                  "key": "krateo.audit.object_ref.name",
+                  "value": {
+                    "stringValue": "example-agent-mapping"
+                  }
+                },
+                {
+                  "key": "krateo.request.uri",
+                  "value": {
+                    "stringValue": "/delegate"
+                  }
+                },
+                {
+                  "key": "krateo.request.source_ips",
+                  "value": {
+                    "arrayValue": {
+                      "values": [
+                        {
+                          "stringValue": "192.0.2.10"
+                        }
+                      ]
+                    }
+                  }
+                },
+                {
+                  "key": "session.id",
+                  "value": {
+                    "stringValue": "example-session"
+                  }
+                },
+                {
+                  "key": "outcome",
+                  "value": {
+                    "stringValue": "denied"
+                  }
+                },
+                {
+                  "key": "k8s.resource.group",
+                  "value": {
+                    "stringValue": "serviceaccount.authn.krateo.io"
+                  }
+                },
+                {
+                  "key": "k8s.resource.version",
+                  "value": {
+                    "stringValue": "v1alpha1"
+                  }
+                },
+                {
+                  "key": "k8s.resource.resource",
+                  "value": {
+                    "stringValue": "serviceaccounts"
+                  }
+                },
+                {
+                  "key": "k8s.resource.name",
+                  "value": {
+                    "stringValue": "example-agent-mapping"
+                  }
+                }
+              ],
+              "body": {
+                "stringValue": ""
+              },
+              "eventName": "audit"
+            },
+            {
+              "attributes": [
+                {
+                  "key": "event.name",
+                  "value": {
+                    "stringValue": "audit"
+                  }
+                },
+                {
+                  "key": "krateo.audit.schema_version",
+                  "value": {
+                    "stringValue": "1"
+                  }
+                },
+                {
+                  "key": "user.name",
+                  "value": {
+                    "stringValue": "example-user"
+                  }
+                },
+                {
+                  "key": "krateo.audit.actor_class",
+                  "value": {
+                    "stringValue": "human"
+                  }
+                },
+                {
+                  "key": "krateo.action",
+                  "value": {
+                    "stringValue": "authn.login.oidc"
+                  }
+                },
+                {
+                  "key": "krateo.audit.verb",
+                  "value": {
+                    "stringValue": "update"
+                  }
+                },
+                {
+                  "key": "http.request.method",
+                  "value": {
+                    "stringValue": "PUT"
+                  }
+                },
+                {
+                  "key": "krateo.audit.outcome",
+                  "value": {
+                    "stringValue": "denied"
+                  }
+                },
+                {
+                  "key": "krateo.audit.denial_reason",
+                  "value": {
+                    "stringValue": "name_missing"
+                  }
+                },
+                {
+                  "key": "krateo.audit.preview",
+                  "value": {
+                    "boolValue": false
+                  }
+                },
+                {
+                  "key": "k8s.namespace.name",
+                  "value": {
+                    "stringValue": "example-system"
+                  }
+                },
+                {
+                  "key": "krateo.audit.object_ref.api_version",
+                  "value": {
+                    "stringValue": "v1"
+                  }
+                },
+                {
+                  "key": "krateo.audit.object_ref.resource",
+                  "value": {
+                    "stringValue": "secrets"
+                  }
+                },
+                {
+                  "key": "krateo.request.uri",
+                  "value": {
+                    "stringValue": "/oidc/callback"
+                  }
+                },
+                {
+                  "key": "krateo.request.source_ips",
+                  "value": {
+                    "arrayValue": {
+                      "values": [
+                        {
+                          "stringValue": "192.0.2.10"
+                        }
+                      ]
+                    }
+                  }
+                },
+                {
+                  "key": "session.id",
+                  "value": {
+                    "stringValue": "example-session"
+                  }
+                },
+                {
+                  "key": "krateo.audit.dry_run",
+                  "value": {
+                    "boolValue": false
+                  }
+                },
+                {
+                  "key": "outcome",
+                  "value": {
+                    "stringValue": "denied"
+                  }
+                },
+                {
+                  "key": "k8s.resource.version",
+                  "value": {
+                    "stringValue": "v1"
+                  }
+                },
+                {
+                  "key": "k8s.resource.resource",
+                  "value": {
+                    "stringValue": "secrets"
+                  }
+                }
+              ],
+              "body": {
+                "stringValue": ""
+              },
+              "eventName": "audit"
+            },
+            {
+              "attributes": [
+                {
+                  "key": "event.name",
+                  "value": {
+                    "stringValue": "audit"
+                  }
+                },
+                {
+                  "key": "krateo.audit.schema_version",
+                  "value": {
+                    "stringValue": "1"
+                  }
+                },
+                {
+                  "key": "user.name",
+                  "value": {
+                    "stringValue": "example-user"
+                  }
+                },
+                {
+                  "key": "krateo.audit.actor_class",
+                  "value": {
+                    "stringValue": "human"
+                  }
+                },
+                {
+                  "key": "krateo.action",
+                  "value": {
+                    "stringValue": "authn.stepup"
+                  }
+                },
+                {
+                  "key": "krateo.audit.verb",
+                  "value": {
+                    "stringValue": "update"
+                  }
+                },
+                {
+                  "key": "http.request.method",
+                  "value": {
+                    "stringValue": "PUT"
+                  }
+                },
+                {
+                  "key": "krateo.audit.outcome",
+                  "value": {
+                    "stringValue": "denied"
+                  }
+                },
+                {
+                  "key": "krateo.audit.denial_reason",
+                  "value": {
+                    "stringValue": "insufficient_assurance"
+                  }
+                },
+                {
+                  "key": "krateo.audit.preview",
+                  "value": {
+                    "boolValue": false
+                  }
+                },
+                {
+                  "key": "k8s.namespace.name",
+                  "value": {
+                    "stringValue": "example-system"
+                  }
+                },
+                {
+                  "key": "krateo.audit.object_ref.api_version",
+                  "value": {
+                    "stringValue": "v1"
+                  }
+                },
+                {
+                  "key": "krateo.audit.object_ref.resource",
+                  "value": {
+                    "stringValue": "secrets"
+                  }
+                },
+                {
+                  "key": "krateo.audit.object_ref.name",
+                  "value": {
+                    "stringValue": "example-user-clientconfig"
+                  }
+                },
+                {
+                  "key": "krateo.request.uri",
+                  "value": {
+                    "stringValue": "/stepup"
+                  }
+                },
+                {
+                  "key": "krateo.request.source_ips",
+                  "value": {
+                    "arrayValue": {
+                      "values": [
+                        {
+                          "stringValue": "192.0.2.10"
+                        }
+                      ]
+                    }
+                  }
+                },
+                {
+                  "key": "session.id",
+                  "value": {
+                    "stringValue": "example-session"
+                  }
+                },
+                {
+                  "key": "krateo.audit.dry_run",
+                  "value": {
+                    "boolValue": false
+                  }
+                },
+                {
+                  "key": "outcome",
+                  "value": {
+                    "stringValue": "denied"
+                  }
+                },
+                {
+                  "key": "k8s.resource.version",
+                  "value": {
+                    "stringValue": "v1"
+                  }
+                },
+                {
+                  "key": "k8s.resource.resource",
+                  "value": {
+                    "stringValue": "secrets"
+                  }
+                },
+                {
+                  "key": "k8s.resource.name",
+                  "value": {
+                    "stringValue": "example-user-clientconfig"
+                  }
+                }
+              ],
+              "body": {
+                "stringValue": ""
+              },
+              "eventName": "audit"
+            },
+            {
+              "attributes": [
+                {
+                  "key": "event.name",
+                  "value": {
+                    "stringValue": "audit"
+                  }
+                },
+                {
+                  "key": "krateo.audit.schema_version",
+                  "value": {
+                    "stringValue": "1"
+                  }
+                },
+                {
+                  "key": "user.name",
+                  "value": {
+                    "stringValue": "system:serviceaccount:example-system:example-controller"
+                  }
+                },
+                {
+                  "key": "krateo.audit.actor_class",
+                  "value": {
+                    "stringValue": "service"
+                  }
+                },
+                {
+                  "key": "krateo.action",
+                  "value": {
+                    "stringValue": "authn.login.serviceaccount"
+                  }
+                },
+                {
+                  "key": "krateo.audit.verb",
+                  "value": {
+                    "stringValue": "create"
+                  }
+                },
+                {
+                  "key": "http.request.method",
+                  "value": {
+                    "stringValue": "POST"
+                  }
+                },
+                {
+                  "key": "krateo.audit.outcome",
+                  "value": {
+                    "stringValue": "denied"
+                  }
+                },
+                {
+                  "key": "krateo.audit.denial_reason",
+                  "value": {
+                    "stringValue": "no_mapping"
+                  }
+                },
+                {
+                  "key": "krateo.audit.preview",
+                  "value": {
+                    "boolValue": false
+                  }
+                },
+                {
+                  "key": "k8s.namespace.name",
+                  "value": {
+                    "stringValue": "example-system"
+                  }
+                },
+                {
+                  "key": "krateo.audit.object_ref.api_group",
+                  "value": {
+                    "stringValue": "serviceaccount.authn.krateo.io"
+                  }
+                },
+                {
+                  "key": "krateo.audit.object_ref.api_version",
+                  "value": {
+                    "stringValue": "v1alpha1"
+                  }
+                },
+                {
+                  "key": "krateo.audit.object_ref.resource",
+                  "value": {
+                    "stringValue": "serviceaccounts"
+                  }
+                },
+                {
+                  "key": "krateo.request.uri",
+                  "value": {
+                    "stringValue": "/serviceaccount/login"
+                  }
+                },
+                {
+                  "key": "krateo.request.source_ips",
+                  "value": {
+                    "arrayValue": {
+                      "values": [
+                        {
+                          "stringValue": "192.0.2.10"
+                        }
+                      ]
+                    }
+                  }
+                },
+                {
+                  "key": "session.id",
+                  "value": {
+                    "stringValue": "example-session"
+                  }
+                },
+                {
+                  "key": "krateo.audit.dry_run",
+                  "value": {
+                    "boolValue": false
+                  }
+                },
+                {
+                  "key": "outcome",
+                  "value": {
+                    "stringValue": "denied"
+                  }
+                },
+                {
+                  "key": "k8s.resource.group",
+                  "value": {
+                    "stringValue": "serviceaccount.authn.krateo.io"
+                  }
+                },
+                {
+                  "key": "k8s.resource.version",
+                  "value": {
+                    "stringValue": "v1alpha1"
+                  }
+                },
+                {
+                  "key": "k8s.resource.resource",
+                  "value": {
+                    "stringValue": "serviceaccounts"
+                  }
+                }
+              ],
+              "body": {
+                "stringValue": ""
+              },
+              "eventName": "audit"
+            },
+            {
+              "attributes": [
+                {
+                  "key": "event.name",
+                  "value": {
+                    "stringValue": "audit"
+                  }
+                },
+                {
+                  "key": "krateo.audit.schema_version",
+                  "value": {
+                    "stringValue": "1"
+                  }
+                },
+                {
+                  "key": "user.name",
+                  "value": {
+                    "stringValue": "system:serviceaccount:example-system:example-controller"
+                  }
+                },
+                {
+                  "key": "krateo.audit.actor_class",
+                  "value": {
+                    "stringValue": "service"
+                  }
+                },
+                {
+                  "key": "krateo.action",
+                  "value": {
+                    "stringValue": "authn.login.serviceaccount"
+                  }
+                },
+                {
+                  "key": "krateo.audit.verb",
+                  "value": {
+                    "stringValue": "create"
+                  }
+                },
+                {
+                  "key": "http.request.method",
+                  "value": {
+                    "stringValue": "POST"
+                  }
+                },
+                {
+                  "key": "krateo.audit.outcome",
+                  "value": {
+                    "stringValue": "denied"
+                  }
+                },
+                {
+                  "key": "krateo.audit.denial_reason",
+                  "value": {
+                    "stringValue": "not_a_service_account"
+                  }
+                },
+                {
+                  "key": "krateo.audit.preview",
+                  "value": {
+                    "boolValue": false
+                  }
+                },
+                {
+                  "key": "k8s.namespace.name",
+                  "value": {
+                    "stringValue": "example-system"
+                  }
+                },
+                {
+                  "key": "krateo.audit.object_ref.api_group",
+                  "value": {
+                    "stringValue": "serviceaccount.authn.krateo.io"
+                  }
+                },
+                {
+                  "key": "krateo.audit.object_ref.api_version",
+                  "value": {
+                    "stringValue": "v1alpha1"
+                  }
+                },
+                {
+                  "key": "krateo.audit.object_ref.resource",
+                  "value": {
+                    "stringValue": "serviceaccounts"
+                  }
+                },
+                {
+                  "key": "krateo.request.uri",
+                  "value": {
+                    "stringValue": "/serviceaccount/login"
+                  }
+                },
+                {
+                  "key": "krateo.request.source_ips",
+                  "value": {
+                    "arrayValue": {
+                      "values": [
+                        {
+                          "stringValue": "192.0.2.10"
+                        }
+                      ]
+                    }
+                  }
+                },
+                {
+                  "key": "session.id",
+                  "value": {
+                    "stringValue": "example-session"
+                  }
+                },
+                {
+                  "key": "krateo.audit.dry_run",
+                  "value": {
+                    "boolValue": false
+                  }
+                },
+                {
+                  "key": "outcome",
+                  "value": {
+                    "stringValue": "denied"
+                  }
+                },
+                {
+                  "key": "k8s.resource.group",
+                  "value": {
+                    "stringValue": "serviceaccount.authn.krateo.io"
+                  }
+                },
+                {
+                  "key": "k8s.resource.version",
+                  "value": {
+                    "stringValue": "v1alpha1"
+                  }
+                },
+                {
+                  "key": "k8s.resource.resource",
+                  "value": {
+                    "stringValue": "serviceaccounts"
+                  }
+                }
+              ],
+              "body": {
+                "stringValue": ""
+              },
+              "eventName": "audit"
+            },
+            {
+              "attributes": [
+                {
+                  "key": "event.name",
+                  "value": {
+                    "stringValue": "audit"
+                  }
+                },
+                {
+                  "key": "krateo.audit.schema_version",
+                  "value": {
+                    "stringValue": "1"
+                  }
+                },
+                {
+                  "key": "user.name",
+                  "value": {
+                    "stringValue": "system:serviceaccount:example-system:example-controller"
+                  }
+                },
+                {
+                  "key": "krateo.audit.actor_class",
+                  "value": {
+                    "stringValue": "service"
+                  }
+                },
+                {
+                  "key": "krateo.action",
+                  "value": {
+                    "stringValue": "authn.login.serviceaccount"
+                  }
+                },
+                {
+                  "key": "krateo.audit.verb",
+                  "value": {
+                    "stringValue": "create"
+                  }
+                },
+                {
+                  "key": "http.request.method",
+                  "value": {
+                    "stringValue": "POST"
+                  }
+                },
+                {
+                  "key": "http.response.status_code",
+                  "value": {
+                    "intValue": "503"
+                  }
+                },
+                {
+                  "key": "krateo.audit.outcome",
+                  "value": {
+                    "stringValue": "failure"
+                  }
+                },
+                {
+                  "key": "krateo.audit.preview",
+                  "value": {
+                    "boolValue": false
+                  }
+                },
+                {
+                  "key": "k8s.namespace.name",
+                  "value": {
+                    "stringValue": "example-system"
+                  }
+                },
+                {
+                  "key": "krateo.audit.object_ref.api_group",
+                  "value": {
+                    "stringValue": "serviceaccount.authn.krateo.io"
+                  }
+                },
+                {
+                  "key": "krateo.audit.object_ref.api_version",
+                  "value": {
+                    "stringValue": "v1alpha1"
+                  }
+                },
+                {
+                  "key": "krateo.audit.object_ref.resource",
+                  "value": {
+                    "stringValue": "serviceaccounts"
+                  }
+                },
+                {
+                  "key": "krateo.request.uri",
+                  "value": {
+                    "stringValue": "/serviceaccount/login"
+                  }
+                },
+                {
+                  "key": "krateo.request.source_ips",
+                  "value": {
+                    "arrayValue": {
+                      "values": [
+                        {
+                          "stringValue": "192.0.2.10"
+                        }
+                      ]
+                    }
+                  }
+                },
+                {
+                  "key": "session.id",
+                  "value": {
+                    "stringValue": "example-session"
+                  }
+                },
+                {
+                  "key": "krateo.audit.dry_run",
+                  "value": {
+                    "boolValue": false
+                  }
+                },
+                {
+                  "key": "outcome",
+                  "value": {
+                    "stringValue": "failure"
+                  }
+                },
+                {
+                  "key": "k8s.resource.group",
+                  "value": {
+                    "stringValue": "serviceaccount.authn.krateo.io"
+                  }
+                },
+                {
+                  "key": "k8s.resource.version",
+                  "value": {
+                    "stringValue": "v1alpha1"
+                  }
+                },
+                {
+                  "key": "k8s.resource.resource",
+                  "value": {
+                    "stringValue": "serviceaccounts"
+                  }
+                }
+              ],
+              "body": {
+                "stringValue": ""
+              },
+              "eventName": "audit"
+            }
+          ],
+          "scope": {
+            "name": "example/audit"
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -9,6 +9,26 @@ timestamp: 2026-11-12T00:00:00Z
 
 # Log
 
+- **2026-11-12**: v0.11.0 (audit#32, for authn#139). The schema's value
+  formats become exported validators, generated from a new `formats:`
+  section of schema/v1.yaml (id, Go name, description, and the pattern when a
+  regular expression states the whole rule): `ValidOpaqueID` and one
+  `Valid*` per format, `ValidFormat(format, value)`, `ValidValue(key,
+  value)` (a `*FormatError` that names the key and format, never the value;
+  `ErrUnknownKey` for an undeclared key) and `Formats()`. `Check` applies a
+  key's format through `ValidFormat`, element by element for a string list;
+  the check.go regexes are gone, and a test fails if any declared pattern is
+  copied into another file of the module. The generator refuses an
+  undeclared format, an unanchored or invalid pattern, and a repeated or
+  undescribed format; docs/schema.md's format list comes from the YAML.
+  Tests: every declared format has its rule and generated validator; one
+  table (an email, a newline inside and at either end, 128 and 129
+  characters, empty, unicode, and each format's boundaries) runs through
+  `Check` and every export, and they agree; every element of a list is
+  checked. Compatibility: `testdata/v0.10.0/` holds 25 records audit
+  v0.10.0's own `Emit` wrote, and this release gives v0.10.0's own report.
+  No record or rule changes; new API, so a minor version per
+  docs/release.md.
 - **2026-11-12**: v0.10.0 (audit#29, authn#136). Two request-writer denial
   reasons. `name_not_issued` (`DenialReasonNameNotIssued`, plumbing's
   `usernames.ErrNotIssued`): a sign-in for a username authn would issue in

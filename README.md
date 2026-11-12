@@ -88,7 +88,7 @@ audit pipeline routes `event.name="audit"` to `krateo_audit`. See
 
 - [docs/index.md](docs/index.md): the map of this documentation
 - [docs/schema.md](docs/schema.md): the record contract, key by key (generated)
-- [docs/usage.md](docs/usage.md): when and how to emit, adopting v0.4, v0.5, v0.6, v0.7, v0.8, v0.9 and v0.10, testing a writer
+- [docs/usage.md](docs/usage.md): when and how to emit, adopting v0.4, v0.5, v0.6, v0.7, v0.8, v0.9, v0.10 and v0.11, testing a writer
 - [docs/api.md](docs/api.md): the Go API
 
 ## Develop & release
