@@ -44,6 +44,11 @@ timestamp: 2026-11-12T00:00:00Z
     and admission-policy (`admissionpolicy.apply`) writes
     (oasgen-provider#543). rest-dynamic-controller's bare scope is noted as
     a historical exception; a new scope is the module path plus `/audit`.
+  - The `krateo.action` registry gains core-provider's controller literals,
+    each described by its code path at core-provider@b1f9b5f:
+    `rbac.apply`, `rbac.delete`, `secret.apply`, `authn.mapping.apply`,
+    `composition.mirror`, `composition.hub.delete`, `composition.migrate`.
+    No `secret.delete`: no core-provider site deletes a credential Secret.
   - Compatibility: `testdata/v0.13.0/` (30 records audit v0.13.0's own
     `Emit` wrote, its `rbac_not_allowed` refusal included) gives v0.13.0's
     own report, and every earlier replay is unchanged.

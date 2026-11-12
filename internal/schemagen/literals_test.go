@@ -114,6 +114,37 @@ func TestActionLiterals_ReadersAreDerived(t *testing.T) {
 	}
 }
 
+// core-provider's literals (v0.14.0, core-provider@b1f9b5f), by hand: each
+// registered under the controller, citing that commit, and shown in the
+// registry section. secret.delete is not registered: it has no emit site.
+func TestActionLiterals_CoreProvider(t *testing.T) {
+	raw, err := os.ReadFile("../../schema/v1.yaml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	doc := actionLiteralsDoc(parseSchema(t, string(raw)))
+	byLiteral := map[string]actionLiteral{}
+	for _, l := range actionLiterals {
+		byLiteral[l.Literal] = l
+	}
+	for _, lit := range []string{"rbac.apply", "rbac.delete", "secret.apply", "authn.mapping.apply", "composition.mirror", "composition.hub.delete", "composition.migrate"} {
+		l, ok := byLiteral[lit]
+		if !ok || l.Writer != "controller" {
+			t.Errorf("%s: %+v, want registered under the controller", lit, l)
+			continue
+		}
+		if !strings.Contains(l.Action, "core-provider@b1f9b5f") {
+			t.Errorf("%s does not cite core-provider@b1f9b5f: %q", lit, l.Action)
+		}
+		if !strings.Contains(doc, "| `controller` | `"+lit+"` | ") {
+			t.Errorf("the registry section does not show %s", lit)
+		}
+	}
+	if _, ok := byLiteral["secret.delete"]; ok {
+		t.Error("secret.delete is registered, but no core-provider site emits it")
+	}
+}
+
 // The registry is well formed: each row names a writer class of the schema
 // and a literal of krateo.action's form, once per writer. cdc's helm
 // literals (core-provider#423) are registered under the controller, written
