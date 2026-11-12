@@ -59,6 +59,10 @@ timestamp: 2026-11-12T00:00:00Z
     "audited, non-conformant for authorization-metadata-only changes": it
     counts a write that changes only an authorization annotation or label
     as `metadata_only` and records nothing, pending core-provider#465.
+    The cdc's other rows are re-derived at b1f9b5f: a new uninstall row is
+    "audited" (its real records are checked by core-provider's
+    integration suite, `composition_test.go:1811`); the prune and the kept
+    deletion are "audited, conformance not yet proven".
   - Compatibility: `testdata/v0.13.0/` (30 records audit v0.13.0's own
     `Emit` wrote, its `rbac_not_allowed` refusal included) gives v0.13.0's
     own report, and every earlier replay is unchanged.

@@ -344,6 +344,52 @@ func TestCoverage_CdcHelmWriteRow(t *testing.T) {
 	}
 }
 
+// The cdc's other rows, re-derived at core-provider@b1f9b5f: each names the
+// cdc scope and cites b1f9b5f; only the uninstall, whose real records the
+// integration suite checks (composition_test.go:1811), is "audited"; the
+// prune and the kept deletion are "audited, conformance not yet proven". No
+// row is left "not yet re-derived".
+func TestCoverage_CdcRowsRederived(t *testing.T) {
+	raw, err := os.ReadFile("docs/coverage.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(strings.Join(strings.Fields(string(raw)), " "), "not yet re-derived") {
+		t.Error("docs/coverage.md still says a row is not yet re-derived")
+	}
+	want := map[string]string{
+		"helm prune of a child":           coverageUnproven,
+		"helm uninstall of a Composition": "audited",
+		"a kept deletion":                 coverageUnproven,
+	}
+	seen := map[string]bool{}
+	for _, r := range coverageRows(t, string(raw)) {
+		if r.component != "cdc" {
+			continue
+		}
+		if r.scope != "github.com/krateo-platformops/composition-dynamic-controller/audit" || !strings.Contains(r.path, "b1f9b5f") {
+			t.Errorf("docs/coverage.md:%d: scope %q, or no b1f9b5f citation", r.line, r.scope)
+		}
+		for prefix, status := range want {
+			if !strings.HasPrefix(r.path, prefix) {
+				continue
+			}
+			seen[prefix] = true
+			if r.status != status {
+				t.Errorf("docs/coverage.md:%d: %s: status %q, want %q", r.line, prefix, r.status, status)
+			}
+			if status == "audited" && !strings.Contains(r.path, "composition_test.go:1811") {
+				t.Errorf("docs/coverage.md:%d: audited without the test that proves it", r.line)
+			}
+		}
+	}
+	for prefix := range want {
+		if !seen[prefix] {
+			t.Errorf("no cdc row %q", prefix)
+		}
+	}
+}
+
 // Emit writes the kept key, one record per conflicting key, and each record
 // passes Check; no value is written.
 func TestEmit_KeptExistingValue(t *testing.T) {
