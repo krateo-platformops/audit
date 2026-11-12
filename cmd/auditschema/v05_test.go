@@ -181,7 +181,7 @@ func TestSQL_CauseRefAndDenialReason(t *testing.T) {
 	if q := rules[audit.WriterRequest]; !strings.Contains(q, "'name_held_legacy'") || strings.Contains(q, "'kept_resource_policy'") || !strings.Contains(q, bad) {
 		t.Errorf("the request writer's bad_ column is not authn's set:\n%s", q)
 	}
-	if q := rules[audit.WriterController]; !strings.Contains(q, "NOT IN ('', 'kept_resource_policy')) AS "+bad) {
+	if q := rules[audit.WriterController]; !strings.Contains(q, "NOT IN ('', 'kept_resource_policy', 'kept_existing_value')) AS "+bad) {
 		t.Errorf("the controller's bad_ column is not its set:\n%s", q)
 	}
 	for _, w := range []audit.Writer{audit.WriterRequest, audit.WriterController} {

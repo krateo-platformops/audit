@@ -84,6 +84,9 @@ var fixtureValue = map[string]attribute.Value{
 	audit.KeyURLPath:              attribute.StringValue("/debug/shadow-parity"),
 	audit.KeyEndpointRefNamespace: attribute.StringValue("example-ns"),
 	audit.KeyEndpointRefName:      attribute.StringValue("example-endpoint"),
+	// v0.14.0: the authorization key a controller kept, beside
+	// kept_existing_value (fixtureDenialReason).
+	audit.KeyAuthorizationKey: attribute.StringValue("annotation:authn.krateo.io/username"),
 }
 
 // firstActionValue is the first action, in sorted order, that declares a set
@@ -99,10 +102,12 @@ func firstActionValue(key string, w audit.Writer) (action, value string, ok bool
 	return action, sets[action][0], true
 }
 
-// fixtureDenialReason is one value of each writer's own closed set.
+// fixtureDenialReason is one value of each writer's own closed set. The
+// controller's is kept_existing_value (v0.14.0), so the rich row holds its
+// condition and may carry krateo.audit.authorization_key.
 var fixtureDenialReason = map[audit.Writer]string{
 	audit.WriterRequest:    audit.DenialReasonGroupNotAllowed,
-	audit.WriterController: audit.DenialReasonKeptResourcePolicy,
+	audit.WriterController: audit.DenialReasonKeptExistingValue,
 }
 
 type fixtureRow struct {

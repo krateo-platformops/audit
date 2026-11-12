@@ -114,9 +114,20 @@ stated once here for every row below.
 
 ## Naming a derived credential Secret
 
-Every writer that names a credential Secret derived from a username, authn's
-username checks and its sign-in refusals included, follows one rule. The
-derived name is plumbing's `endpoints.SecretName`:
+The rule below is for the records that name a credential Secret only by
+deriving its name from a username, with no Secret in hand: a **refusal**
+(a sign-in or step-up refused before anything was written) and a
+**username check** (`authn.username.check`, which writes nothing). It is not
+for a successful write: a write names its real target, the Secret the
+apiserver created or updated, as `object_ref` names any written object (v0.14.0).
+With exact naming on, authn proves a Secret found under a legacy name is
+the username's with plumbing v1.58.0's `endpoints.OwnsSecret`
+(`endpoints/names.go:73-81`) before it writes it, and never replaces one
+that isn't, so the written target is the username's own ([authn#147],
+pending merge, at `fdd4b61f`:
+`go/authn/internal/helpers/kube/config/storage/storage.go:218-231`,
+`storage/naming.go:103-111`; behind `exactUsernames.enabled`, off by
+default). The derived name is plumbing's `endpoints.SecretName`:
 `kubeutil.MakeDNS1123Compatible(username)` plus `-clientconfig`
 (plumbing v1.51.0 `endpoints/endpoints.go:107-109`,
 `kubeutil/dns1123.go:18-32`). The derivation lowercases the username, drops
@@ -128,6 +139,8 @@ only of dropped characters derives an empty name, and the Secret name
 `-clientconfig`, which isn't a valid object name; the rule below never names
 such a Secret, since the derivation changed the username.
 
+On a refusal or a username check:
+
 - `krateo.audit.object_ref.name` is the derived Secret name only when the
   derivation leaves the username unchanged
   (`MakeDNS1123Compatible(username) == username`).
@@ -135,11 +148,13 @@ such a Secret, since the derivation changed the username.
   `name_missing` record does. A sign-in with such a username that an
   identity source chose is refused with `name_not_issued` (audit v0.10.0;
   authn#141 at `2fb07895`, `internal/helpers/kube/config/guard.go:57-65`, `:126`, `:143-152`). An administrator-provisioned name (a basic User, a
-  ServiceAccount mapping) keeps signing in, and its records stay nameless
-  under this rule ([authn#140]).
+  ServiceAccount mapping) keeps signing in. Its refusals and checks stay
+  nameless under this rule ([authn#140]); its successful writes name the
+  Secret written.
 
 The reason is aliasing: a query for one user's Secret must never show checks
-or refusals for names that weren't theirs.
+or refusals for names that weren't theirs. A successful write has no such
+risk, since it names the object that was written.
 
 ## Exclusions
 
@@ -258,7 +273,7 @@ v0.9.1: pending its merge.
 | authn | a ServiceAccount the TokenReview verified, refused or failed at the mapping lookup, on `/serviceaccount/login` and `/delegate`: names the mapping resource without a name, no verb. Emit: `internal/routes/auth/serviceaccount/login.go:104` and `internal/routes/delegate/delegate.go:126`, through `RecordUnmapped` (`serviceaccount/login.go:258-271`); recorder `internal/auditlog/mapping.go:40-67` | request | the TokenReview's username; actor class, verb, method and preview marked incomplete by design | audited | [authn#119]; emit: [authn#133] | `github.com/krateo-platformops/authn/audit` | `authn.login.serviceaccount`, `authn.delegate` | none (marked) | denied (`no_mapping`, `ambiguous_mapping`, `not_a_service_account`, `mapping.go:16-27`), failure with the apiserver's answer to the lookup (`:61-63`) |
 | authn | OIDC step-up: creates or updates the user's step-up clientconfig Secret. Emit: `internal/routes/auth/oidc/stepup.go:260`; recorder `auditlog.go:76-104`; literal `auditlog.go:34` | request | the identity the IdP verified, class human | audited | [authn#119]; emit: [authn#123]; post-verification refusals: [authn#133] | `github.com/krateo-platformops/authn/audit` | `authn.stepup.oidc` | the verb sent for the Secret | success, denied (`stepup_not_enabled`, `insufficient_assurance`, `stale_authentication`, `auditlog.go:266-269`), failure |
 | authn | `POST /delegate`: signs a delegated JWT for an actor its mapping admits; recorded as a create on the mapping's `token` subresource. Emit: `internal/routes/delegate/delegate.go:133`, `:142`, `:150`, `:168`, `:172`; recorder `internal/auditlog/delegate.go:49-97`; literal `auditlog.go:32` | request | the actor, of its mapping's class; the subject goes to `on_behalf_of`, the chain to `delegation` (`delegate.go:86-94`) | audited | [authn#119]; emit: [authn#123]; subject-token refusals: [authn#131] | `github.com/krateo-platformops/authn/audit` | `authn.delegate` | create | success, denied (`delegation_not_allowed`, `subject_token_expired`, `subject_token_invalid`, `delegation_too_deep`, `delegate.go:22-34`), failure |
-| authn | `POST /usernames/check`: whether a username is free; a read of the checked name's clientconfig Secret, verb get. [authn#136] at `751f089d`: route `internal/routes/usernames/check.go:107-150`, recorder `internal/auditlog/usernames.go:54-94`, on audit v0.9.1 | request | the caller's mapping, of its declared class (`usernames.go:60`, `:75-77`); an unmapped caller as in the mapping-lookup row (`check.go:107`) | not audited | [authn#136] (pending authn#136 merge) | `github.com/krateo-platformops/authn/audit` | `authn.username.check` | get | success with `krateo.audit.check_result` (`check.go:166-176`), denied (`username_check_not_allowed`, `check.go:120`; an unreadable body or one with no username: no reason at `751f089d`, `check.go:129`, `invalid_request` from audit v0.10.0, audit#29; the record names the Secret resource with no name, and a derived name only as "Naming a derived credential Secret" says), failure (`check.go:137`, `:146`) |
+| authn | `POST /usernames/check`: whether a username is free; a read of the checked name's clientconfig Secret, verb get. [authn#136] at `751f089d`: route `internal/routes/usernames/check.go:107-150`, recorder `internal/auditlog/usernames.go:54-94`, on audit v0.9.1 | request | the caller's mapping, of its declared class (`usernames.go:60`, `:75-77`); an unmapped caller as in the mapping-lookup row (`check.go:107`) | not audited | [authn#136] (pending authn#136 merge) | `github.com/krateo-platformops/authn/audit` | `authn.username.check` | get | success with `krateo.audit.check_result` (`check.go:166-176`; with a claimant in the request, `name_claimed_by_claimant` or `name_claimed_by_another` for a claimed name, never the claimant, audit v0.14.0, [authn#146] pending merge at `1bef35f3`: `internal/helpers/kube/config/availability.go:69-104`, `internal/routes/usernames/check.go:250-274`), denied (`username_check_not_allowed`, `check.go:120`; an unreadable body or one with no username: no reason at `751f089d`, `check.go:129`, `invalid_request` from audit v0.10.0, audit#29; the record names the Secret resource with no name, and a derived name only as "Naming a derived credential Secret" says), failure (`check.go:137`, `:146`) |
 | kagent-controller | its REST writes (sessions, runs, agent edits), reached from the kagent UI through ui-token-hop and the agent gateway | request | the Krateo bearer ui-token-hop mints and swaps in | not audited | [kagent#31] | | | | |
 
 ## gateway (G)
@@ -340,6 +355,7 @@ the predicate drops, by reason.
 | authn | the step-up Secret sweep: deletes an expired step-up clientconfig Secret. Emit: `internal/stepupsweep/sweep.go:129`; recorder `internal/auditlog/controller.go:70-93`; literal `controller.go:16` | controller | authn's own ServiceAccount, class controller (`controller.go:50-57`) | audited | [authn#119]; emit: [authn#123] | `github.com/krateo-platformops/authn/audit/controller` | `authn.stepup.expired` | delete | success, failure with the apiserver's code |
 | authn | service certificate issue or renewal: writes authn's own clientconfig Secret. Emit: `internal/certrenewal/renewal.go:258`; recorder `controller.go:110-133`; literal `controller.go:19` | controller | authn's own ServiceAccount | audited | [authn#119]; emit: [authn#123] | `github.com/krateo-platformops/authn/audit/controller` | `authn.servicecert.issued` | the verb sent (plumbing `StoreWritten`); marked when unknown | success, failure |
 | authn | identity backfill at startup: stamps the authorization-bearing identity annotations (strategy, groups) or the owner on a credential Secret written before authn recorded them; a full update. Emit: `internal/identitybackfill/backfill.go:160`; recorder `controller.go:139-159`; literal `controller.go:20-23` | controller | authn's own ServiceAccount | audited | [authn#119]; emit: [authn#123] | `github.com/krateo-platformops/authn/audit/controller` | `authn.identity.backfilled` | update | success, failure |
+| authn | identity backfill at startup, with exact naming on: a credential Secret whose username annotation, principal label or username-label already holds a value other than its certificate proves is left as found, nothing sent. [authn#147] at `fdd4b61f`: `go/authn/internal/identitybackfill/backfill.go:161-169`, conflicts from `missingExact` (`:334-347`); recorder `internal/auditlog/controller.go:174-190` (`IdentityInconsistent`; literal `:31`), on audit v0.11.0: one denied record per Secret with no reason | controller | authn's own ServiceAccount | not audited | [authn#147] (pending authn#147 merge; behind `exactUsernames.enabled`, off by default) | `github.com/krateo-platformops/authn/audit/controller` | `authn.identity.inconsistent` | update | denied (`kept_existing_value`, audit v0.14.0: one record per conflicting key, `krateo.audit.authorization_key` naming it, never a value; no status code) |
 | authn | its own credential's identity annotations brought in line with its certificate, recorded only when an authorization-bearing annotation changed. Emit: `internal/certrenewal/renewal.go:411-421`; recorder `controller.go:139-159`; literal `controller.go:24-26` | controller | authn's own ServiceAccount | audited | [authn#119]; emit: [authn#123] | `github.com/krateo-platformops/authn/audit/controller` | `authn.servicecert.annotated` | update | success, failure |
 | authn | the leader-election Lease that elects the replica doing authn's own-identity work (`internal/leader/leader.go:24-26`); no emit | controller | authn's own ServiceAccount | out of scope (not `*.krateo.io`, and not an RBAC, admission or credential write) | [authn#119] | | | | |
 | cdc | helm install or upgrade of a Composition's child: create, update or patch | controller | cdc's own ServiceAccount | not audited | [core-provider#423], [plumbing#106] | | | | |
@@ -352,8 +368,8 @@ the predicate drops, by reason.
 | core-provider | Roles, ClusterRoles, their bindings, ServiceAccounts and credential Secrets (named exception) | controller | core-provider's own ServiceAccount | not audited | [core-provider#423] | | | | |
 | core-provider | CRDs, Deployments, labels and status | controller | core-provider's own ServiceAccount | out of scope ([installer#413] condition 1; counted by the excluded-writes counter) | [core-provider#423] | | | | |
 | rest-dynamic-controller | an external `POST`, `PUT`, `PATCH` or `DELETE` to the API a RestDefinition describes | controller | none today; its own ServiceAccount is known to the process but not passed | audited, non-conformant (audit v0.3.0: no actor, error text in the body, `Kind` without `Resource`, no verb on delegated sites, emitted after its span ended) | [oasgen-provider#543] | `rest-dynamic-controller/audit` | `rest.write` | | |
-| oasgen-provider | ClusterRoles, Roles, their bindings and ServiceAccounts (named exception) | controller | oasgen-provider's own ServiceAccount | not audited | [oasgen-provider#543] | | | | |
-| oasgen-provider | MutatingAdmissionPolicy and its binding (named exception) | controller | oasgen-provider's own ServiceAccount | not audited | [oasgen-provider#543] | | | | |
+| oasgen-provider | ClusterRoles, Roles, their bindings and ServiceAccounts (named exception) | controller | oasgen-provider's own ServiceAccount | not audited | [oasgen-provider#543] (its scope registered in audit v0.14.0) | `github.com/krateo-platformops/oasgen-provider/audit` | `rbac.apply`, `rbac.delete` | | |
+| oasgen-provider | MutatingAdmissionPolicy and its binding (named exception) | controller | oasgen-provider's own ServiceAccount | not audited | [oasgen-provider#543] (its scope registered in audit v0.14.0) | `github.com/krateo-platformops/oasgen-provider/audit` | `admissionpolicy.apply` | | |
 | oasgen-provider | CRDs, Deployments and label patches | controller | oasgen-provider's own ServiceAccount | out of scope ([installer#413] condition 1; counted by the excluded-writes counter) | [oasgen-provider#543] | | | | |
 | access-review | creates the immutable snapshot ConfigMap | controller | none today; the fix passes the controller's ServiceAccount | audited, non-conformant | [access-review#25] | `github.com/krateo-platformops/audit` | `campaign.snapshot` | | |
 | access-review | creates the evidence ConfigMap that closes a campaign | controller | as above | audited, non-conformant | [access-review#25] | `github.com/krateo-platformops/audit` | `campaign.evidence` | | |
@@ -475,6 +491,8 @@ Each open question is asked on its owner's issue; the link goes to the comment. 
 [authn#133]: https://github.com/krateo-platformops/authn/pull/133
 [authn#136]: https://github.com/krateo-platformops/authn/pull/136
 [authn#140]: https://github.com/krateo-platformops/authn/issues/140
+[authn#146]: https://github.com/krateo-platformops/authn/pull/146
+[authn#147]: https://github.com/krateo-platformops/authn/pull/147
 [observability#138]: https://github.com/krateo-platformops/observability/issues/138
 [observability#155]: https://github.com/krateo-platformops/observability/pull/155
 [observability#156]: https://github.com/krateo-platformops/observability/issues/156

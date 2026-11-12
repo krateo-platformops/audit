@@ -56,8 +56,9 @@ through the generated `audit.Key*` constants and test their records with
 | `http.request.method_original` | string | stable | C: http.request.method is _OTHER [checked] | C: http.request.method is _OTHER [checked] | C: http.request.method is _OTHER [checked] | C: http.request.method is _OTHER [checked] | The HTTP method exactly as the writer was given it, when http.request.method records it as _OTHER. Written only then, so no value a writer passes is lost. Semconv also lets a framework that treats methods as case-insensitive pair a canonical method with its original; this schema does not: a method semconv does not name, lowercase included, is _OTHER. **Only when** `method_other` holds; anywhere else `Check` reports it `unexpected`. |
 | `krateo.audit.dry_run` | bool | none | C: the record is a write [checked] | NE | C: the record is a write [checked] | — | true when the write was validated and not persisted (Kubernetes dryRun=All, or an endpoint's own dry run), false for a write meant to persist. On every write record of a writer that serves requests or performs actions; never on a read. Readers use this key, not a suffix on krateo.action. **Only when** `write` holds; anywhere else `Check` reports it `unexpected`. |
 | `krateo.audit.outcome` | string | none | R | R | R | R | What the authority this writer sent to answered, at the protocol level the writer observes. denied means the writer itself refused; krateo.audit.denial_reason may say why. One of `success`, `failure`, `denied`. |
-| `krateo.audit.denial_reason` | string | none | O, one of `name_reserved`, `name_claimed`, `name_held_legacy`, `name_provisioned`, `name_bound`, `system_group`, `group_not_allowed`, `delegation_not_allowed`, `delegation_too_deep`, `platform_group`, `name_missing`, `subject_token_expired`, `subject_token_invalid`, `stepup_not_enabled`, `insufficient_assurance`, `stale_authentication`, `no_mapping`, `ambiguous_mapping`, `not_a_service_account`, `username_check_not_allowed`, `invalid_request`, `name_not_issued`, `destination_refused`, `per_user_credential_ref`, `endpoint_ref_malformed`, `internal_identity_context`, `write_refused`, `dry_run_not_executed`, `dependency_failed`, `uaf_on_write_verb`, `invalid_path`, `template_error`, `session_credential_missing`, `step_up_required`, `rbac_not_allowed` | — | — | O, one of `kept_resource_policy` | Why the writer itself refused, on a denied record only: one of the closed values its writer class declares, never free text. The caller's answer can stay opaque while the audit reader gets the reason. Optional: a denied record without it conforms. A writer class with no declared value cannot write it. **Only when** `denied` holds; anywhere else `Check` reports it `unexpected`. |
-| `krateo.audit.check_result` | string | none | O, on `authn.username.check` one of `available`, `reserved`, `name_claimed`, `name_held_legacy`, `name_provisioned`, `name_bound`, `invalid` | — | — | — | What a check the writer ran for the caller concluded, when the record's action is a check: one of the closed values its krateo.action declares, never free text. It is the check's answer, not the record's outcome: a check that completed is a success whatever it concluded. Optional: a record without it conforms. Only on a success, when the check ran: a denied record (the check never ran) and a failure (the lookup failed) carry none. An action with no declared set cannot write it. **Only when** `succeeded` holds; anywhere else `Check` reports it `unexpected`. |
+| `krateo.audit.denial_reason` | string | none | O, one of `name_reserved`, `name_claimed`, `name_held_legacy`, `name_provisioned`, `name_bound`, `system_group`, `group_not_allowed`, `delegation_not_allowed`, `delegation_too_deep`, `platform_group`, `name_missing`, `subject_token_expired`, `subject_token_invalid`, `stepup_not_enabled`, `insufficient_assurance`, `stale_authentication`, `no_mapping`, `ambiguous_mapping`, `not_a_service_account`, `username_check_not_allowed`, `invalid_request`, `name_not_issued`, `destination_refused`, `per_user_credential_ref`, `endpoint_ref_malformed`, `internal_identity_context`, `write_refused`, `dry_run_not_executed`, `dependency_failed`, `uaf_on_write_verb`, `invalid_path`, `template_error`, `session_credential_missing`, `step_up_required`, `rbac_not_allowed` | — | — | O, one of `kept_resource_policy`, `kept_existing_value` | Why the writer itself refused, on a denied record only: one of the closed values its writer class declares, never free text. The caller's answer can stay opaque while the audit reader gets the reason. Optional: a denied record without it conforms. A writer class with no declared value cannot write it. **Only when** `denied` holds; anywhere else `Check` reports it `unexpected`. |
+| `krateo.audit.check_result` | string | none | O, on `authn.username.check` one of `available`, `reserved`, `name_claimed`, `name_held_legacy`, `name_provisioned`, `name_bound`, `invalid`, `name_claimed_by_claimant`, `name_claimed_by_another` | — | — | — | What a check the writer ran for the caller concluded, when the record's action is a check: one of the closed values its krateo.action declares, never free text. It is the check's answer, not the record's outcome: a check that completed is a success whatever it concluded. Optional: a record without it conforms. Only on a success, when the check ran: a denied record (the check never ran) and a failure (the lookup failed) carry none. An action with no declared set cannot write it. **Only when** `succeeded` holds; anywhere else `Check` reports it `unexpected`. |
+| `krateo.audit.authorization_key` | string | none | — | — | — | C: the denial reason is kept_existing_value [checked] | The authorization-bearing annotation or label a controller declined to overwrite (krateo.audit.denial_reason kept_existing_value), as &lt;kind&gt;:&lt;key&gt;, e.g. annotation:authn.krateo.io/username. The closed set is generated from authorization_metadata, so a key the schema does not declare is never one. Present exactly when the denial reason is kept_existing_value: one record per conflicting key. Never a value, neither the one found nor the one the writer would have written: they are identities. One of `annotation:authn.krateo.io/strategy`, `annotation:authn.krateo.io/groups`, `annotation:authn.krateo.io/username`, `label:authn.krateo.io/principal`, `label:authn.krateo.io/username-label`. The values are generated from `authorization_metadata`, each entry as `&lt;kind&gt;:&lt;key&gt;`. **Only when** `kept_existing_value` holds; anywhere else `Check` reports it `unexpected`. |
 | `http.response.status_code` | int | stable | C: the authority answered | C: the backend answered | C: the authority answered | C: the action was an HTTP request that was answered | The status code the authority answered (Kubernetes responseStatus.code). Never on a denied record: denied means the writer itself refused, so no authority answered. **Never when** `denied` holds; there `Check` reports it `unexpected`. |
 | `krateo.audit.preview` | bool | none | C: the target is a Kubernetes object (false when cluster-scoped) [checked] (mark) | NE | C: the target is a Kubernetes object (false when cluster-scoped) [checked] (mark) | C: the target is a Kubernetes object (false when cluster-scoped) [checked] (mark) | true when the target is a namespaced Kubernetes object whose Namespace carries the label krateo.io/purpose=preview-sandbox, read by the writer from apiserver state. false for any other Kubernetes target, a cluster-scoped one included (installer#716 §2.4). Omitted and marked when the Namespace could not be read. Not written for an external endpoint alone. Not a retention key, not a filter. Marker `preview`. |
 | `krateo.audit.object_ref.api_group` | string | none | C: Kubernetes target outside the core group | NE | C: Kubernetes target outside the core group | C: Kubernetes target outside the core group | The object's API group (objectRef.apiGroup). Omitted for the core group. |
@@ -147,6 +148,7 @@ listed matches the resource and every subresource of it.
 - `confirmed_set`: The record names the confirmed set its write belongs to: any krateo.audit.client.confirmed_set.* key is present.
 - `endpoint_target`: The record's target is an external endpoint: server.address is present.
 - `succeeded`: krateo.audit.outcome is success: the authority answered and the action completed.
+- `kept_existing_value`: krateo.audit.denial_reason is kept_existing_value: the writer declined to overwrite an authorization-bearing value already present.
 
 ## Formats `Check` enforces
 
@@ -215,6 +217,7 @@ writers spell each value through its generated constant.
 | `krateo.audit.denial_reason` | `step_up_required` | `request` | any | `audit.DenialReasonStepUpRequired` |
 | `krateo.audit.denial_reason` | `rbac_not_allowed` | `request` | any | `audit.DenialReasonRbacNotAllowed` |
 | `krateo.audit.denial_reason` | `kept_resource_policy` | `controller` | any | `audit.DenialReasonKeptResourcePolicy` |
+| `krateo.audit.denial_reason` | `kept_existing_value` | `controller` | any | `audit.DenialReasonKeptExistingValue` |
 | `krateo.audit.check_result` | `available` | `request` | `authn.username.check` | `audit.CheckResultAvailable` |
 | `krateo.audit.check_result` | `reserved` | `request` | `authn.username.check` | `audit.CheckResultReserved` |
 | `krateo.audit.check_result` | `name_claimed` | `request` | `authn.username.check` | `audit.CheckResultNameClaimed` |
@@ -222,6 +225,8 @@ writers spell each value through its generated constant.
 | `krateo.audit.check_result` | `name_provisioned` | `request` | `authn.username.check` | `audit.CheckResultNameProvisioned` |
 | `krateo.audit.check_result` | `name_bound` | `request` | `authn.username.check` | `audit.CheckResultNameBound` |
 | `krateo.audit.check_result` | `invalid` | `request` | `authn.username.check` | `audit.CheckResultInvalid` |
+| `krateo.audit.check_result` | `name_claimed_by_claimant` | `request` | `authn.username.check` | `audit.CheckResultNameClaimedByClaimant` |
+| `krateo.audit.check_result` | `name_claimed_by_another` | `request` | `authn.username.check` | `audit.CheckResultNameClaimedByAnother` |
 
 ## `krateo.action` literals
 
@@ -456,6 +461,19 @@ writer.
   `version`, `schema`) and **no other client key**; `Check`
   reports any other one as `unexpected`. The write itself still ran.
 
+## Kept values
+
+A controller row (v0.14.0) for a write the controller declined: an object
+already holds an authorization-bearing annotation or label with a value
+other than the one the controller would write, and it leaves the value as
+found. Verb `update`, outcome `denied`, `krateo.audit.denial_reason`
+`kept_existing_value`, no status code (nothing was sent). The record names the
+object and, in `krateo.audit.authorization_key`, the one key it kept, as
+`<kind>:<key>` (`audit.AuthorizationKeyValue`): one record per conflicting key,
+never a value. The key's closed set is generated from
+`authorization_metadata`. `Check` holds the pair both ways: the key without
+the reason is `unexpected`, and the reason without the key is `missing`.
+
 ## Kept deletions and pruned children
 
 Two controller rows a helm-based controller writes for the children of the
@@ -598,6 +616,8 @@ actor: `actor`). Each marker is counted under
 | `rest-dynamic-controller/audit` | `controller` | rest-dynamic-controller |
 | `github.com/krateo-platformops/composition-dynamic-controller/audit` | `controller` | the composition-dynamic-controller's helm writes to a Composition's children (one record per child installed, upgraded, pruned or kept) |
 | `github.com/krateo-platformops/core-provider/audit` | `controller` | core-provider's *.krateo.io spec writes (authn mapping, spoke mirror Compositions, hub delete) and its RBAC and credential-Secret writes |
+| `github.com/krateo-platformops/oasgen-provider/audit` | `controller` | oasgen-provider's RBAC (rbac.apply, rbac.delete) and admission-policy (admissionpolicy.apply) writes |
 | `request` | `gateway` | the agent gateway's pre-2026-10-22 access-log rows (pre-schema, the positive control) |
 
+- `rest-dynamic-controller/audit`: rest-dynamic-controller's bare scope, with no module path, is a historical exception, kept so its rows stay selectable. Every new scope is the emitting module's path plus /audit (github.com/krateo-platformops/<module>/audit).
 - `github.com/krateo-platformops/composition-dynamic-controller/audit`: The composition-dynamic-controller runs one Deployment per CompositionDefinition version, each with its own ServiceName, and every one emits on this scope: select its rows by scope, not by ServiceName.

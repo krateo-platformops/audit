@@ -375,6 +375,9 @@ func evalCondition(c Condition, present map[string]attribute.Value) (holds, know
 	case CondSucceeded:
 		o, ok := present[KeyOutcome]
 		return ok && o.Type() == attribute.STRING && o.AsString() == OutcomeSuccess, true
+	case CondKeptExistingValue:
+		r, ok := present[KeyDenialReason]
+		return ok && r.Type() == attribute.STRING && r.AsString() == DenialReasonKeptExistingValue, true
 	}
 	return false, false
 }

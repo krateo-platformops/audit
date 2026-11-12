@@ -68,6 +68,7 @@ const MetricRecordedMarkerUnattached = "krateo.audit.recorded_marker.unattached"
 | `StatusCode` | `http.response.status_code` | omitted when 0 |
 | `Outcome` | `krateo.audit.outcome` (+ `outcome`) | |
 | `DenialReason` | `krateo.audit.denial_reason` | on an `OutcomeDenied` record only; one of the writer class's own closed values, spelled through the generated `DenialReason*` constants (`DenialReasonNameClaimed`, `DenialReasonKeptResourcePolicy`, ...). No v0.3 key |
+| `AuthorizationKey` | `krateo.audit.authorization_key` | v0.14.0, controller only: the one authorization-bearing annotation or label a controller declined to overwrite, `<kind>:<key>` (build it with `AuthorizationKeyValue`). Exactly when `DenialReason` is `DenialReasonKeptExistingValue`; one record per key; never a value |
 | `Preview` | `krateo.audit.preview` | `PreviewUnknown` (omitted, and marked for any Kubernetes object), `PreviewFalse` (also for a cluster-scoped object), `PreviewTrue`; `PreviewOf(bool)` |
 | `DryRun` | `krateo.audit.dry_run` | `true` whenever set. `false` only on a write record (`Verb` in `WriteVerbs()`) of an Emitter declared `WithWriter(WriterRequest)` or `WithWriter(WriterAction)`. Never on a read or a controller record, and never added for an Emitter that declares no writer (a v0.3 caller). The `Action` literal is the caller's either way |
 | `Namespace` | `k8s.namespace.name` | |
@@ -108,6 +109,8 @@ func ContentSHA256(group, resource, subresource string, obj any) (string, error)
 func AuthorizationAnnotations() []string // the authorization-bearing annotations: content (v0.13.0 adds authn.krateo.io/username); not what c1 reads
 func AuthorizationLabels() []string      // the authorization-bearing labels (v0.13.0): content; form c1 counts no label
 func ContentFormC1Annotations() []string // v0.13.0: c1's annotation keys, FROZEN at v0.12.0's two (strategy, groups); a new set is a new form
+const MetadataKindAnnotation, MetadataKindLabel = "annotation", "label" // v0.14.0
+func AuthorizationKeyValue(kind, key string) (string, bool) // v0.14.0: "<kind>:<key>" for krateo.audit.authorization_key; false for a key not declared as that kind
 const ContentFormC1 = "c1"
 var ErrCredentialTarget error
 

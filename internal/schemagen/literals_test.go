@@ -104,7 +104,7 @@ func TestActionLiterals_ReadersAreDerived(t *testing.T) {
 	}
 	// No per-action set at all: no rule reads it.
 	none := parseSchema(t, strings.Replace(src,
-		"request: {level: optional, actions: {authn.username.check: [available, reserved, name_claimed, name_held_legacy, name_provisioned, name_bound, invalid]}}",
+		"request: {level: optional, actions: {authn.username.check: [available, reserved, name_claimed, name_held_legacy, name_provisioned, name_bound, invalid, name_claimed_by_claimant, name_claimed_by_another]}}",
 		"request: optional", 1))
 	if got := actionReaders(none); got != "No rule reads it." {
 		t.Errorf("no per-action set: %q", got)

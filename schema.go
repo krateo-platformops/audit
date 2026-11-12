@@ -275,6 +275,32 @@ func AuthorizationAnnotations() []string { return slices.Clone(schemaContentAnno
 // is a credential target, which has no hash.
 func AuthorizationLabels() []string { return slices.Clone(schemaContentLabels) }
 
+// The kinds of authorization-bearing metadata, as krateo.audit.authorization_key
+// spells them (v0.14.0).
+const (
+	MetadataKindAnnotation = "annotation"
+	MetadataKindLabel      = "label"
+)
+
+// AuthorizationKeyValue returns the krateo.audit.authorization_key value of
+// the declared authorization-bearing annotation or label key (kind
+// MetadataKindAnnotation or MetadataKindLabel), "<kind>:<key>", and whether it
+// is declared: an undeclared key, or a declared key of the other kind, is
+// ("", false), and a record must not name it.
+func AuthorizationKeyValue(kind, key string) (string, bool) {
+	var declared []string
+	switch kind {
+	case MetadataKindAnnotation:
+		declared = schemaContentAnnotations
+	case MetadataKindLabel:
+		declared = schemaContentLabels
+	}
+	if !slices.Contains(declared, key) {
+		return "", false
+	}
+	return kind + ":" + key, true
+}
+
 // Populations returns where each writer's records land, by scope name.
 func Populations() []Population { return slices.Clone(schemaPopulations) }
 

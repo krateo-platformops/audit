@@ -9,6 +9,45 @@ timestamp: 2026-11-12T00:00:00Z
 
 # Log
 
+- **2026-11-12**: v0.14.0 (draft). Additive: no record of an earlier
+  release changes, and no content hash.
+  - `authn.username.check` gains two check results,
+    `name_claimed_by_claimant` and `name_claimed_by_another`: the name is
+    claimed, and the claim is, or is not, the claimant's (authn#146,
+    pending merge, at `1bef35f3`: `config.CheckUsernameFor`,
+    `go/authn/internal/helpers/kube/config/availability.go:69-104`;
+    `routes/usernames/check.go` `readRequest` `:250-274`,
+    `Claimant.claim` `:79-87`). The writer's obligation, stated in the
+    schema since `Check` never sees the request: these only when the
+    request carried a claimant, bare `name_claimed` only when it didn't.
+    The claimant's identity is never recorded.
+  - The controller's denial reason `kept_existing_value`: the writer
+    declined to overwrite an authorization-bearing value already present
+    (verb update, outcome denied, no status code). With it, a new controller
+    key, `krateo.audit.authorization_key` (`Event.AuthorizationKey`), the
+    kept key as `<kind>:<key>`, whose closed set the generator builds from
+    `authorization_metadata` (`values_from`). A new condition,
+    `kept_existing_value`, makes `Check` hold the pair both ways: the key
+    without the reason is `unexpected`, the reason without the key
+    `missing`. One record per conflicting key, never a value.
+    `AuthorizationKeyValue(kind, key)` spells a declared key. First user:
+    authn's startup backfill (authn#147, pending merge, at `fdd4b61f`:
+    `go/authn/internal/identitybackfill/backfill.go:161-169`).
+  - [coverage.md](./coverage.md), "Naming a derived credential Secret":
+    the derived-name rule (nameless unless the derivation leaves the
+    username unchanged) is scoped to refusals and username checks. A
+    successful write names its real target; with exact naming on, authn
+    proves a legacy-named Secret is the username's with plumbing v1.58.0's
+    `endpoints.OwnsSecret` before writing it (authn#147).
+  - The population `github.com/krateo-platformops/oasgen-provider/audit`
+    (controller): oasgen-provider's RBAC (`rbac.apply`, `rbac.delete`)
+    and admission-policy (`admissionpolicy.apply`) writes
+    (oasgen-provider#543). rest-dynamic-controller's bare scope is noted as
+    a historical exception; a new scope is the module path plus `/audit`.
+  - Compatibility: `testdata/v0.13.0/` (30 records audit v0.13.0's own
+    `Emit` wrote, its `rbac_not_allowed` refusal included) gives v0.13.0's
+    own report, and every earlier replay is unchanged.
+
 - **2026-11-12**: v0.13.0. Additive: one more declared annotation, one more
   request denial reason; no record shape, rule or content hash changes.
   - The authorization-bearing labels: `AuthorizationLabels()`
