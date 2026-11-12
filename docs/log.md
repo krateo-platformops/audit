@@ -9,6 +9,24 @@ timestamp: 2026-11-12T00:00:00Z
 
 # Log
 
+- **2026-11-12**: v0.9.1 (audit#26, audit#25). A fix in `audittest`, no
+  schema or record change.
+  - `AssertRemovalDetected`, and so `AssertRequiredKeysDetected`, failed on
+    every conformant `authn.username.check` success record (authn, building
+    authn#136): removing `krateo.action` makes `Check` report
+    `krateo.audit.check_result` `not-for-action`, correctly, and the
+    falsifier counted that as collateral damage. Its relation of keys is now
+    read from the schema in one more way: when `krateo.action` is removed or
+    changed, every key whose closed set the writer declares per action
+    (`Requirement.ActionValues`) is related. No key is named. Tests: the
+    removal falsifier and `AssertRequiredKeysDetected` on an
+    `authn.username.check` success record (v0.9.0's suite never ran them),
+    and the relation pinned per writer and per key.
+  - The `krateo.action` literal registry in docs/schema.md: its statement of
+    which rules read `krateo.action` is now derived from the schema's
+    per-action sets, not typed, and a test fails when an action a
+    per-action set declares is not registered under the writer that
+    declares it.
 - **2026-11-12**: v0.9.0 (audit#23). One optional key,
   `krateo.audit.check_result` (`Event.CheckResult`): what a check the writer
   ran concluded. Its closed set is declared per writer **and per action**

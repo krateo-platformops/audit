@@ -10,6 +10,41 @@ import (
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 )
 
+// audit#26: relatedTo derives the per-action relation from the schema, and
+// only that: krateo.action is related to every key whose closed set the
+// writer declares per action, for that writer only, and no other key's
+// change relates to them.
+func TestRelatedTo_PerActionSetsFollowTheAction(t *testing.T) {
+	var perAction []string // keys with a per-action set for the request writer, read from the schema
+	for _, k := range audit.Keys() {
+		if len(k.Writers[audit.WriterRequest].ActionValues) > 0 {
+			perAction = append(perAction, k.Name)
+		}
+	}
+	if !slices.Contains(perAction, audit.KeyCheckResult) {
+		t.Fatalf("precondition: the request writer declares no per-action set for check_result: %v", perAction)
+	}
+	for _, tc := range []struct {
+		name string
+		w    audit.Writer
+		key  string
+		want bool
+	}{
+		{"request, krateo.action", audit.WriterRequest, audit.KeyAction, true},
+		{"request, krateo.audit.verb", audit.WriterRequest, audit.KeyVerb, false},
+		{"request, user.name", audit.WriterRequest, audit.KeyUserName, false},
+		{"controller, krateo.action (no per-action set)", audit.WriterController, audit.KeyAction, false},
+		{"gateway, krateo.action (no per-action set)", audit.WriterGateway, audit.KeyAction, false},
+	} {
+		related := relatedTo(tc.w, tc.key, nil, nil)
+		for _, k := range perAction {
+			if related[k] != tc.want {
+				t.Errorf("%s: %s related = %v, want %v", tc.name, k, related[k], tc.want)
+			}
+		}
+	}
+}
+
 // v0.9.0 (audit#23): a per-action set (krateo.audit.check_result) is
 // exercised on a record of its action, so a value outside the set of
 // authn.username.check is caught as bad-enum and nothing else is. Method

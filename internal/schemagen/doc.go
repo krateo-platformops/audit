@@ -153,7 +153,7 @@ writers spell each value through its generated constant.
 		}
 	}
 
-	b.WriteString(actionLiterals)
+	b.WriteString(actionLiteralsDoc(s))
 
 	b.WriteString(`
 ## A controller row: the object written and the object reconciled
@@ -448,26 +448,73 @@ const (
 	contentVectorHash  = "c1:e8374f859e140054ea17527c08740cd2439bc7bcad48dd777a3e3cc0921d708c"
 )
 
+// actionLiteral is one registered krateo.action literal: the writer class
+// that writes it, the literal, and what the action is.
+type actionLiteral struct {
+	Writer, Literal, Action string
+}
+
 // actionLiterals is the registry of krateo.action literals in docs/schema.md.
-// It documents them only: Check enforces no krateo.action value.
-const actionLiterals = `
+// It documents them only: Check enforces no krateo.action value. Every action
+// a per-action closed set declares in schema/v1.yaml must be registered here,
+// under the writer that declares it (TestActionLiterals_RegistryNamesEveryDeclaredAction).
+var actionLiterals = []actionLiteral{
+	{"controller", "helm.install", "helm installs a release that does not exist yet (cdc's Create, no release)"},
+	{"controller", "helm.upgrade", "helm upgrades an existing release (cdc's Create, a release exists)"},
+	{"controller", "helm.reconcile", "helm reconciles a release to its desired state: Observe's self-heal or Update, through plumbing's Reconcile, a three-way merge that patches drift and prunes children"},
+	{"controller", "helm.uninstall", "helm uninstalls a release (cdc's Delete)"},
+	{"request", "authn.username.check", "authn's `POST /usernames/check`, whether a username is free; its result is `krateo.audit.check_result`"},
+}
+
+// actionReaders is the sentence naming the rules that read krateo.action,
+// derived from the schema: the keys whose closed set is per action, each
+// with the actions that declare a set.
+func actionReaders(s *schema) string {
+	var rules []string
+	for _, k := range s.Keys {
+		var actions []string
+		for _, w := range s.Writers {
+			for _, a := range slices.Sorted(maps.Keys(k.Writers[w.ID].Actions)) {
+				if !slices.Contains(actions, a) {
+					actions = append(actions, a)
+				}
+			}
+		}
+		if len(actions) > 0 {
+			rules = append(rules, "`"+k.Name+"` on `"+strings.Join(actions, "`, `")+"`")
+		}
+	}
+	switch len(rules) {
+	case 0:
+		return "No rule reads it."
+	case 1:
+		return "The only rule that reads it is a per-action closed set (above): " + rules[0] + "."
+	}
+	return "The only rules that read it are the per-action closed sets (above): " + strings.Join(rules, "; ") + "."
+}
+
+// actionLiteralsDoc renders the registry section of docs/schema.md.
+func actionLiteralsDoc(s *schema) string {
+	var b strings.Builder
+	b.WriteString(`
 ## ` + "`krateo.action`" + ` literals
 
 ` + "`krateo.action`" + ` is the emit site's own literal. Schema v1 does not enforce
-its values: ` + "`Check`" + ` accepts any non-empty literal. The only rule that
-reads it is a per-action closed set (above): ` + "`krateo.audit.check_result`" + `
-on ` + "`authn.username.check`" + `. The literals below are registered so that
-writers spell the same action the same way and readers can query by it. A
-writer registers a literal by adding it here, in ` + "`internal/schemagen/doc.go`" + `.
+its values: ` + "`Check`" + ` accepts any non-empty literal.
+` + actionReaders(s) + `
+The literals below are registered so that writers spell the same action the
+same way and readers can query by it. A writer registers a literal by adding
+it here, in ` + "`internal/schemagen/doc.go`" + `; every action a per-action set
+declares must be registered.
 
 | writer | literal | the action |
 |---|---|---|
-| ` + "`controller`" + ` | ` + "`helm.install`" + ` | helm installs a release that does not exist yet (cdc's Create, no release) |
-| ` + "`controller`" + ` | ` + "`helm.upgrade`" + ` | helm upgrades an existing release (cdc's Create, a release exists) |
-| ` + "`controller`" + ` | ` + "`helm.reconcile`" + ` | helm reconciles a release to its desired state: Observe's self-heal or Update, through plumbing's Reconcile, a three-way merge that patches drift and prunes children |
-| ` + "`controller`" + ` | ` + "`helm.uninstall`" + ` | helm uninstalls a release (cdc's Delete) |
-| ` + "`request`" + ` | ` + "`authn.username.check`" + ` | authn's ` + "`POST /usernames/check`" + `, whether a username is free; its result is ` + "`krateo.audit.check_result`" + ` |
-`
+`)
+	for _, l := range actionLiterals {
+		fmt.Fprintf(&b, "| `%s` | `%s` | %s |\n", l.Writer, l.Literal, l.Action)
+	}
+	return b.String()
+}
 
 // formatDocs is what each format of `formats` requires of a value, as Check
 // enforces it. TestFormatsAreDocumented fails on a format without an entry.

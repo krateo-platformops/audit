@@ -239,6 +239,44 @@ func TestFalsifiers_CoverClientProvenance(t *testing.T) {
 	audittest.AssertEnumsDetected(t, audit.WriterRequest, rec.Only(t))
 }
 
+// audit#26: the falsifiers run on a conformant authn.username.check success
+// record. Removing krateo.action makes Check report check_result
+// not-for-action, which is right (its closed set is the action's), so the
+// falsifier counts it as related, not as collateral damage: the relation is
+// read from the schema's per-action sets, not named.
+func TestFalsifiers_UsernameCheckSuccess(t *testing.T) {
+	rec := audittest.NewRecorder(t)
+	audit.New(rec.Logger("test/audit"), audit.WithWriter(audit.WriterRequest)).Emit(sessionCtx(t), audit.Event{
+		UserName: "system:serviceaccount:example-system:example-controller", ActorClass: audit.ClassService,
+		Action: "authn.username.check", Verb: "get", HTTPMethod: "GET", Outcome: audit.OutcomeSuccess,
+		CheckResult: audit.CheckResultAvailable, Namespace: "example-system", Version: "v1", Resource: "secrets",
+		ObjectName: "example-user-clientconfig", Preview: audit.PreviewFalse, RequestURI: "/usernames/check",
+		SourceIPs: []string{"192.0.2.10"}})
+	r := rec.Only(t)
+	audittest.AssertConformant(t, audit.WriterRequest, r)
+
+	// The precondition the fix is about: without krateo.action, Check reports
+	// the check result too. Without it this test would prove nothing.
+	removed := audit.Check(audit.WriterRequest, audittest.Without(audittest.Attributes(r), audit.KeyAction))
+	if !slices.Contains(removed, audit.Violation{Key: audit.KeyCheckResult, Reason: audit.ReasonNotForAction}) {
+		t.Fatalf("precondition: removing krateo.action does not report check_result not-for-action: %v", removed)
+	}
+
+	if msgs := failures(t, func(tb testing.TB) { audittest.AssertRemovalDetected(tb, audit.WriterRequest, r, audit.KeyAction) }); len(msgs) != 0 {
+		t.Errorf("AssertRemovalDetected(krateo.action): %q", msgs)
+	}
+	if msgs := failures(t, func(tb testing.TB) { audittest.AssertRequiredKeysDetected(tb, audit.WriterRequest, r) }); len(msgs) != 0 {
+		t.Errorf("AssertRequiredKeysDetected: %q", msgs)
+	}
+	if msgs := failures(t, func(tb testing.TB) { audittest.AssertEnumsDetected(tb, audit.WriterRequest, r) }); len(msgs) != 0 {
+		t.Errorf("AssertEnumsDetected: %q", msgs)
+	}
+	// The removal is still detected: krateo.action is reported missing.
+	if !slices.Contains(removed, audit.Violation{Key: audit.KeyAction, Reason: audit.ReasonMissing}) {
+		t.Errorf("removing krateo.action is not reported missing: %v", removed)
+	}
+}
+
 // AssertEnumsDetected replaces each closed-set value, the writer's own
 // denial reason included, and needs a conformant record to start from.
 func TestAssertEnumsDetected(t *testing.T) {
