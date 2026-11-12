@@ -221,9 +221,10 @@ var (
 	goIdent          = regexp.MustCompile(`^[A-Z][A-Za-z0-9]*$`)
 	markerName       = regexp.MustCompile(`^[a-z][a-z_]*$`)
 	valueName        = regexp.MustCompile(`^[a-z][a-z0-9]*(_[a-z0-9]+)*$`)
-	// actionName is a krateo.action literal a per-action set is declared
-	// for: dot-separated lower_snake_case words (authn.username.check).
-	actionName = regexp.MustCompile(`^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)*$`)
+	// actionName is a krateo.action literal: dot-separated words, each
+	// starting with a lowercase letter (authn.username.check, call.dryRun,
+	// debug.shadowParity).
+	actionName = regexp.MustCompile(`^[a-z][A-Za-z0-9_]*(\.[a-z][A-Za-z0-9_]*)*$`)
 )
 
 func parse(raw []byte) (*schema, error) {

@@ -470,6 +470,7 @@ var actionLiterals = []actionLiteral{
 	{"controller", "helm.rollback", "helm rolls a release back: Observe clearing a release stuck pending past the grace, and Delete's rollback; real child patches, creates and deletes (plumbing#140 per-child verdicts)"},
 	{"controller", "helm.uninstall", "helm uninstalls a release (cdc's Delete)"},
 	{"request", "authn.username.check", "authn's `POST /usernames/check`, whether a username is free; its result is `krateo.audit.check_result`"},
+	{"request", "debug.shadowParity", "snowplow's `POST /debug/shadow-parity`, which toggles a per-process dark parity measurement; its target is the non-resource path, `url.path` (v0.12.0)"},
 }
 
 // actionReaders is the sentence naming the rules that read krateo.action,

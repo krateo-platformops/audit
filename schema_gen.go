@@ -535,7 +535,7 @@ var formatPatterns = map[string]*regexp.Regexp{
 	FormatUUID:         regexp.MustCompile("^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"),
 	FormatOpaqueID:     regexp.MustCompile("^[A-Za-z0-9_-]{1,128}$"),
 	FormatSessionID:    regexp.MustCompile("^[A-Za-z0-9._-]{1,128}$"),
-	FormatK8sNamespace: regexp.MustCompile("^[a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?$"),
+	FormatK8sNamespace: regexp.MustCompile("^([a-z0-9]|[a-z0-9][-a-z0-9]{0,61}[a-z0-9])$"),
 	FormatURLPath:      regexp.MustCompile("^/[^?#\\s]{0,1000}$"),
 }
 

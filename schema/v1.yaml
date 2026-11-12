@@ -211,7 +211,7 @@ formats:
       (audit#32): its minted ids, a trace id, a UUID all fit.
   - id: k8s_namespace
     go: K8sNamespace
-    pattern: '^[a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?$'
+    pattern: '^([a-z0-9]|[a-z0-9][-a-z0-9]{0,61}[a-z0-9])$'
     description: >-
       a Kubernetes namespace name: a DNS-1123 label, 1 to 63 of `[a-z0-9-]`,
       starting and ending with a letter or digit.

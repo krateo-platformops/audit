@@ -79,6 +79,8 @@ const MetricRecordedMarkerUnattached = "krateo.audit.recorded_marker.unattached"
 | `ServerAddress` | `server.address` | **host[:port] only**: `Emit` drops any scheme, userinfo, path, query and fragment, and omits a value with no parseable host |
 | `RequestURI`, `SourceIPs`, `UserAgent`, `ReceivedTime` | `krateo.request.uri`, `krateo.request.source_ips`, `user_agent.original`, `krateo.request.received_time_unix_nano` | what a request-serving writer received; the User-Agent is cut at 1024 bytes on a character |
 | `RESTActionNamespace`, `RESTActionName`, `RESTActionStage` | `krateo.restaction.{namespace,name,stage}` | |
+| `EndpointRefNamespace`, `EndpointRefName` | `krateo.audit.endpoint_ref.{namespace,name}` | v0.12.0: the endpointRef a stage dialled `ServerAddress` through, only on a record whose target is `ServerAddress`. `Emit` never writes a name of a per-user clientconfig Secret (it embeds a username), nor any name not of format `endpoint_ref_name` |
+| `URLPath` | `url.path` | v0.12.0: the request writer's third target, a non-resource path it served (`/debug/shadow-parity`); never beside an object or `ServerAddress`; no query |
 | read from W3C baggage on `ctx` | `session.id` | |
 | set automatically | `krateo.audit.no_trace_context` | `true` when `ctx` carries no valid span |
 | the span on `ctx` | TraceId / SpanId | LogRecord fields stamped by the SDK, not attributes |
@@ -126,7 +128,7 @@ func Keys() []KeySpec                  // every key: type, semconv status, enum,
 func LookupKey(name string) (KeySpec, bool)
 func Writers() []Writer
 func Markers() []string                // what krateo.audit.incomplete may list
-func Target() TargetRule               // object_ref.resource or server.address, per writer
+func Target() TargetRule               // object_ref.resource or server.address, per writer; TargetRule.KeysFor(w) adds w's own (url.path for request)
 func Conditions() []Condition          // the conditions Check evaluates on a record
 func CredentialTargets() []CredentialTarget                   // where a credential-free key is never written
 func IsCredentialTarget(group, resource, subresource string) bool
@@ -148,6 +150,9 @@ its own copy of a pattern.
 const FormatOpaqueID = "opaque_id"     // ... one Format* constant per format, generated
 func ValidOpaqueID(s string) bool      // ... one Valid* function per format, generated
 func ValidSessionID(s string) bool     // session.id's format (v0.11.0): 1 to 128 of [A-Za-z0-9._-]
+func ValidK8sNamespace(s string) bool  // endpoint_ref.namespace's format (v0.12.0): a DNS-1123 label
+func ValidEndpointRefName(s string) bool // endpoint_ref.name's (v0.12.0): never a per-user clientconfig Secret's name
+func ValidURLPath(s string) bool       // url.path's (v0.12.0): "/" and up to 1000 more, no query, fragment or whitespace
 func ValidFormat(format, value string) bool // value of format, as Check enforces it; false for an undeclared format
 func ValidValue(key, value string) error    // key's declared format: nil, *FormatError, or ErrUnknownKey wrapped
 func Formats() []string                // every declared format, in schema order

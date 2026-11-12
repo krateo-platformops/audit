@@ -160,7 +160,7 @@ minimum, or not below its `less_than` key, is `out-of-range`.
 - `uuid` (`audit.ValidUUID`): a UUID in its canonical textual form, lowercase (8-4-4-4-12 hex digits). Pattern `^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`.
 - `opaque_id` (`audit.ValidOpaqueID`): 1 to 128 of `[A-Za-z0-9_-]`. Pattern `^[A-Za-z0-9_-]{1,128}$`.
 - `session_id` (`audit.ValidSessionID`): 1 to 128 of `[A-Za-z0-9._-]`: a correlation id safe in W3C baggage and on a log line. The shape snowplow, the id's origin, accepts and mints (audit#32): its minted ids, a trace id, a UUID all fit. Pattern `^[A-Za-z0-9._-]{1,128}$`.
-- `k8s_namespace` (`audit.ValidK8sNamespace`): a Kubernetes namespace name: a DNS-1123 label, 1 to 63 of `[a-z0-9-]`, starting and ending with a letter or digit. Pattern `^[a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?$`.
+- `k8s_namespace` (`audit.ValidK8sNamespace`): a Kubernetes namespace name: a DNS-1123 label, 1 to 63 of `[a-z0-9-]`, starting and ending with a letter or digit. Pattern `^([a-z0-9]|[a-z0-9][-a-z0-9]{0,61}[a-z0-9])$`.
 - `endpoint_ref_name` (`audit.ValidEndpointRefName`): the name of the Secret an endpointRef names: 1 to 253 of `[a-z0-9.-]`, starting and ending with a letter or digit, and never a per-user clientconfig Secret's name (one ending in `-clientconfig` or `-clientconfig-stepup`), which embeds a username.
 - `url_path` (`audit.ValidURLPath`): a URL path: `/` and up to 1000 more characters, no query, no fragment, no whitespace. Pattern `^/[^?#\s]{0,1000}$`.
 - `rfc3339` (`audit.ValidRFC3339`): an RFC 3339 timestamp, with or without fractional seconds.
@@ -240,6 +240,7 @@ declares must be registered.
 | `controller` | `helm.rollback` | helm rolls a release back: Observe clearing a release stuck pending past the grace, and Delete's rollback; real child patches, creates and deletes (plumbing#140 per-child verdicts) |
 | `controller` | `helm.uninstall` | helm uninstalls a release (cdc's Delete) |
 | `request` | `authn.username.check` | authn's `POST /usernames/check`, whether a username is free; its result is `krateo.audit.check_result` |
+| `request` | `debug.shadowParity` | snowplow's `POST /debug/shadow-parity`, which toggles a per-process dark parity measurement; its target is the non-resource path, `url.path` (v0.12.0) |
 
 ## A controller row: the object written and the object reconciled
 

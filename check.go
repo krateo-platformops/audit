@@ -421,7 +421,6 @@ func hasPrefix(present map[string]attribute.Value, prefix string) bool {
 	return false
 }
 
-// targets counts the target keys the record carries.
 // targets counts the target keys of writer w the record carries.
 func targets(w Writer, present map[string]attribute.Value) int {
 	n := 0

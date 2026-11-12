@@ -149,9 +149,17 @@ None of these is a row anyone emits. Each is a decision.
   `main`; they show only in authn's generic `http.server.request.count`, by
   route and status, when its metrics are on
   (`internal/telemetry/metrics_middleware.go:15`, `:24`, `:46-52`).
-  snowplow's 401s are answered by its UserConfig middleware before any
-  handler runs, so they don't reach the trail either. They stay visible in
-  the gateway's access log.
+  snowplow refuses a caller before verification in its UserConfig
+  middleware, before any handler runs: a missing, invalid or expired token,
+  or one signed by a key authn no longer publishes (TokenMissing,
+  TokenInvalid, TokenExpired, KeyNotPublished; snowplow `219a076e`,
+  `go/snowplow/internal/handlers/middleware/credential_status.go:64-80`).
+  Those are counted, never rows, and stay visible in the gateway's access
+  log. Not every snowplow 401 is one of them: a **verified** caller refused
+  because its session or step-up credential Secret is missing
+  (`session_credential_missing`, `step_up_required`;
+  `credential_status.go:195-199`, via `userconfig.go:363-364`) gets a row,
+  with its denial reason (audit v0.12.0).
 - **Tool-server actions that run on the tool server's own ServiceAccount**
   (the kagent helm, istio, cilium, argo and shell tools) can't be
   attributed to a person by any hop. No record can name the human, so
@@ -207,7 +215,8 @@ v0.9.1: pending its merge.
 | snowplow | `POST`, `PUT`, `PATCH /call/dry-run`: nothing persisted; the apiserver admits or refuses the write | request | as `/call` | audited, non-conformant | [snowplow#1291]; emit: [snowplow#461] | `github.com/krateo-platformops/snowplow/audit` | `call.dryRun` | create, update, patch | success, failure |
 | snowplow | a RESTAction `api[]` stage with a write verb, dialled by a customer request (`GET /call`, `POST /call/read`, `/export`): the caller's apiserver object (no `endpointRef`), or a named endpoint (`server.address`) | request | the request's verified caller; one record per dialled call | audited, non-conformant | [snowplow#1291], [snowplow#1283]; emit: [snowplow#902] | `github.com/krateo-platformops/snowplow/audit` | `restaction`, `restaction.dryRun` | the stage's write verb | success, failure |
 | snowplow | `GET`, `POST /export`: nothing changes; data leaves as a file built from the caller's own `/call` | request | as `/call` | audited, non-conformant (the success path only) | [snowplow#1291], [snowplow#986]; emit: [snowplow#116] | `github.com/krateo-platformops/snowplow/audit` | `export` | get | success, failure |
-| snowplow | `POST /debug/shadow-parity`: toggles a per-process dark parity measurement; it can't change an authorization verdict | request | as `/call` | not audited | [snowplow#909] | | | | |
+| snowplow | `POST /debug/shadow-parity`: toggles a per-process dark parity measurement; it can't change an authorization verdict. Its target is the non-resource path, `url.path` (audit v0.12.0) | request | as `/call` | not audited | [snowplow#909] | | `debug.shadowParity` | post | |
+| snowplow | a verified caller refused because its session or step-up credential Secret is missing (snowplow `219a076e`, `handlers/middleware/credential_status.go:195-199`, via `userconfig.go:363-364`) | request | the verified token | not audited | [audit#22] | | | | denied (`session_credential_missing`, `step_up_required`) |
 | snowplow | a RESTAction write stage in a background resolve (refresher, cohort seed, prewarm, revalidation) | request | none: no person is behind it | out of scope (nothing is sent: the stage is refused before the dial, snowplow#903) | [snowplow#1291] | | | | |
 | snowplow | a RESTAction write stage in an inline dry-run draft (`POST /call/read`) | request | the caller | out of scope (nothing is sent: write stages are refused before egress, snowplow#443) | [snowplow#1291] | | | | |
 | snowplow | a RESTAction write stage abandoned before the dial (unresolvable endpoint, failed template, guard refusal, failed dependency) | request | the caller | out of scope (nothing is sent) | [snowplow#1291] | | | | |
@@ -341,7 +350,7 @@ All four are closed, and the gateway denies the tool to every caller.
 
 | component | path (what changes) | writer class | identity source | status | owner issue | scope | krateo.action | verb | outcomes |
 |---|---|---|---|---|---|---|---|---|---|
-| snowplow | an authentication failure on any route (a missing, malformed or expired token, or an untrusted signature) | — | none: no verified identity | out of scope (see Exclusions) | [installer#410] | | | | |
+| snowplow | a refusal before verification on any route: a missing, invalid or expired token, or one signed by a key authn no longer publishes (TokenMissing, TokenInvalid, TokenExpired, KeyNotPublished; `credential_status.go:64-80`) | — | none: no verified identity | out of scope (see Exclusions) | [installer#410] | | | | |
 | snowplow | `POST /convert` | — | none | out of scope (not mounted: the route is commented out) | [installer#410] | | | | |
 | snowplow | `POST /telemetry/v1/traces`: browser spans on the trace plane | — | none | out of scope (no platform state changes) | [snowplow#1291] | | | | |
 | snowplow | snowplow's own writes to the cluster | — | snowplow's ServiceAccount | out of scope (there are none: the grant is `get`, `list`, `watch`, non-persistent access reviews and `impersonate` for reads) | [installer#410] | | | | |
@@ -400,6 +409,7 @@ Each open question is asked on its owner's issue; the link goes to the comment. 
 [audit#8]: https://github.com/krateo-platformops/audit/issues/8
 [audit#9]: https://github.com/krateo-platformops/audit/issues/9
 [audit#12]: https://github.com/krateo-platformops/audit/issues/12
+[audit#22]: https://github.com/krateo-platformops/audit/issues/22
 [installer#410]: https://github.com/krateo-platformops/installer/issues/410
 [installer#411]: https://github.com/krateo-platformops/installer/issues/411
 [installer#412]: https://github.com/krateo-platformops/installer/issues/412
