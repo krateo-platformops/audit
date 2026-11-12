@@ -312,14 +312,17 @@ authorization_metadata:
   # v0.13.0: plumbing v1.58.0's endpoints.UsernameAnnotation
   # (endpoints/names.go:13-17). OwnsSecret (names.go:73-81) proves a session
   # Secret holds the requester's credential by it before a reader uses the
-  # Secret; snowplow#1382 reads it so, and acmp's tenant onboarding names a
-  # tenant's session Secret from it. authn will stamp it on every session
-  # Secret (planned, per authn#144). Not in c1 (above).
+  # Secret; snowplow#1382 (planned) will read it so, and acmp's tenant
+  # onboarding requires the session Secret's name to equal the annotation's
+  # value + "-clientconfig". authn will stamp it on every session Secret
+  # (planned, per authn#144, behind exactUsernames.enabled, off by default).
+  # Not in c1 (above).
   - kind: annotation
     key: authn.krateo.io/username
     reason: the exact username a session Secret holds the credential of; a reader proves the Secret is the requester's by it (plumbing endpoints.OwnsSecret), so it decides credential ownership
   # authn will stamp both labels on every session Secret (planned, per
-  # authn#144; the AUDIT-4 lead's ruling, 2026-11-12).
+  # authn#144, behind exactUsernames.enabled, off by default; the AUDIT-4
+  # lead's ruling, 2026-11-12).
   - kind: label
     key: authn.krateo.io/principal
     reason: "the session's principal class (human, service, agent or controller): acmp's tenant onboarding selects humans by it"

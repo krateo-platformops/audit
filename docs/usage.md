@@ -449,8 +449,9 @@ counts `authn.krateo.io/username`.
 
 - **Authorization-bearing labels.** `audit.AuthorizationLabels()` returns
   `authn.krateo.io/principal` and `authn.krateo.io/username-label`, which
-  authn will stamp on every session Secret (planned, per authn#144) and
-  which acmp's tenant onboarding reads. It sits beside
+  authn will stamp on every session Secret (planned, per authn#144, behind
+  `exactUsernames.enabled`, off by default) and which acmp's tenant
+  onboarding reads. It sits beside
   `audit.AuthorizationAnnotations()`, and both are generated from one
   schema list, `authorization_metadata`, where each entry declares its
   kind, its key and why it is content.
@@ -458,8 +459,11 @@ counts `authn.krateo.io/username`.
   adds `authn.krateo.io/username` (plumbing v1.58.0's
   `endpoints.UsernameAnnotation`): the exact username a session Secret
   holds the credential of, by which a reader proves the Secret is the
-  requester's (`endpoints.OwnsSecret`). authn will stamp it on every
-  session Secret (planned, per authn#144).
+  requester's (`endpoints.OwnsSecret`; snowplow#1382, planned, will read
+  it so). acmp's tenant onboarding requires the session Secret's name to
+  equal the annotation's value + `-clientconfig`. authn will stamp it on
+  every session Secret (planned, per authn#144, behind
+  `exactUsernames.enabled`, off by default).
 - **What content is.** The desired state (coverage.md, boundary ruling 1)
   plus the declared annotations and labels, compared by key and value. A
   write that changes a declared annotation or label, adds it or removes it

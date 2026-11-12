@@ -265,10 +265,10 @@ func AuthorizationAnnotations() []string { return slices.Clone(schemaContentAnno
 
 // AuthorizationLabels returns the authorization-bearing label keys
 // (schema/v1.yaml authorization_metadata, kind label, v0.13.0): authn will
-// stamp them on every session Secret (planned, per authn#144), and
-// authorization reads them (acmp's tenant
-// onboarding selects humans by authn.krateo.io/principal and names a
-// tenant's namespaces from authn.krateo.io/username-label). A write that
+// stamp them on every session Secret (planned, per authn#144, behind
+// exactUsernames.enabled, off by default), and authorization reads them
+// (acmp's tenant onboarding selects humans by authn.krateo.io/principal and
+// names a tenant's namespaces from authn.krateo.io/username-label). A write that
 // changes one, adds it or removes it is a content change, as for
 // AuthorizationAnnotations; a label is compared only as a label. Form c1 of
 // the content hash counts no label: a form is fixed, and the labels' carrier

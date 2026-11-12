@@ -10,8 +10,8 @@ import (
 )
 
 // The declared authorization labels, by hand (v0.13.0): authn will stamp both
-// on every session Secret (planned, per authn#144), and authorization reads
-// them.
+// on every session Secret (planned, per authn#144, behind
+// exactUsernames.enabled, off by default), and authorization reads them.
 func TestAuthorizationLabels(t *testing.T) {
 	if got, want := AuthorizationLabels(), []string{"authn.krateo.io/principal", "authn.krateo.io/username-label"}; !slices.Equal(got, want) {
 		t.Errorf("AuthorizationLabels() = %v, want %v", got, want)

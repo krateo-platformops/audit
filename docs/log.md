@@ -13,15 +13,18 @@ timestamp: 2026-11-12T00:00:00Z
   request denial reason; no record shape, rule or content hash changes.
   - The authorization-bearing labels: `AuthorizationLabels()`
     (`authn.krateo.io/principal`, `authn.krateo.io/username-label`). authn
-    will stamp them on every session Secret (planned, per authn#144), and
-    acmp's tenant onboarding reads them. The AUDIT-4 lead ruled them content
-    (2026-11-12).
+    will stamp them on every session Secret (planned, per authn#144, behind
+    `exactUsernames.enabled`, off by default), and acmp's tenant onboarding
+    reads them. The AUDIT-4 lead ruled them content (2026-11-12).
   - One more authorization annotation, `authn.krateo.io/username`
     (plumbing v1.58.0's `endpoints.UsernameAnnotation`): the exact username a
     session Secret holds the credential of. A reader proves the Secret is the
     requester's by it before using it (plumbing `endpoints.OwnsSecret`;
-    snowplow#1382), so it decides credential ownership. authn will stamp it
-    on every session Secret (planned, per authn#144).
+    snowplow#1382, planned, will read it so), so it decides credential
+    ownership. acmp's tenant onboarding requires the session Secret's name
+    to equal the annotation's value + `-clientconfig`. authn will stamp it
+    on every session Secret (planned, per authn#144, behind
+    `exactUsernames.enabled`, off by default).
     `AuthorizationAnnotations()` now returns three keys.
   - One schema list for both kinds: `content_annotations` becomes
     `authorization_metadata`, each entry with its kind (annotation or
