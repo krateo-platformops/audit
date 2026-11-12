@@ -138,6 +138,21 @@ func LegacyKey(key string) string      // the v0.3 twin of a key, during W1
 func SchemaYAML() []byte               // schema/v1.yaml
 ```
 
+## A controller's actor
+
+v0.12.0. A controller names itself from the downward API its chart sets
+(see [usage](./usage.md), Adopting v0.12.0, for the chart's two entries).
+
+```go
+const EnvPodNamespace = "POD_NAMESPACE"             // fieldRef metadata.namespace
+const EnvPodServiceAccount = "POD_SERVICE_ACCOUNT"  // fieldRef spec.serviceAccountName
+func ControllerActor() string                       // ServiceAccountActor of the two; "" when either is unset or invalid
+func ServiceAccountActor(namespace, name string) string // system:serviceaccount:<namespace>:<name>; "" unless namespace is a DNS-1123 label and name a DNS-1123 subdomain
+```
+
+On `""` the controller passes no `WithActor`, and Emit marks every record
+`actor`.
+
 ## Value formats
 
 The formats a key may declare (`format:` in schema/v1.yaml), as exported

@@ -46,6 +46,21 @@ timestamp: 2026-11-12T00:00:00Z
   - The registry accepts camel-case words in a literal (`call.dryRun`,
     `debug.shadowParity`). The SQL column-count test now matches whole
     aliases, since `endpoint_ref.name`'s prefixes `endpoint_ref.namespace`'s.
+  - A controller's own actor: `ControllerActor()`, `ServiceAccountActor`,
+    `EnvPodNamespace` (`POD_NAMESPACE`) and `EnvPodServiceAccount`
+    (`POD_SERVICE_ACCOUNT`). It returns `system:serviceaccount:<ns>:<name>`
+    from the chart's downward API, or `""` when either is unset or not a
+    name Kubernetes gives; then no `WithActor`, and records are marked
+    `actor`. It replaces the copies in access-review
+    (`internal/auditing/auditing.go`, `Actor`, at `e986af18`) and
+    identity-lifecycle (same file, at `8f9bb41a`), which return `""` only
+    when a part is unset; core-provider and oasgen-provider adopt it
+    instead of copying.
+  - authn is on v0.11.0: authn#139 merged as
+    `07b288d26bba0670f2631106ccc6023427373c22`, whose session.id check is
+    `return v, audit.ValidSessionID(v)` in `SessionID`
+    (`go/authn/internal/auditlog/middleware.go:37`). The v0.11.0 entry's
+    citation of `498828bf` stays true for that commit.
   - Compatibility: `testdata/v0.11.0/` (25 records audit v0.11.0's own `Emit`
     wrote) gives v0.11.0's own report, and every earlier replay is
     unchanged.

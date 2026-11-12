@@ -406,6 +406,37 @@ v0.12.0 is additive (audit#22): a plain bump changes no record.
   `per_user_credential_ref` never names the Secret it refused. Not denials: a
   Secret the apiserver answered NotFound or Forbidden for, a page-budget
   cut, and a refused 3xx redirect stay failures with the authority's code.
+- **A controller's own actor.** `audit.ControllerActor()` returns
+  `system:serviceaccount:<namespace>:<name>` from the downward-API variables
+  `audit.EnvPodNamespace` (`POD_NAMESPACE`) and `audit.EnvPodServiceAccount`
+  (`POD_SERVICE_ACCOUNT`), and `""` when either is unset or is not a name
+  Kubernetes gives (a DNS-1123 label for the namespace, a DNS-1123
+  subdomain for the ServiceAccount). With `""`, pass no `WithActor`: every
+  record is then marked `actor`, and names no principal it is not.
+  `audit.ServiceAccountActor(namespace, name)` is the same rule on values
+  in hand. It replaces each controller's own copy (access-review and
+  identity-lifecycle carry one). The chart sets both from the pod's own
+  fields, and should refuse an override of either (an `extraEnv` entry, say):
+
+  ```yaml
+  env:
+    - name: POD_NAMESPACE
+      valueFrom:
+        fieldRef:
+          fieldPath: metadata.namespace
+    - name: POD_SERVICE_ACCOUNT
+      valueFrom:
+        fieldRef:
+          fieldPath: spec.serviceAccountName
+  ```
+
+  ```go
+  opts := []audit.Option{audit.WithWriter(audit.WriterController)}
+  if actor := audit.ControllerActor(); actor != "" {
+  	opts = append(opts, audit.WithActor(actor, audit.ClassController))
+  }
+  emitter := audit.New(logger, opts...)
+  ```
 
 ## Testing a writer
 
