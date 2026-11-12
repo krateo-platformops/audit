@@ -241,6 +241,12 @@ func TestCoverage_DerivedNameRuleIsScopedToRefusalsAndChecks(t *testing.T) {
 		"It is not for a successful write: a write names its real target",
 		"`endpoints.OwnsSecret`",
 		"On a refusal or a username check:",
+		// The ownership proof is authn's default path (authn#148, 0.45.0),
+		// at its two sites.
+		"[authn#148]",
+		"`dc732f89`",
+		"`guard.go:158-166`",
+		"`storage/storage.go:194-216`",
 	} {
 		if !strings.Contains(flat, want) {
 			t.Errorf("the section does not say %q", want)
@@ -248,6 +254,9 @@ func TestCoverage_DerivedNameRuleIsScopedToRefusalsAndChecks(t *testing.T) {
 	}
 	if strings.Contains(flat, "Every writer that names a credential Secret derived from a username") {
 		t.Error("the section still states the rule for every writer, writes included")
+	}
+	if strings.Contains(flat, "exact naming on") || strings.Contains(flat, "exactUsernames") {
+		t.Error("the section still limits the ownership proof to exact naming")
 	}
 }
 
@@ -332,7 +341,8 @@ func TestCoverage_CdcHelmWriteRow(t *testing.T) {
 		}
 		found++
 		if !strings.HasPrefix(r.status, "audited, non-conformant for authorization-metadata-only changes: ") ||
-			!strings.Contains(r.status, "metadata_only") || !strings.Contains(r.status, "[core-provider#465]") {
+			!strings.Contains(r.status, "metadata_only") || !strings.Contains(r.status, "[core-provider#465]") ||
+			!strings.Contains(r.status, "[core-provider#467], is not yet merged") {
 			t.Errorf("docs/coverage.md:%d: status %q", r.line, r.status)
 		}
 		if r.scope != "github.com/krateo-platformops/composition-dynamic-controller/audit" {

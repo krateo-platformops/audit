@@ -36,9 +36,12 @@ timestamp: 2026-11-12T00:00:00Z
   - [coverage.md](./coverage.md), "Naming a derived credential Secret":
     the derived-name rule (nameless unless the derivation leaves the
     username unchanged) is scoped to refusals and username checks. A
-    successful write names its real target; with exact naming on, authn
-    proves a legacy-named Secret is the username's with plumbing v1.58.0's
-    `endpoints.OwnsSecret` before writing it (authn#147).
+    successful write names its real target: on authn's default path since
+    authn#148 (authn 0.45.0, `dc732f89`), the name guard's claimless branch
+    (`guard.go:158-166`, `name_held_legacy`) and `Put`'s 409 re-check
+    (`storage/storage.go:194-216`, `ErrHeldByAnother`) prove a Secret
+    written before claims is the username's with plumbing's
+    `endpoints.OwnsSecret` before writing it.
   - The population `github.com/krateo-platformops/oasgen-provider/audit`
     (controller): oasgen-provider's RBAC (`rbac.apply`, `rbac.delete`)
     and admission-policy (`admissionpolicy.apply`) writes
@@ -58,7 +61,8 @@ timestamp: 2026-11-12T00:00:00Z
     `audit_envtest_test.go:137`. The cdc's helm child-write row is
     "audited, non-conformant for authorization-metadata-only changes": it
     counts a write that changes only an authorization annotation or label
-    as `metadata_only` and records nothing, pending core-provider#465.
+    as `metadata_only` and records nothing, pending core-provider#465 (its
+    fix, core-provider#467, is not yet merged).
     The cdc's other rows are re-derived at b1f9b5f: a new uninstall row is
     "audited" (its real records are checked by core-provider's
     integration suite, `composition_test.go:1811`); the prune and the kept

@@ -125,14 +125,16 @@ deriving its name from a username, with no Secret in hand: a **refusal**
 **username check** (`authn.username.check`, which writes nothing). It is not
 for a successful write: a write names its real target, the Secret the
 apiserver created or updated, as `object_ref` names any written object (v0.14.0).
-With exact naming on, authn proves a Secret found under a legacy name is
-the username's with plumbing v1.58.0's `endpoints.OwnsSecret`
-(`endpoints/names.go:73-81`) before it writes it, and never replaces one
-that isn't, so the written target is the username's own ([authn#147],
-pending merge, at `fdd4b61f`:
-`go/authn/internal/helpers/kube/config/storage/storage.go:218-231`,
-`storage/naming.go:103-111`; behind `exactUsernames.enabled`, off by
-default). The derived name is plumbing's `endpoints.SecretName`:
+authn proves a Secret written before claims existed is the username's with
+plumbing's `endpoints.OwnsSecret` (v1.58.0 `endpoints/names.go:73-81`)
+before it writes it, and never replaces one that isn't, so the written
+target is the username's own. This is the default path since [authn#148]
+(released in authn 0.45.0, at `dc732f89`, under
+`go/authn/internal/helpers/kube/config/`): the name guard's claimless
+branch adopts such a Secret only when its certificate was issued to the
+username, else refuses with `name_held_legacy` (`guard.go:158-166`), and
+`Put` re-checks on a create answered 409, refusing with `ErrHeldByAnother`
+(`storage/storage.go:194-216`). The derived name is plumbing's `endpoints.SecretName`:
 `kubeutil.MakeDNS1123Compatible(username)` plus `-clientconfig`
 (plumbing v1.51.0 `endpoints/endpoints.go:107-109`,
 `kubeutil/dns1123.go:18-32`). The derivation lowercases the username, drops
@@ -378,7 +380,7 @@ the predicate drops, by reason.
 | authn | identity backfill at startup, with exact naming on: a credential Secret whose username annotation, principal label or username-label already holds a value other than its certificate proves is left as found, nothing sent. [authn#147] at `fdd4b61f`: `go/authn/internal/identitybackfill/backfill.go:161-169`, conflicts from `missingExact` (`:334-347`); recorder `internal/auditlog/controller.go:174-190` (`IdentityInconsistent`; literal `:31`), on audit v0.11.0: one denied record per Secret with no reason | controller | authn's own ServiceAccount | not audited | [authn#147] (pending authn#147 merge; behind `exactUsernames.enabled`, off by default) | `github.com/krateo-platformops/authn/audit/controller` | `authn.identity.inconsistent` | update | denied (`kept_existing_value`, audit v0.14.0: one record per conflicting key, `krateo.audit.authorization_key` naming it, never a value; no status code) |
 | authn | its own credential's identity annotations brought in line with its certificate, recorded only when an authorization-bearing annotation changed. Emit: `internal/certrenewal/renewal.go:411-421`; recorder `controller.go:139-159`; literal `controller.go:24-26` | controller | authn's own ServiceAccount | audited | [authn#119]; emit: [authn#123] | `github.com/krateo-platformops/authn/audit/controller` | `authn.servicecert.annotated` | update | success, failure |
 | authn | the leader-election Lease that elects the replica doing authn's own-identity work (`internal/leader/leader.go:24-26`); no emit | controller | authn's own ServiceAccount | out of scope (not `*.krateo.io`, and not an RBAC, admission or credential write) | [authn#119] | | | | |
-| cdc | helm install or upgrade of a Composition's child: create, update or patch. Emit at core-provider@b1f9b5f (since [core-provider#459], released in 2.13.86): `go/composition-dynamic-controller/internal/composition/composition.go:1020` (install), `:1002` (upgrade), `:644`, `:1232` (reconcile), `:518`, `:1478` (rollback); literals `internal/auditrec/verdict.go:23-30` | controller | cdc's own ServiceAccount | audited, non-conformant for authorization-metadata-only changes: a child write that changes only an authorization-bearing annotation or label is counted `metadata_only` (`composition_audit_excluded_total`) and not recorded. The cdc passes no `ContentAnnotations` to plumbing's helm verdicts (`helm/helm.go:368`; none in the cdc's non-test code at b1f9b5f), and plumbing's helm config has no `ContentLabels` (v1.53.0, the cdc's pin, through v1.62.0). Pending [core-provider#465] | [core-provider#423], [plumbing#106]; fix: [core-provider#465]; emit: [core-provider#459] | `github.com/krateo-platformops/composition-dynamic-controller/audit` | `helm.install`, `helm.upgrade`, `helm.reconcile`, `helm.rollback` | | |
+| cdc | helm install or upgrade of a Composition's child: create, update or patch. Emit at core-provider@b1f9b5f (since [core-provider#459], released in 2.13.86): `go/composition-dynamic-controller/internal/composition/composition.go:1020` (install), `:1002` (upgrade), `:644`, `:1232` (reconcile), `:518`, `:1478` (rollback); literals `internal/auditrec/verdict.go:23-30` | controller | cdc's own ServiceAccount | audited, non-conformant for authorization-metadata-only changes: a child write that changes only an authorization-bearing annotation or label is counted `metadata_only` (`composition_audit_excluded_total`) and not recorded. The cdc passes no `ContentAnnotations` to plumbing's helm verdicts (`helm/helm.go:368`; none in the cdc's non-test code at b1f9b5f), and plumbing's helm config has no `ContentLabels` (v1.53.0, the cdc's pin, through v1.62.0). Pending [core-provider#465]; its fix, [core-provider#467], is not yet merged | [core-provider#423], [plumbing#106]; issue: [core-provider#465]; fix: [core-provider#467] (not yet merged); emit: [core-provider#459] | `github.com/krateo-platformops/composition-dynamic-controller/audit` | `helm.install`, `helm.upgrade`, `helm.reconcile`, `helm.rollback` | | |
 | cdc | helm prune of a child the new revision no longer renders. Emit at core-provider@b1f9b5f: a deleted child's verdict (`go/composition-dynamic-controller/internal/auditrec/verdict.go:81-84`) in the records of `internal/composition/composition.go:1002` (`Create`, upgrade), `:644` (`Observe`, self-heal) and `:1232` (`Update`) (reconcile), `:518` (`Observe`) and `:1478` (`Delete`) (rollback). Not proven: the integration suite's heal step checks every record it writes (`internal/composition/composition_test.go:910`, `AssertConformant` at `audit_e2e_test.go:87`), and its comment says the heal prunes a child, but no step requires a prune record, so a run that prunes nothing passes | controller | cdc's own ServiceAccount | audited, conformance not yet proven | [core-provider#423], [plumbing#106]; emit: [core-provider#459] | `github.com/krateo-platformops/composition-dynamic-controller/audit` | `helm.upgrade`, `helm.reconcile`, `helm.rollback` | delete | success, failure |
 | cdc | helm uninstall of a Composition: the delete of each child. Emit at core-provider@b1f9b5f: a deleted child's verdict (`go/composition-dynamic-controller/internal/auditrec/verdict.go:81-84`) in the records of `internal/composition/composition.go:1523` (`Delete`). Conformance: the integration suite's uninstall step requires a `helm.uninstall` delete record for every child the install recorded, checks each with `AssertConformant` (`internal/composition/composition_test.go:1811`, `audit_e2e_test.go:87`) and each against the cluster; CI runs it on kind (`.github/workflows/integration-cdc.yaml:54-55`) | controller | cdc's own ServiceAccount | audited | [core-provider#423]; emit: [core-provider#459] | `github.com/krateo-platformops/composition-dynamic-controller/audit` | `helm.uninstall` | delete | success, failure |
 | cdc | a kept deletion: a child helm declined to delete (`resource-policy: keep`), on an uninstall, or on an upgrade, reconcile or rollback that no longer renders it. Emit at core-provider@b1f9b5f: a kept child's verdict (`go/composition-dynamic-controller/internal/auditrec/verdict.go:73-75`: verb delete, no method, denied, `kept_resource_policy`) in the records of `internal/composition/composition.go:1523`, `:1002`, `:644`, `:1232`, `:518`, `:1478`. Not proven: only unit tests run `AssertConformant` on it, on hand-built verdicts (`internal/auditrec/verdict_test.go:46`, `:99`; `recorder_test.go:125`, `:185`); no test produces a real kept deletion | controller | cdc's own ServiceAccount | audited, conformance not yet proven | [core-provider#423], [plumbing#106]; emit: [core-provider#459] | `github.com/krateo-platformops/composition-dynamic-controller/audit` | `helm.uninstall`, `helm.upgrade`, `helm.reconcile`, `helm.rollback` | delete | denied (`kept_resource_policy`) |
@@ -516,6 +518,7 @@ Each open question is asked on its owner's issue; the link goes to the comment. 
 [authn#140]: https://github.com/krateo-platformops/authn/issues/140
 [authn#146]: https://github.com/krateo-platformops/authn/pull/146
 [authn#147]: https://github.com/krateo-platformops/authn/pull/147
+[authn#148]: https://github.com/krateo-platformops/authn/pull/148
 [observability#138]: https://github.com/krateo-platformops/observability/issues/138
 [observability#155]: https://github.com/krateo-platformops/observability/pull/155
 [observability#156]: https://github.com/krateo-platformops/observability/issues/156
@@ -531,6 +534,7 @@ Each open question is asked on its owner's issue; the link goes to the comment. 
 [core-provider#464]: https://github.com/krateo-platformops/core-provider/pull/464
 [core-provider#459]: https://github.com/krateo-platformops/core-provider/pull/459
 [core-provider#465]: https://github.com/krateo-platformops/core-provider/issues/465
+[core-provider#467]: https://github.com/krateo-platformops/core-provider/pull/467
 [oasgen-provider#543]: https://github.com/krateo-platformops/oasgen-provider/issues/543
 [access-review#25]: https://github.com/krateo-platformops/access-review/issues/25
 [access-review#28]: https://github.com/krateo-platformops/access-review/pull/28
