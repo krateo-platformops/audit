@@ -734,6 +734,8 @@ const (
 // record's krateo.action. Check reports any other value, a value written by a
 // writer it does not list, and a per-action value on an action it does not
 // list.
+//
+// #nosec G101 -- each constant is a closed-set value schema/v1.yaml declares (a reason such as per_user_credential_ref), never a credential
 const (
 {{- range .}}
 {{- if .Actions}}
