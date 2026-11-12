@@ -1,7 +1,7 @@
 ---
 type: Usage
 title: audit — usage
-description: Install the package, when and how to emit, who the actor is, adopting v0.4.0, v0.5.0, v0.6.0, v0.7.0, v0.8.0, v0.9.0 and v0.10.0, testing a writer against the schema, and checking the live table.
+description: Install the package, when and how to emit, who the actor is, adopting v0.4.0, v0.5.0, v0.6.0, v0.7.0, v0.8.0, v0.9.0, v0.10.0 and v0.11.0, testing a writer against the schema, and checking the live table.
 resource: github.com/krateo-platformops/audit
 tags: [library, audit, usage]
 timestamp: 2026-11-12T00:00:00Z
@@ -320,9 +320,12 @@ gains a value, or the key gains an action, in a minor release.
 v0.10.0 is additive: a plain bump changes no record. It adds two request
 denial reasons (audit#29).
 
-`DenialReasonNameNotIssued` (`name_not_issued`) is for a sign-in with a
-username authn would issue in another form, one the clientconfig Secret's
-name derivation would rewrite. The record is denied, with no status code and
+`DenialReasonNameNotIssued` (`name_not_issued`) is for a sign-in whose
+username an identity source chose and authn would issue in another form, one
+the clientconfig Secret's name derivation would rewrite (authn#141 at `2fb07895`, `internal/helpers/kube/config/guard.go:57-65`, `:126`, `:143-152`).
+An administrator-provisioned name (a basic User, a ServiceAccount mapping) is
+not refused: it keeps signing in, and its records stay nameless under the
+same naming rule (authn#140). The record is denied, with no status code and
 no `check_result`, and names the Secret resource without a name: the derived
 name would be another username's (coverage.md, "Naming a derived credential
 Secret").
@@ -335,6 +338,43 @@ and the check never runs. The record is denied, with no status code and no
 name, as `name_missing` does. Like every denial reason, both are the request
 writer's alone: `Check` reports it `bad-enum` on a controller and
 `not-for-writer` on the gateway and action writers.
+
+## Adopting v0.11.0
+
+v0.11.0 adds API and changes no record or rule. The schema's value formats are
+exported validators, generated from schema/v1.yaml (audit#32):
+`audit.ValidOpaqueID(s)` and one `Valid*` per format, the generic
+`audit.ValidFormat(format, s)`, and `audit.ValidValue(key, s)`, which applies
+a key's declared format and returns a `*FormatError` naming the key and the
+format, never the value. `Check` uses exactly these.
+
+A writer that takes a value from an untrusted source validates it with them
+before writing it, and drops any copy of a pattern it keeps (authn, snowplow,
+the gateway).
+
+**One rule tightens: `session.id` is now of format `session_id`**, 1 to 128
+of `[A-Za-z0-9._-]` (`audit.ValidSessionID`). Until v0.11.0 any value
+passed. The shape is snowplow's, the id's origin: its minted ids (16 hex
+characters, or the request's trace id) and identity-lifecycle's (a UUID) fit
+it, and dots are safe in baggage and on a log line. `Check` now reports any
+other `session.id` as `bad-format`, on every writer that writes it. A writer
+that takes the id from inbound baggage refuses a value that isn't of this
+format (`ValidSessionID`, or `ValidValue(KeySessionID, s)`) and mints its
+own instead.
+
+**Emit never writes an invalid inbound `session.id`.** A baggage `session.id`
+that isn't of format `session_id` is left out of the record, per writer:
+- the request writer must establish a valid id, so with none on the context
+  Emit omits the key and marks it `session` in `krateo.audit.incomplete` (the
+  key is markable for it from v0.11.0): the gap is stated, never filled with
+  a value `Check` would refuse;
+- for the gateway and action writers the key is conditional on inbound
+  baggage carrying a `session_id`-formatted value, so a malformed client
+  value is refused input, not a gap: Emit omits it plainly, with no marker.
+ A writer that wants an id on the
+record puts a valid one on the context first, as authn's request middleware
+does: it keeps a valid inbound id and mints one otherwise. Every `session.id` that v0.4.0, v0.5.0, v0.8.0, v0.9.1 and
+v0.10.0 wrote in this module's compatibility fixtures is of the format.
 
 ## Testing a writer
 

@@ -2,6 +2,8 @@
 
 package audit
 
+import "regexp"
+
 // SchemaVersion is the schema version this package writes
 // (krateo.audit.schema_version).
 const SchemaVersion = "1"
@@ -194,7 +196,12 @@ const (
 	KeyRequestReceivedTime = "krateo.request.received_time_unix_nano"
 	// KeySessionID is "session.id". The business/session correlation id from W3C
 	// baggage. A correlation key a client can set: never identity, never a policy
-	// key.
+	// key. Of format session_id (v0.11.0): a writer refuses an inbound value of
+	// any other shape, with audit.ValidSessionID, before writing it. Emit never
+	// writes an invalid one. The request writer must establish a valid id (keep a
+	// valid inbound one or mint one): with none on ctx, Emit omits the key and
+	// marks it session. For the gateway and action writers a malformed client
+	// value is refused input, not a gap: it is omitted plainly, with no marker.
 	KeySessionID = "session.id"
 	// KeyRESTActionNamespace is "krateo.restaction.namespace". The namespace of
 	// the RESTAction whose stage performed the action.
@@ -422,6 +429,95 @@ const (
 	CheckResultInvalid = "invalid"
 )
 
+// The value formats a key may declare. Each has its exported validator below.
+const (
+	// FormatDelegationLink is the format "delegation_link": `<class>:<subject>`,
+	// the class one of the actor classes or empty, the subject not empty.
+	FormatDelegationLink = "delegation_link"
+	// FormatMarkerList is the format "marker_list": comma-separated markers of the
+	// schema, each at most once.
+	FormatMarkerList = "marker_list"
+	// FormatSHA256Hex is the format "sha256_hex": 64 lowercase hex digits.
+	FormatSHA256Hex = "sha256_hex"
+	// FormatContentHash is the format "content_hash": `c1:` and 64 lowercase hex
+	// digits: the content hash in form c1 (below). Any other form prefix is
+	// refused: a stored hash is read only with the form that made it.
+	FormatContentHash = "content_hash"
+	// FormatUUID is the format "uuid": a UUID in its canonical textual form,
+	// lowercase (8-4-4-4-12 hex digits).
+	FormatUUID = "uuid"
+	// FormatOpaqueID is the format "opaque_id": 1 to 128 of `[A-Za-z0-9_-]`.
+	FormatOpaqueID = "opaque_id"
+	// FormatSessionID is the format "session_id": 1 to 128 of `[A-Za-z0-9._-]`: a
+	// correlation id safe in W3C baggage and on a log line. The shape snowplow,
+	// the id's origin, accepts and mints (audit#32): its minted ids, a trace id, a
+	// UUID all fit.
+	FormatSessionID = "session_id"
+	// FormatRFC3339 is the format "rfc3339": an RFC 3339 timestamp, with or
+	// without fractional seconds.
+	FormatRFC3339 = "rfc3339"
+)
+
+var schemaFormats = []string{FormatDelegationLink, FormatMarkerList, FormatSHA256Hex, FormatContentHash, FormatUUID, FormatOpaqueID, FormatSessionID, FormatRFC3339}
+
+// formatPatterns holds the formats whose whole rule is a regular expression,
+// compiled once from schema/v1.yaml's patterns.
+var formatPatterns = map[string]*regexp.Regexp{
+	FormatSHA256Hex: regexp.MustCompile("^[0-9a-f]{64}$"),
+	FormatUUID:      regexp.MustCompile("^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"),
+	FormatOpaqueID:  regexp.MustCompile("^[A-Za-z0-9_-]{1,128}$"),
+	FormatSessionID: regexp.MustCompile("^[A-Za-z0-9._-]{1,128}$"),
+}
+
+// ValidDelegationLink reports whether s is of format delegation_link, as Check enforces it:
+// `<class>:<subject>`, the class one of the actor classes or empty, the
+// subject not empty.
+func ValidDelegationLink(s string) bool { return ValidFormat(FormatDelegationLink, s) }
+
+// ValidMarkerList reports whether s is of format marker_list, as Check enforces it:
+// comma-separated markers of the schema, each at most once.
+func ValidMarkerList(s string) bool { return ValidFormat(FormatMarkerList, s) }
+
+// ValidSHA256Hex reports whether s is of format sha256_hex, as Check enforces it:
+// 64 lowercase hex digits.
+func ValidSHA256Hex(s string) bool { return ValidFormat(FormatSHA256Hex, s) }
+
+// ValidContentHash reports whether s is of format content_hash, as Check enforces it:
+// `c1:` and 64 lowercase hex digits: the content hash in form c1 (below). Any
+// other form prefix is refused: a stored hash is read only with the form that
+// made it.
+func ValidContentHash(s string) bool { return ValidFormat(FormatContentHash, s) }
+
+// ValidUUID reports whether s is of format uuid, as Check enforces it: a UUID
+// in its canonical textual form, lowercase (8-4-4-4-12 hex digits).
+func ValidUUID(s string) bool { return ValidFormat(FormatUUID, s) }
+
+// ValidOpaqueID reports whether s is of format opaque_id, as Check enforces it:
+// 1 to 128 of `[A-Za-z0-9_-]`.
+func ValidOpaqueID(s string) bool { return ValidFormat(FormatOpaqueID, s) }
+
+// ValidSessionID reports whether s is of format session_id, as Check enforces it:
+// 1 to 128 of `[A-Za-z0-9._-]`: a correlation id safe in W3C baggage and on a
+// log line. The shape snowplow, the id's origin, accepts and mints (audit#32):
+// its minted ids, a trace id, a UUID all fit.
+func ValidSessionID(s string) bool { return ValidFormat(FormatSessionID, s) }
+
+// ValidRFC3339 reports whether s is of format rfc3339, as Check enforces it:
+// an RFC 3339 timestamp, with or without fractional seconds.
+func ValidRFC3339(s string) bool { return ValidFormat(FormatRFC3339, s) }
+
+// formatValidators is each format's generated validator.
+var formatValidators = map[string]func(string) bool{
+	FormatDelegationLink: ValidDelegationLink,
+	FormatMarkerList:     ValidMarkerList,
+	FormatSHA256Hex:      ValidSHA256Hex,
+	FormatContentHash:    ValidContentHash,
+	FormatUUID:           ValidUUID,
+	FormatOpaqueID:       ValidOpaqueID,
+	FormatSessionID:      ValidSessionID,
+	FormatRFC3339:        ValidRFC3339,
+}
+
 // The writer classes.
 const (
 	// WriterRequest (H): A request a component served for a caller, recorded by
@@ -481,7 +577,7 @@ var schemaWriters = []Writer{WriterRequest, WriterGateway, WriterAction, WriterC
 
 var schemaConditions = []Condition{CondK8sTarget, CondWrite, CondMethodOther, CondDelegated, CondImpersonated, CondCaused, CondDenied, CondContentWrite, CondClientRejected, CondClientProvenance, CondConfirmedSet, CondSucceeded}
 
-var schemaMarkers = []string{"actor", "actor_class", "action", "verb", "method", "preview", "target"}
+var schemaMarkers = []string{"actor", "actor_class", "action", "verb", "method", "preview", "session", "target"}
 
 var schemaTarget = TargetRule{
 	Marker: "target",
@@ -1557,8 +1653,8 @@ var schemaKeys = []KeySpec{
 		Type:           TypeString,
 		Semconv:        "development",
 		Values:         nil,
-		Format:         "",
-		Marker:         "",
+		Format:         "session_id",
+		Marker:         "session",
 		Identity:       false,
 		Asserted:       false,
 		ReplacedBy:     "",
@@ -1568,11 +1664,11 @@ var schemaKeys = []KeySpec{
 		CredentialFree: false,
 		Min:            nil,
 		LessThan:       "",
-		Description:    "The business/session correlation id from W3C baggage. A correlation key a client can set: never identity, never a policy key.",
+		Description:    "The business/session correlation id from W3C baggage. A correlation key a client can set: never identity, never a policy key. Of format session_id (v0.11.0): a writer refuses an inbound value of any other shape, with audit.ValidSessionID, before writing it. Emit never writes an invalid one. The request writer must establish a valid id (keep a valid inbound one or mint one): with none on ctx, Emit omits the key and marks it session. For the gateway and action writers a malformed client value is refused input, not a gap: it is omitted plainly, with no marker.",
 		Writers: map[Writer]Requirement{
-			WriterRequest:    {Level: LevelRequired},
-			WriterGateway:    {Level: LevelConditional, When: "inbound baggage carries it"},
-			WriterAction:     {Level: LevelConditional, When: "inbound baggage carries it"},
+			WriterRequest:    {Level: LevelRequired, Markable: true},
+			WriterGateway:    {Level: LevelConditional, When: "inbound baggage carries a session_id-formatted value"},
+			WriterAction:     {Level: LevelConditional, When: "inbound baggage carries a session_id-formatted value"},
 			WriterController: {Level: LevelNotApplicable},
 		},
 	},

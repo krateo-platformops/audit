@@ -136,6 +136,30 @@ func LegacyKey(key string) string      // the v0.3 twin of a key, during W1
 func SchemaYAML() []byte               // schema/v1.yaml
 ```
 
+## Value formats
+
+The formats a key may declare (`format:` in schema/v1.yaml), as exported
+validators, generated from the schema (v0.11.0, audit#32). `Check` uses
+exactly these, so a writer that validates an untrusted value with them (an
+inbound header, a baggage member) agrees with `Check`, and no writer keeps
+its own copy of a pattern.
+
+```go
+const FormatOpaqueID = "opaque_id"     // ... one Format* constant per format, generated
+func ValidOpaqueID(s string) bool      // ... one Valid* function per format, generated
+func ValidSessionID(s string) bool     // session.id's format (v0.11.0): 1 to 128 of [A-Za-z0-9._-]
+func ValidFormat(format, value string) bool // value of format, as Check enforces it; false for an undeclared format
+func ValidValue(key, value string) error    // key's declared format: nil, *FormatError, or ErrUnknownKey wrapped
+func Formats() []string                // every declared format, in schema order
+
+type FormatError struct{ Key, Format string } // names the key and the format, never the value
+var ErrUnknownKey error
+```
+
+`ValidValue` checks the format only, not the key's type, enum or emptiness. A
+string-list key's format (`krateo.audit.delegation`) applies to each
+element; pass one element. A key that declares no format accepts any value.
+
 ## Checker
 
 ```go

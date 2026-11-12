@@ -273,10 +273,12 @@ func TestEmit_MarkersFollowTheWriter(t *testing.T) {
 	if _, marked := attrs(only(t, rec))[KeyIncomplete]; marked {
 		t.Errorf("no writer declared: a missing method is no gap for a controller, and must not be marked")
 	}
+	// The request writer must carry session.id too (marker session, v0.11.0):
+	// a ctx with no baggage leaves it a gap.
 	e, rec, reader := newBareEmitter(t, WithWriter(WriterRequest))
 	e.Emit(spanCtx(t), ev)
-	if got := attrs(only(t, rec))[KeyIncomplete].AsString(); got != "method" {
-		t.Errorf("request writer: incomplete = %q, want method", got)
+	if got := attrs(only(t, rec))[KeyIncomplete].AsString(); got != "method,session" {
+		t.Errorf("request writer: incomplete = %q, want method,session", got)
 	}
 	if counted(t, reader, MetricIncomplete, "marker", "method") != 1 {
 		t.Errorf("the method gap is not counted")

@@ -239,6 +239,41 @@ func TestFalsifiers_CoverClientProvenance(t *testing.T) {
 	audittest.AssertEnumsDetected(t, audit.WriterRequest, rec.Only(t))
 }
 
+// The #33 review's probe values for an inbound session.id, through the real
+// Emit: each record is conformant with the session gap allowed, and carries
+// the marker, never the value.
+func TestEmit_InvalidInboundSessionIDConformsMarked(t *testing.T) {
+	for _, v := range []string{"a:b", "a+b=c", "a b", "x/y@z"} {
+		m, err := baggage.NewMemberRaw(audit.BaggageSessionKey, v)
+		if err != nil {
+			t.Fatalf("%q: %v", v, err)
+		}
+		b, _ := baggage.New(m)
+		ctx := baggage.ContextWithBaggage(spanCtx(t), b)
+		rec := audittest.NewRecorder(t)
+		audit.New(rec.Logger("test/audit"), audit.WithWriter(audit.WriterRequest)).Emit(ctx, audit.Event{
+			UserName: "system:serviceaccount:example-system:example-controller", ActorClass: audit.ClassService,
+			Action: "authn.username.check", Verb: "get", HTTPMethod: "GET", Outcome: audit.OutcomeSuccess,
+			CheckResult: audit.CheckResultAvailable, Namespace: "example-system", Version: "v1", Resource: "secrets",
+			ObjectName: "example-user-clientconfig", Preview: audit.PreviewFalse, RequestURI: "/usernames/check",
+			SourceIPs: []string{"192.0.2.10"}})
+		r := rec.Only(t)
+		audittest.AssertConformant(t, audit.WriterRequest, r, audittest.AllowIncomplete(audit.KeySessionID))
+		marked := false
+		for _, kv := range audittest.Attributes(r) {
+			switch string(kv.Key) {
+			case audit.KeySessionID:
+				t.Errorf("%q: session.id written", v)
+			case audit.KeyIncomplete:
+				marked = slices.Contains(strings.Split(kv.Value.AsString(), ","), "session")
+			}
+		}
+		if !marked {
+			t.Errorf("%q: the record is not marked session", v)
+		}
+	}
+}
+
 // audit#26: the falsifiers run on a conformant authn.username.check success
 // record. Removing krateo.action makes Check report check_result
 // not-for-action, which is right (its closed set is the action's), so the

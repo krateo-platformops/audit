@@ -124,9 +124,11 @@ such a Secret, since the derivation changed the username.
   derivation leaves the username unchanged
   (`MakeDNS1123Compatible(username) == username`).
 - Otherwise the record names the Secret resource with no name, as a
-  `name_missing` record does. A sign-in for such a username is refused with
-  `name_not_issued` (audit v0.10.0): authn would issue the username in
-  another form.
+  `name_missing` record does. A sign-in with such a username that an
+  identity source chose is refused with `name_not_issued` (audit v0.10.0;
+  authn#141 at `2fb07895`, `internal/helpers/kube/config/guard.go:57-65`, `:126`, `:143-152`). An administrator-provisioned name (a basic User, a
+  ServiceAccount mapping) keeps signing in, and its records stay nameless
+  under this rule ([authn#140]).
 
 The reason is aliasing: a query for one user's Secret must never show checks
 or refusals for names that weren't theirs.
@@ -420,6 +422,7 @@ Each open question is asked on its owner's issue; the link goes to the comment. 
 [authn#131]: https://github.com/krateo-platformops/authn/pull/131
 [authn#133]: https://github.com/krateo-platformops/authn/pull/133
 [authn#136]: https://github.com/krateo-platformops/authn/pull/136
+[authn#140]: https://github.com/krateo-platformops/authn/issues/140
 [observability#138]: https://github.com/krateo-platformops/observability/issues/138
 [observability#155]: https://github.com/krateo-platformops/observability/pull/155
 [observability#156]: https://github.com/krateo-platformops/observability/issues/156

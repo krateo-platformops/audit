@@ -83,7 +83,7 @@ through the generated `audit.Key*` constants and test their records with
 | `krateo.request.source_ips` | string[] | none | R | R | C: the action was a received request | — | Kubernetes sourceIPs: forwarded entries, then the TCP peer. Only the last entry is established by the writer. **Identity.** |
 | `user_agent.original` | string | stable | C: the header was sent | C: the header was sent | C: the header was sent | — | The User-Agent header, cut at 1024 bytes with ...TRUNCATED, as the apiserver does. |
 | `krateo.request.received_time_unix_nano` | int | none | O | O | O | — | When the request was received (Kubernetes requestReceivedTimestamp), Unix nanoseconds. |
-| `session.id` | string | development | R | C: inbound baggage carries it | C: inbound baggage carries it | — | The business/session correlation id from W3C baggage. A correlation key a client can set: never identity, never a policy key. |
+| `session.id` | string | development | R (mark) | C: inbound baggage carries a session_id-formatted value | C: inbound baggage carries a session_id-formatted value | — | The business/session correlation id from W3C baggage. A correlation key a client can set: never identity, never a policy key. Of format session_id (v0.11.0): a writer refuses an inbound value of any other shape, with audit.ValidSessionID, before writing it. Emit never writes an invalid one. The request writer must establish a valid id (keep a valid inbound one or mint one): with none on ctx, Emit omits the key and marks it session. For the gateway and action writers a malformed client value is refused input, not a gap: it is omitted plainly, with no marker. Marker `session`. Format `session_id`. |
 | `krateo.restaction.namespace` | string | none | C: a RESTAction stage record | — | — | — | The namespace of the RESTAction whose stage performed the action. |
 | `krateo.restaction.name` | string | none | C: a RESTAction stage record | — | — | — | The name of the RESTAction whose stage performed the action. |
 | `krateo.restaction.stage` | string | none | C: a RESTAction stage record | — | — | — | The api[] stage of the RESTAction that performed the action. |
@@ -147,13 +147,14 @@ listed matches the resource and every subresource of it.
 A value that breaks its key's format is `bad-format`; an int below its
 minimum, or not below its `less_than` key, is `out-of-range`.
 
-- `delegation_link`: `<class>:<subject>`, the class one of the actor classes or empty, the subject not empty.
-- `marker_list`: comma-separated markers of the schema, each at most once.
-- `sha256_hex`: 64 lowercase hex digits.
-- `content_hash`: `c1:` and 64 lowercase hex digits: the content hash in form c1 (below). Any other form prefix is refused: a stored hash is read only with the form that made it.
-- `uuid`: a UUID in its canonical textual form, lowercase (8-4-4-4-12 hex digits).
-- `opaque_id`: 1 to 128 of `[A-Za-z0-9_-]`.
-- `rfc3339`: an RFC 3339 timestamp, with or without fractional seconds.
+- `delegation_link` (`audit.ValidDelegationLink`): `<class>:<subject>`, the class one of the actor classes or empty, the subject not empty.
+- `marker_list` (`audit.ValidMarkerList`): comma-separated markers of the schema, each at most once.
+- `sha256_hex` (`audit.ValidSHA256Hex`): 64 lowercase hex digits. Pattern `^[0-9a-f]{64}$`.
+- `content_hash` (`audit.ValidContentHash`): `c1:` and 64 lowercase hex digits: the content hash in form c1 (below). Any other form prefix is refused: a stored hash is read only with the form that made it.
+- `uuid` (`audit.ValidUUID`): a UUID in its canonical textual form, lowercase (8-4-4-4-12 hex digits). Pattern `^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`.
+- `opaque_id` (`audit.ValidOpaqueID`): 1 to 128 of `[A-Za-z0-9_-]`. Pattern `^[A-Za-z0-9_-]{1,128}$`.
+- `session_id` (`audit.ValidSessionID`): 1 to 128 of `[A-Za-z0-9._-]`: a correlation id safe in W3C baggage and on a log line. The shape snowplow, the id's origin, accepts and mints (audit#32): its minted ids, a trace id, a UUID all fit. Pattern `^[A-Za-z0-9._-]{1,128}$`.
+- `rfc3339` (`audit.ValidRFC3339`): an RFC 3339 timestamp, with or without fractional seconds.
 
 ## Closed values per writer and per action
 

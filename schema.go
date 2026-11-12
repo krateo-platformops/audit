@@ -112,8 +112,9 @@ type KeySpec struct {
 	// the writer. A key whose values depend on the writer lists them in each
 	// Requirement.Values instead.
 	Values []string
-	// Format names a structural rule on the value: "delegation_link" or
-	// "marker_list".
+	// Format names the key's value format, one of Formats() (the Format*
+	// constants), or "" for none. ValidFormat applies it; Check uses exactly
+	// that, element by element for a string list.
 	Format string
 	// Marker is the name the key has in krateo.audit.incomplete.
 	Marker string

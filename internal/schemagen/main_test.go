@@ -147,15 +147,63 @@ func TestParse_RefusesABrokenSchema(t *testing.T) {
 	}
 }
 
-// Every format the generator accepts is documented in docs/schema.md.
+// Every format schema/v1.yaml declares is documented in docs/schema.md, with
+// its validator's name and, when it has one, its pattern; and the generator
+// refuses a format that is unnamed, undescribed, repeated, unanchored or not
+// a regular expression, and a key naming an undeclared format.
 func TestFormatsAreDocumented(t *testing.T) {
-	for _, f := range formats {
-		if f != "" && formatDocs[f] == "" {
-			t.Errorf("format %s has no formatDocs entry", f)
+	raw, err := os.ReadFile("../../schema/v1.yaml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	s, err := parse(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(s.Formats) == 0 {
+		t.Fatal("schema/v1.yaml declares no format")
+	}
+	md, err := os.ReadFile("../../docs/schema.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	doc := strings.Join(strings.Fields(string(md)), " ")
+	for _, f := range s.Formats {
+		if !strings.Contains(doc, "- `"+f.ID+"` (`audit.Valid"+f.Go+"`): "+strings.Join(strings.Fields(f.Description), " ")) {
+			t.Errorf("docs/schema.md does not document format %s", f.ID)
+		}
+		if f.Pattern != "" && !strings.Contains(doc, "Pattern `"+f.Pattern+"`") {
+			t.Errorf("docs/schema.md does not show format %s's pattern", f.ID)
 		}
 	}
-	if len(formatDocs) != len(formats)-1 {
-		t.Errorf("formatDocs documents %d formats, the generator accepts %d", len(formatDocs), len(formats)-1)
+	src := string(raw)
+	// The mutations are built from the declared pattern, so no copy of it
+	// lives here.
+	var p string
+	for _, f := range s.Formats {
+		if f.ID == "opaque_id" {
+			p = f.Pattern
+		}
+	}
+	if p == "" {
+		t.Fatal("precondition: opaque_id declares no pattern")
+	}
+	for name, m := range map[string][3]string{
+		"undeclared format":  {"    format: opaque_id\n", "    format: opaque_idx\n", `unknown format "opaque_idx"`},
+		"unanchored pattern": {"pattern: '" + p + "'", "pattern: '" + strings.TrimSuffix(strings.TrimPrefix(p, "^"), "$") + "'", "a pattern is anchored"},
+		"bad pattern":        {"pattern: '" + p + "'", "pattern: '" + strings.Replace(p, "]", "", 1) + "'", `format "opaque_id": pattern:`},
+		"repeated format":    {"  - id: rfc3339\n", "  - id: uuid\n", `format "uuid": id (lower_snake_case), go and description are required, and the id once`},
+		"no description":     {"    description: an RFC 3339 timestamp, with or without fractional seconds.\n", "", `format "rfc3339": id (lower_snake_case), go and description are required`},
+	} {
+		t.Run(name, func(t *testing.T) {
+			bad := strings.Replace(src, m[0], m[1], 1)
+			if bad == src {
+				t.Fatalf("precondition: the mutation %q did not apply", m[0])
+			}
+			if _, err := parse([]byte(bad)); err == nil || !strings.Contains(err.Error(), m[2]) {
+				t.Errorf("parse: %v; want %q", err, m[2])
+			}
+		})
 	}
 }
 

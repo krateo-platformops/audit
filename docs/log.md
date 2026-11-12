@@ -9,6 +9,72 @@ timestamp: 2026-11-12T00:00:00Z
 
 # Log
 
+- **2026-11-12**: v0.11.0 (audit#32, for authn#139). The schema's value
+  formats become exported validators, generated from a new `formats:`
+  section of schema/v1.yaml (id, Go name, description, and the pattern when a
+  regular expression states the whole rule): `ValidOpaqueID` and one
+  `Valid*` per format, `ValidFormat(format, value)`, `ValidValue(key,
+  value)` (a `*FormatError` that names the key and format, never the value;
+  `ErrUnknownKey` for an undeclared key) and `Formats()`. `Check` applies a
+  key's format through `ValidFormat`, element by element for a string list;
+  the check.go regexes are gone, and a test fails if any declared pattern is
+  copied into another file of the module. The generator refuses an
+  undeclared format, an unanchored or invalid pattern, and a repeated or
+  undescribed format; docs/schema.md's format list comes from the YAML.
+  Tests: every declared format has its rule and generated validator; one
+  table (an email, a newline inside and at either end, 128 and 129
+  characters, empty, unicode, and each format's boundaries) runs through
+  `Check` and every export, and they agree; every element of a list is
+  checked. **One rule tightens** (the AUDIT-4 lead's ruling, 2026-11-12):
+  `session.id` declares the new format `session_id`, 1 to 128 of
+  `[A-Za-z0-9._-]` (`ValidSessionID`), where any value passed before. The
+  shape is snowplow's (it accepts and mints it), and identity-lifecycle's
+  UUIDs fit it; `Check` reports any other value as `bad-format` on every
+  writer of the key. Its rows: a dotted id, a UUID, 16 hex characters, a
+  trace id, 128 and 129 characters, empty, whitespace, `;`, `,`, `=`,
+  non-ASCII, an email. Every `session.id` in the v0.4.0, v0.5.0, v0.8.0,
+  v0.9.1 and v0.10.0 compatibility fixtures (65 values) is of the format,
+  and every replay gives its version's own report. Compatibility:
+  `testdata/v0.10.0/` holds 25 records audit v0.10.0's own `Emit` wrote,
+  and this release gives v0.10.0's own report. New API and one tightened
+  rule that no recorded writer's output breaks: a minor version per
+  docs/release.md, under its tightening rule (added in this release).
+
+  **The tightening, and each registered writer's status** (the release
+  note docs/release.md asks for):
+  - `session.id` must be of format `session_id`; it was any value.
+  - authn: conformant. It keeps a valid inbound id and mints one otherwise
+    (authn#139 at `498828bf`, `internal/auditlog/middleware.go:52-63`; a
+    minted id is 32 lowercase hex, `:74-78`).
+  - snowplow, `internal/support/audit`: conformant. Its accepted shape is the
+    same pattern, at most 128 characters (snowplow `219a076e`,
+    `go/snowplow/internal/support/audit/audit.go:88-96`).
+  - this library's `Emit`: conformant by construction. It never writes an
+    invalid inbound `session.id`; it omits it and marks it `session`, with
+    the key markable for the request writer. Proved by
+    `TestEmit_InvalidInboundSessionIDIsOmittedAndMarked`,
+    `TestEmit_InvalidInboundSessionIDConformsMarked` and the fuzz test
+    `FuzzEmit_RecordPassesItsOwnCheck` (for any inbound value, the record
+    passes its own `Check`).
+  - observability's gateway projection: conformant. It copies
+    `baggage_session` into `session.id` only when the value matches the
+    format, and otherwise writes nothing and sets no marker
+    (krateo-platformops/observability `6f5c2b15603a9166d8d1ad5fdcc6e20ed1ca8825`,
+    "write session.id only in the session_id format (0.1.29)", #166,
+    `charts/otel-collector-daemonset/values.yaml:621`). The earlier 0.1.28
+    copied any non-empty value (`a73bda4`, `values.yaml:616`), so an inbound
+    value outside the format would have become a `session.id` that `Check`
+    reports `bad-format`.
+  - The gateway and action writers' `session.id` is conditional on inbound
+    baggage carrying a `session_id`-formatted value: a malformed client
+    value is omitted plainly, with no marker. Only the request writer's
+    missing id is marked `session`.
+  - The compatibility fixtures v0.4.0 to v0.10.0 hold only
+    `example-session`, so their replays don't prove that real writers fit;
+    the per-writer evidence above does.
+  - The character set is pinned by hand-written rows that don't derive from
+    the generated pattern (`TestSessionID_CharacterSetIsPinned`): widening
+    it to `:` or `/` and regenerating turns the test red.
 - **2026-11-12**: v0.10.0 (audit#29, authn#136). Two request-writer denial
   reasons. `name_not_issued` (`DenialReasonNameNotIssued`, plumbing's
   `usernames.ErrNotIssued`): a sign-in for a username authn would issue in

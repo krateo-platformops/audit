@@ -591,7 +591,7 @@ func TestContentSHA256_Families(t *testing.T) {
 		if err != nil {
 			t.Fatalf("%s/%s: %v", group, resource, err)
 		}
-		if !strings.HasPrefix(h, "c1:") || !lowerHex(strings.TrimPrefix(h, "c1:"), 64) {
+		if !ValidContentHash(h) {
 			t.Fatalf("%s/%s: %q is not c1:<64 hex>", group, resource, h)
 		}
 		return h

@@ -121,10 +121,12 @@ A value that breaks its key's format is ` + "`bad-format`" + `; an int below its
 minimum, or not below its ` + "`less_than`" + ` key, is ` + "`out-of-range`" + `.
 
 `)
-	for _, f := range formats {
-		if f != "" {
-			fmt.Fprintf(&b, "- `%s`: %s\n", f, formatDocs[f])
+	for _, f := range s.Formats {
+		rule := f.Description
+		if f.Pattern != "" {
+			rule += " Pattern `" + f.Pattern + "`."
 		}
+		fmt.Fprintf(&b, "- `%s` (`audit.Valid%s`): %s\n", f.ID, f.Go, rule)
 	}
 
 	if consts := s.valueConsts(); len(consts) > 0 {
@@ -515,18 +517,6 @@ declares must be registered.
 		fmt.Fprintf(&b, "| `%s` | `%s` | %s |\n", l.Writer, l.Literal, l.Action)
 	}
 	return b.String()
-}
-
-// formatDocs is what each format of `formats` requires of a value, as Check
-// enforces it. TestFormatsAreDocumented fails on a format without an entry.
-var formatDocs = map[string]string{
-	"delegation_link": "`<class>:<subject>`, the class one of the actor classes or empty, the subject not empty.",
-	"marker_list":     "comma-separated markers of the schema, each at most once.",
-	"sha256_hex":      "64 lowercase hex digits.",
-	"content_hash":    "`c1:` and 64 lowercase hex digits: the content hash in form c1 (below). Any other form prefix is refused: a stored hash is read only with the form that made it.",
-	"uuid":            "a UUID in its canonical textual form, lowercase (8-4-4-4-12 hex digits).",
-	"opaque_id":       "1 to 128 of `[A-Za-z0-9_-]`.",
-	"rfc3339":         "an RFC 3339 timestamp, with or without fractional seconds.",
 }
 
 func levelCell(r requirement) string {
