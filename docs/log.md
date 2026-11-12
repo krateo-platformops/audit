@@ -36,6 +36,10 @@ timestamp: 2026-11-12T00:00:00Z
   client provenance and its rejection, a delegated call, the denial reasons
   v0.6.0 to v0.8.0 added, a failure row, a kept deletion), with v0.8.0's own
   `auditschema` report on them; this release gives the same report.
+  `http.request.method`'s description now states the rule writers already
+  follow (authn's methodOf, authn@0fa999e0): the method is derived from the
+  verb of the authority request the writer sent, never the method of the
+  request it served; no rule changed.
   `auditschema sql` counts both (`bad_` and `not_for_action_` columns on the
   request writer's rules), and the column test runs them on fixture rows
   derived from the schema: every value of every action, a value outside the

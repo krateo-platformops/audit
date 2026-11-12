@@ -12,7 +12,8 @@ import (
 
 // v0.9.0 (audit#23): a per-action set (krateo.audit.check_result) is
 // exercised on a record of its action, so a value outside the set of
-// authn.username.check is caught as bad-enum and nothing else is.
+// authn.username.check is caught as bad-enum and nothing else is. Method
+// GET, derived from verb get, as the schema defines http.request.method.
 func TestAssertEnumsDetected_ExercisesThePerActionSet(t *testing.T) {
 	var got []string
 	enumsTested = func(keys []string) { got = keys }

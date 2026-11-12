@@ -18,7 +18,10 @@ const usernameCheck = "authn.username.check"
 
 // usernameCheckRecord is authn's record of a completed username check with
 // result r: a request row, verb get, targeting the clientconfig Secret the
-// name guard protects, outcome success. A read, so no dry_run.
+// name guard protects, outcome success. A read, so no dry_run. Its method is
+// GET by the schema's rule for http.request.method, derived from the verb of
+// the authority request the writer sent (get is GET), never the inbound
+// POST /usernames/check (authn's methodOf, auditlog.go at authn 0fa999e0).
 func usernameCheckRecord(r string) []attribute.KeyValue {
 	base := with(without(onObject(baseRecord(WriterRequest), "", "secrets", ""), KeyDryRun, KeyHTTPStatusCode),
 		attribute.String(KeyAction, usernameCheck), attribute.String(KeyVerb, "get"), attribute.String(KeyHTTPMethod, "GET"),
@@ -195,8 +198,9 @@ func TestCheck_UsernameCheckRefusalsAndTheResultOnlyOnSuccess(t *testing.T) {
 func TestEmit_UsernameCheckNotAllowed(t *testing.T) {
 	e, rec := newEmitter(t, WithWriter(WriterRequest))
 	e.Emit(WithSessionIDForTest(t, spanCtx(t), "s1"), Event{UserName: "system:serviceaccount:example-system:example-controller", ActorClass: ClassService,
-		// The verb and method of the lookup authn would have sent, as on its
-		// other refusals; no status code: no authority answered.
+		// Verb get, so method GET: the schema derives http.request.method
+		// from the verb of the authority request, never from the inbound
+		// POST /usernames/check. No status code: no authority answered.
 		Action: usernameCheck, Verb: "get", HTTPMethod: "GET", Outcome: OutcomeDenied, DenialReason: DenialReasonUsernameCheckNotAllowed,
 		Namespace: "example-system", Version: "v1", Resource: "secrets", ObjectName: "example-user-clientconfig",
 		Preview: PreviewFalse, RequestURI: "/usernames/check", SourceIPs: []string{"192.0.2.10"}})

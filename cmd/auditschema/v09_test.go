@@ -12,7 +12,9 @@ import (
 
 // authn's record of a completed username check (audit#23) as OTLP/JSON: a
 // request row, verb get, targeting the clientconfig Secret the name guard
-// protects, outcome success, with the check's result.
+// protects, outcome success, with the check's result. Method GET, by the
+// schema's rule: http.request.method is derived from the verb of the
+// authority request the writer sent, never the inbound POST.
 const usernameCheck = `{"eventName":"audit","attributes":[
   {"key":"event.name","value":{"stringValue":"audit"}},
   {"key":"krateo.audit.schema_version","value":{"stringValue":"1"}},

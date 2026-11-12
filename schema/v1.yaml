@@ -454,9 +454,13 @@ keys:
     values: [CONNECT, DELETE, GET, HEAD, OPTIONS, PATCH, POST, PUT, QUERY, TRACE, _OTHER]
     marker: method
     description: >-
-      The HTTP method the writer sent or proxied; _OTHER for a method semconv
-      does not name (lowercase included), with the method as given in
-      http.request.method_original.
+      The HTTP method the writer sent or proxied, derived from the verb of the
+      authority request the writer sent: for a Kubernetes target, create is
+      POST, update PUT, patch PATCH, delete DELETE, get GET. Never the method
+      of the request the writer served (krateo.request.uri records what it
+      received). A writer that knows no verb omits it and marks it. _OTHER
+      for a method semconv does not name (lowercase included), with the
+      method as given in http.request.method_original.
     writers:
       request: {level: required, markable: true}
       gateway: {level: required, markable: true}
