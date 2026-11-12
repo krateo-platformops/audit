@@ -198,8 +198,9 @@ snowplow's `main` at `219a076e`, relative to `go/snowplow/`.
 - **Agents.** An agent's `/call` records are written on the same scope, as
   the action writer (T), per the population. They are not listed apart.
 - **Tests.** snowplow's arms run `audittest.AssertConformant` on every
-  record shape: `internal/handlers/audit_parity_1291_test.go:128` and `:181`,
-  and `internal/resolvers/restactions/api/stage_audit_parity_1291_test.go:166`.
+  record shape: the `AssertConformant` calls at
+  `internal/handlers/audit_parity_1291_test.go:146` and `:228`, and
+  `internal/resolvers/restactions/api/stage_audit_parity_1291_test.go:208`.
 - **Gaps `Check` can't see.** Where a row is non-conformant, the record
   names something other than what the schema defines: the object dialled, or
   the request that was served. [snowplow#1379] (open) moves the writer to

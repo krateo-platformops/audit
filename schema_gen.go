@@ -354,8 +354,6 @@ const (
 // record's krateo.action. Check reports any other value, a value written by a
 // writer it does not list, and a per-action value on an action it does not
 // list.
-//
-// #nosec G101 -- each constant is a closed-set value schema/v1.yaml declares (a reason such as per_user_credential_ref), never a credential
 const (
 	// DenialReasonNameReserved is "name_reserved", a krateo.audit.denial_reason
 	// value of writer request.
@@ -392,10 +390,10 @@ const (
 	DenialReasonNameMissing = "name_missing"
 	// DenialReasonSubjectTokenExpired is "subject_token_expired", a
 	// krateo.audit.denial_reason value of writer request.
-	DenialReasonSubjectTokenExpired = "subject_token_expired"
+	DenialReasonSubjectTokenExpired = "subject_token_expired" // #nosec G101 -- a name schema/v1.yaml declares, never a credential
 	// DenialReasonSubjectTokenInvalid is "subject_token_invalid", a
 	// krateo.audit.denial_reason value of writer request.
-	DenialReasonSubjectTokenInvalid = "subject_token_invalid"
+	DenialReasonSubjectTokenInvalid = "subject_token_invalid" // #nosec G101 -- a name schema/v1.yaml declares, never a credential
 	// DenialReasonStepupNotEnabled is "stepup_not_enabled", a
 	// krateo.audit.denial_reason value of writer request.
 	DenialReasonStepupNotEnabled = "stepup_not_enabled"
@@ -428,7 +426,7 @@ const (
 	DenialReasonDestinationRefused = "destination_refused"
 	// DenialReasonPerUserCredentialRef is "per_user_credential_ref", a
 	// krateo.audit.denial_reason value of writer request.
-	DenialReasonPerUserCredentialRef = "per_user_credential_ref"
+	DenialReasonPerUserCredentialRef = "per_user_credential_ref" // #nosec G101 -- a name schema/v1.yaml declares, never a credential
 	// DenialReasonEndpointRefMalformed is "endpoint_ref_malformed", a
 	// krateo.audit.denial_reason value of writer request.
 	DenialReasonEndpointRefMalformed = "endpoint_ref_malformed"
@@ -455,7 +453,7 @@ const (
 	DenialReasonTemplateError = "template_error"
 	// DenialReasonSessionCredentialMissing is "session_credential_missing", a
 	// krateo.audit.denial_reason value of writer request.
-	DenialReasonSessionCredentialMissing = "session_credential_missing"
+	DenialReasonSessionCredentialMissing = "session_credential_missing" // #nosec G101 -- a name schema/v1.yaml declares, never a credential
 	// DenialReasonStepUpRequired is "step_up_required", a
 	// krateo.audit.denial_reason value of writer request.
 	DenialReasonStepUpRequired = "step_up_required"

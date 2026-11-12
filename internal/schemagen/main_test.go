@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"os"
+	"regexp"
 	"strings"
 	"testing"
 )
@@ -130,6 +131,11 @@ func TestParse_RefusesABrokenSchema(t *testing.T) {
 		"asserted key outside the prefixes":   {"  - name: krateo.audit.client.requested_at\n", "  - name: krateo.audit.requested_at\n", "asserted keys, and only they, live under the prefixes"},
 		"an asserted key required":            {"      request: {level: conditional, when: the record carries client provenance, check: client_provenance}\n", "      request: required\n", "an asserted key is never required"},
 		"an asserted key marked":              {"    values: [portal]\n", "    values: [portal]\n    marker: source\n", "an asserted key is never marked and never a target"},
+		// v0.12.0: writer_keys, a writer's own target keys.
+		"writer_keys repeats a shared target key":   {"  writer_keys:\n    request: [url.path]\n", "  writer_keys:\n    request: [server.address]\n", `target: writer "request"'s key "server.address" is unknown or already a target key of every writer`},
+		"writer_keys names an unknown key":          {"  writer_keys:\n    request: [url.path]\n", "  writer_keys:\n    request: [url.paths]\n", `target: writer "request"'s key "url.paths" is unknown or already a target key of every writer`},
+		"writer_keys, a key the writer can't write": {"  writer_keys:\n    request: [url.path]\n", "  writer_keys:\n    gateway: [url.path]\n", `target: writer "gateway"'s key "url.path" is one that writer cannot write`},
+		"writer_keys names an unknown writer":       {"  writer_keys:\n    request: [url.path]\n", "  writer_keys:\n    requester: [url.path]\n", `target: writer_keys names unknown writer "requester"`},
 	} {
 		t.Run(name, func(t *testing.T) {
 			bad := strings.Replace(src, m[0], m[1], 1)
@@ -242,5 +248,45 @@ func TestExampleRegions(t *testing.T) {
 		if _, err := exampleRegions([]byte(bad)); err == nil {
 			t.Errorf("%s: exampleRegions accepted it", name)
 		}
+	}
+}
+
+// The generated file carries `#nosec G101` on exactly the string constants
+// whose name gosec's G101 name pattern matches (DenialReasonPerUserCredentialRef
+// among them), each with its reason on the line, and on no other line: no
+// block-level directive suppresses a finding it was not written for.
+func TestRender_NosecG101OnlyWhereTheNameMatches(t *testing.T) {
+	raw, err := os.ReadFile("../../schema_gen.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	constLine := regexp.MustCompile(`^\t([A-Z][A-Za-z0-9]*)(?: [A-Z][A-Za-z]*)? = "`)
+	var marked, consts int
+	for i, line := range strings.Split(string(raw), "\n") {
+		has := strings.Contains(line, "#nosec G101")
+		m := constLine.FindStringSubmatch(line)
+		if m == nil {
+			if has {
+				t.Errorf("schema_gen.go:%d: #nosec G101 off a constant's line: %s", i+1, line)
+			}
+			continue
+		}
+		consts++
+		want := g101Name.MatchString(m[1])
+		if has != want {
+			t.Errorf("schema_gen.go:%d: %s: directive %v, want %v", i+1, m[1], has, want)
+		}
+		if has {
+			marked++
+			if !strings.HasSuffix(line, "// #nosec G101 -- a name schema/v1.yaml declares, never a credential") {
+				t.Errorf("schema_gen.go:%d: the directive has no reason: %s", i+1, line)
+			}
+		}
+	}
+	if marked == 0 || marked == consts {
+		t.Errorf("%d of %d constants marked: the arm needs both kinds", marked, consts)
+	}
+	if !strings.Contains(string(raw), `DenialReasonPerUserCredentialRef = "per_user_credential_ref" // #nosec G101`) {
+		t.Error("DenialReasonPerUserCredentialRef, the constant gosec reports, has no directive")
 	}
 }

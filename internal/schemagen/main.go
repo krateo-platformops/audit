@@ -629,6 +629,23 @@ func (s *schema) requirementsOf(k key) map[string]requirement {
 	return out
 }
 
+// g101Name is gosec's G101 (hardcoded credentials) name pattern, as of
+// gosec v2.30.0 (rules/hardcoded_credentials.go:401). G101 reports a string
+// constant whose name matches it and whose value its entropy test passes.
+var g101Name = regexp.MustCompile(`(?i)passwd|pass|password|pwd|secret|token|pw|apiKey|bearer|cred`)
+
+// nosecG101 is the trailing directive of a generated string constant whose
+// name G101 matches (DenialReasonPerUserCredentialRef): such a constant is a
+// name schema/v1.yaml declares, never a credential. Every other constant gets
+// none, so no other finding is suppressed. Whether G101 then reports it rests
+// on its value's entropy, so every constant the name test reaches carries it.
+func nosecG101(name string) string {
+	if !g101Name.MatchString(name) {
+		return ""
+	}
+	return " // #nosec G101 -- a name schema/v1.yaml declares, never a credential"
+}
+
 func render(s *schema) ([]byte, error) {
 	funcs := template.FuncMap{
 		"q":        strconv.Quote,
@@ -645,6 +662,7 @@ func render(s *schema) ([]byte, error) {
 		"actions":  actionSets,
 		"join":     strings.Join,
 		"deref":    func(p *int64) int64 { return *p },
+		"nosec":    nosecG101,
 	}
 	t, err := template.New("gen").Funcs(funcs).Parse(tmpl)
 	if err != nil {
@@ -724,7 +742,7 @@ const (
 	// Deprecated: the v0.3 name of {{.ReplacedBy}}, removed when
 	// migration window W1 closes. Read {{.ReplacedBy}}.
 {{- end}}
-	Key{{.Go}} = {{q .Name}}
+	Key{{.Go}} = {{q .Name}}{{nosec (printf "Key%s" .Go)}}
 {{- end}}
 )
 
@@ -734,8 +752,6 @@ const (
 // record's krateo.action. Check reports any other value, a value written by a
 // writer it does not list, and a per-action value on an action it does not
 // list.
-//
-// #nosec G101 -- each constant is a closed-set value schema/v1.yaml declares (a reason such as per_user_credential_ref), never a credential
 const (
 {{- range .}}
 {{- if .Actions}}
@@ -743,7 +759,7 @@ const (
 {{- else}}
 	{{doc (printf "%s is %q," .Name .Value) (printf "a %s value of writer %s." .Key (join .Writers ", "))}}
 {{- end}}
-	{{.Name}} = {{q .Value}}
+	{{.Name}} = {{q .Value}}{{nosec .Name}}
 {{- end}}
 )
 {{- end}}
@@ -752,7 +768,7 @@ const (
 const (
 {{- range .Formats}}
 	{{doc (printf "Format%s is the format %q:" .Go .ID) .Description}}
-	Format{{.Go}} = {{q .ID}}
+	Format{{.Go}} = {{q .ID}}{{nosec (printf "Format%s" .Go)}}
 {{- end}}
 )
 
