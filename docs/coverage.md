@@ -111,10 +111,14 @@ username checks and its sign-in refusals included, follows one rule. The
 derived name is plumbing's `endpoints.SecretName`:
 `kubeutil.MakeDNS1123Compatible(username)` plus `-clientconfig`
 (plumbing v1.51.0 `endpoints/endpoints.go:107-109`,
-`kubeutil/dns1123.go:18-32`). It is always a valid object name, but the
-derivation lowercases the username and drops characters, so distinct
-usernames can alias: `Alice@Example` derives the Secret of the user
-`aliceexample`.
+`kubeutil/dns1123.go:18-32`). The derivation lowercases the username, drops
+every character outside `[-a-z0-9]` and any leading run that isn't `[a-z0-9]`,
+and cuts the result to 63 characters (`kubeutil/dns1123.go:9`, `:27-29`). So
+usernames that differ only in case, in characters the derivation drops, or
+beyond its 63-character limit derive the same Secret name. A username made
+only of dropped characters derives an empty name, and the Secret name
+`-clientconfig`, which isn't a valid object name; the rule below never names
+such a Secret, since the derivation changed the username.
 
 - `krateo.audit.object_ref.name` is the derived Secret name only when the
   derivation leaves the username unchanged
