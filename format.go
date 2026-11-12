@@ -56,6 +56,8 @@ func formatRule(format string) (rule func(string) bool, ok bool) {
 			form, sum, ok := strings.Cut(v, ":")
 			return ok && form == ContentFormC1 && ValidSHA256Hex(sum)
 		}, true
+	case FormatEndpointRefName:
+		return validEndpointRefName, true
 	case FormatRFC3339:
 		return func(v string) bool {
 			_, err := time.Parse(time.RFC3339, v)
@@ -63,6 +65,35 @@ func formatRule(format string) (rule func(string) bool, ok bool) {
 		}, true
 	}
 	return nil, false
+}
+
+// perUserSecretSuffixes end the names of the per-user credential Secrets
+// (plumbing endpoints.SecretName and its step-up form): such a name embeds a
+// username, so no endpoint_ref.name is one.
+var perUserSecretSuffixes = []string{"-clientconfig", "-clientconfig-stepup"}
+
+// validEndpointRefName is format endpoint_ref_name: 1 to 253 of [a-z0-9.-],
+// starting and ending with a letter or digit, and never a per-user
+// clientconfig Secret's name.
+func validEndpointRefName(v string) bool {
+	if len(v) == 0 || len(v) > 253 {
+		return false
+	}
+	alnum := func(c byte) bool { return (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') }
+	for i := 0; i < len(v); i++ {
+		if c := v[i]; !alnum(c) && c != '-' && c != '.' {
+			return false
+		}
+	}
+	if !alnum(v[0]) || !alnum(v[len(v)-1]) {
+		return false
+	}
+	for _, sfx := range perUserSecretSuffixes {
+		if strings.HasSuffix(v, sfx) {
+			return false
+		}
+	}
+	return true
 }
 
 // ErrUnknownKey is the error ValidValue returns for a key the schema does not

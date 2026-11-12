@@ -210,6 +210,18 @@ type Event struct {
 	RESTActionNamespace string // krateo.restaction.namespace
 	RESTActionName      string // krateo.restaction.name
 	RESTActionStage     string // krateo.restaction.stage
+	// EndpointRefNamespace and EndpointRefName name the endpointRef a
+	// RESTAction stage dialled ServerAddress through
+	// (krateo.audit.endpoint_ref.*, v0.12.0): only on a record whose target
+	// is ServerAddress. Emit never writes a name of a per-user clientconfig
+	// Secret (it embeds a username): such a name, or any EndpointRefName not
+	// of format endpoint_ref_name, is omitted.
+	EndpointRefNamespace string
+	EndpointRefName      string
+	// URLPath is a non-resource path the request served (url.path, v0.12.0),
+	// the request writer's third target form, e.g. "/debug/shadow-parity":
+	// never beside an object or ServerAddress. No query.
+	URLPath string
 }
 
 // CauseRef names the Kubernetes object a controller reconciled, as the
@@ -505,6 +517,11 @@ func attributes(ctx context.Context, ev Event, actor principal) []attribute.KeyV
 	add(KeyRESTActionNamespace, ev.RESTActionNamespace)
 	add(KeyRESTActionName, ev.RESTActionName)
 	add(KeyRESTActionStage, ev.RESTActionStage)
+	add(KeyEndpointRefNamespace, ev.EndpointRefNamespace)
+	if ValidEndpointRefName(ev.EndpointRefName) {
+		add(KeyEndpointRefName, ev.EndpointRefName)
+	}
+	add(KeyURLPath, ev.URLPath)
 	attrs = append(attrs, ev.Client.attributes()...)
 
 	// TraceId/SpanId are LogRecord fields the SDK stamps from ctx, not

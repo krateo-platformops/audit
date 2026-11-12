@@ -80,6 +80,10 @@ var fixtureValue = map[string]attribute.Value{
 	// v0.9.0: the check result is per action; richRow takes the first value
 	// of the first action that declares a set, and sets krateo.action to it.
 	audit.KeyCheckResult: attribute.StringValue("per-action"),
+	// v0.12.0: the non-resource path target and the endpointRef.
+	audit.KeyURLPath:              attribute.StringValue("/debug/shadow-parity"),
+	audit.KeyEndpointRefNamespace: attribute.StringValue("example-ns"),
+	audit.KeyEndpointRefName:      attribute.StringValue("example-endpoint"),
 }
 
 // firstActionValue is the first action, in sorted order, that declares a set

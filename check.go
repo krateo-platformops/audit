@@ -158,7 +158,7 @@ func Check(w Writer, attrs []attribute.KeyValue) []Violation {
 			if _, here := present[k]; here {
 				out = append(out, Violation{Key: k, Reason: ReasonMarkedButPresent})
 			}
-		} else if m == schemaTarget.Marker && targets(present) > 0 {
+		} else if m == schemaTarget.Marker && targets(w, present) > 0 {
 			out = append(out, Violation{Key: RuleTarget, Reason: ReasonMarkedButPresent})
 		}
 	}
@@ -188,7 +188,7 @@ func Check(w Writer, attrs []attribute.KeyValue) []Violation {
 		}
 	}
 
-	switch n := targets(present); {
+	switch n := targets(w, present); {
 	case n == 0 && marked[schemaTarget.Marker]:
 		out = append(out, Violation{Key: RuleTarget, Reason: ReasonIncomplete})
 	case n == 0:
@@ -370,6 +370,8 @@ func evalCondition(c Condition, present map[string]attribute.Value) (holds, know
 		return false, true
 	case CondConfirmedSet:
 		return hasPrefix(present, confirmedSetPrefix), true
+	case CondEndpointTarget:
+		return has(KeyServerAddress), true
 	case CondSucceeded:
 		o, ok := present[KeyOutcome]
 		return ok && o.Type() == attribute.STRING && o.AsString() == OutcomeSuccess, true
@@ -420,9 +422,10 @@ func hasPrefix(present map[string]attribute.Value, prefix string) bool {
 }
 
 // targets counts the target keys the record carries.
-func targets(present map[string]attribute.Value) int {
+// targets counts the target keys of writer w the record carries.
+func targets(w Writer, present map[string]attribute.Value) int {
 	n := 0
-	for _, k := range schemaTarget.Keys {
+	for _, k := range schemaTarget.KeysFor(w) {
 		if _, ok := present[k]; ok {
 			n++
 		}
@@ -488,7 +491,8 @@ func missingMarkers(ws []Writer, attrs []attribute.KeyValue) []string {
 			out = append(out, spec.Marker)
 		}
 	}
-	if targets(present) == 0 {
+	// The target is a gap when no writer in ws finds one of its target keys.
+	if !slices.ContainsFunc(ws, func(w Writer) bool { return targets(w, present) > 0 }) {
 		out = append(out, schemaTarget.Marker)
 	}
 	return out

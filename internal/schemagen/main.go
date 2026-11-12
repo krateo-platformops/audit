@@ -123,6 +123,9 @@ type target struct {
 	Marker  string            `yaml:"marker"`
 	Keys    []string          `yaml:"keys"`
 	Writers map[string]string `yaml:"writers"`
+	// WriterKeys are target keys of one writer only (url.path, the request
+	// writer's non-resource path).
+	WriterKeys map[string][]string `yaml:"writer_keys"`
 }
 
 type population struct {
@@ -404,6 +407,20 @@ func (s *schema) validate() error {
 	for _, w := range s.Writers {
 		if _, ok := modes[s.Target.Writers[w.ID]]; !ok {
 			return fmt.Errorf("target: writer %q has no mode", w.ID)
+		}
+	}
+	for w, keys := range s.Target.WriterKeys {
+		if !writerIDs[w] {
+			return fmt.Errorf("target: writer_keys names unknown writer %q", w)
+		}
+		for _, k := range keys {
+			n := names[k]
+			if n == nil || slices.Contains(s.Target.Keys, k) {
+				return fmt.Errorf("target: writer %q's key %q is unknown or already a target key of every writer", w, k)
+			}
+			if lv := n.Writers[w].Level; lv == "not_applicable" || lv == "not_established" {
+				return fmt.Errorf("target: writer %q's key %q is one that writer cannot write", w, k)
+			}
 		}
 	}
 	seenTargets := map[credentialTarget]bool{}
@@ -781,6 +798,11 @@ var schemaMarkers = {{strs markers}}
 var schemaTarget = TargetRule{
 	Marker: {{q .Target.Marker}},
 	Keys:   {{strs .Target.Keys}},
+	WriterKeys: map[Writer][]string{
+{{- range $.Writers}}{{if index $.Target.WriterKeys .ID}}
+		{{.Go}}: {{strs (index $.Target.WriterKeys .ID)}},
+{{- end}}{{end}}
+	},
 	Writers: map[Writer]TargetMode{
 {{- range $.Writers}}
 		{{.Go}}: {{mode (index $.Target.Writers .ID)}},

@@ -56,7 +56,7 @@ through the generated `audit.Key*` constants and test their records with
 | `http.request.method_original` | string | stable | C: http.request.method is _OTHER [checked] | C: http.request.method is _OTHER [checked] | C: http.request.method is _OTHER [checked] | C: http.request.method is _OTHER [checked] | The HTTP method exactly as the writer was given it, when http.request.method records it as _OTHER. Written only then, so no value a writer passes is lost. Semconv also lets a framework that treats methods as case-insensitive pair a canonical method with its original; this schema does not: a method semconv does not name, lowercase included, is _OTHER. **Only when** `method_other` holds; anywhere else `Check` reports it `unexpected`. |
 | `krateo.audit.dry_run` | bool | none | C: the record is a write [checked] | NE | C: the record is a write [checked] | — | true when the write was validated and not persisted (Kubernetes dryRun=All, or an endpoint's own dry run), false for a write meant to persist. On every write record of a writer that serves requests or performs actions; never on a read. Readers use this key, not a suffix on krateo.action. **Only when** `write` holds; anywhere else `Check` reports it `unexpected`. |
 | `krateo.audit.outcome` | string | none | R | R | R | R | What the authority this writer sent to answered, at the protocol level the writer observes. denied means the writer itself refused; krateo.audit.denial_reason may say why. One of `success`, `failure`, `denied`. |
-| `krateo.audit.denial_reason` | string | none | O, one of `name_reserved`, `name_claimed`, `name_held_legacy`, `name_provisioned`, `name_bound`, `system_group`, `group_not_allowed`, `delegation_not_allowed`, `delegation_too_deep`, `platform_group`, `name_missing`, `subject_token_expired`, `subject_token_invalid`, `stepup_not_enabled`, `insufficient_assurance`, `stale_authentication`, `no_mapping`, `ambiguous_mapping`, `not_a_service_account`, `username_check_not_allowed`, `invalid_request`, `name_not_issued` | — | — | O, one of `kept_resource_policy` | Why the writer itself refused, on a denied record only: one of the closed values its writer class declares, never free text. The caller's answer can stay opaque while the audit reader gets the reason. Optional: a denied record without it conforms. A writer class with no declared value cannot write it. **Only when** `denied` holds; anywhere else `Check` reports it `unexpected`. |
+| `krateo.audit.denial_reason` | string | none | O, one of `name_reserved`, `name_claimed`, `name_held_legacy`, `name_provisioned`, `name_bound`, `system_group`, `group_not_allowed`, `delegation_not_allowed`, `delegation_too_deep`, `platform_group`, `name_missing`, `subject_token_expired`, `subject_token_invalid`, `stepup_not_enabled`, `insufficient_assurance`, `stale_authentication`, `no_mapping`, `ambiguous_mapping`, `not_a_service_account`, `username_check_not_allowed`, `invalid_request`, `name_not_issued`, `destination_refused`, `per_user_credential_ref`, `endpoint_ref_malformed`, `internal_identity_context`, `write_refused`, `dry_run_not_executed`, `dependency_failed`, `uaf_on_write_verb`, `invalid_path`, `template_error`, `session_credential_missing`, `step_up_required` | — | — | O, one of `kept_resource_policy` | Why the writer itself refused, on a denied record only: one of the closed values its writer class declares, never free text. The caller's answer can stay opaque while the audit reader gets the reason. Optional: a denied record without it conforms. A writer class with no declared value cannot write it. **Only when** `denied` holds; anywhere else `Check` reports it `unexpected`. |
 | `krateo.audit.check_result` | string | none | O, on `authn.username.check` one of `available`, `reserved`, `name_claimed`, `name_held_legacy`, `name_provisioned`, `name_bound`, `invalid` | — | — | — | What a check the writer ran for the caller concluded, when the record's action is a check: one of the closed values its krateo.action declares, never free text. It is the check's answer, not the record's outcome: a check that completed is a success whatever it concluded. Optional: a record without it conforms. Only on a success, when the check ran: a denied record (the check never ran) and a failure (the lookup failed) carry none. An action with no declared set cannot write it. **Only when** `succeeded` holds; anywhere else `Check` reports it `unexpected`. |
 | `http.response.status_code` | int | stable | C: the authority answered | C: the backend answered | C: the authority answered | C: the action was an HTTP request that was answered | The status code the authority answered (Kubernetes responseStatus.code). Never on a denied record: denied means the writer itself refused, so no authority answered. **Never when** `denied` holds; there `Check` reports it `unexpected`. |
 | `krateo.audit.preview` | bool | none | C: the target is a Kubernetes object (false when cluster-scoped) [checked] (mark) | NE | C: the target is a Kubernetes object (false when cluster-scoped) [checked] (mark) | C: the target is a Kubernetes object (false when cluster-scoped) [checked] (mark) | true when the target is a namespaced Kubernetes object whose Namespace carries the label krateo.io/purpose=preview-sandbox, read by the writer from apiserver state. false for any other Kubernetes target, a cluster-scoped one included (installer#716 §2.4). Omitted and marked when the Namespace could not be read. Not written for an external endpoint alone. Not a retention key, not a filter. Marker `preview`. |
@@ -78,7 +78,10 @@ through the generated `audit.Key*` constants and test their records with
 | `krateo.audit.cause_ref.name` | string | none | — | — | — | C: the record names a reconciled object [checked] | The name of the object the controller reconciled. |
 | `krateo.audit.cause_ref.uid` | string | none | — | — | — | C: the record names a reconciled object [checked] | The uid of the object the controller reconciled, as it read it. Joins the row to the request whose write it reconciled (that row's krateo.audit.object_ref.uid). |
 | `krateo.audit.cause_ref.generation` | int | none | — | — | — | C: the reconciled object has a generation (every custom resource has one) | The generation of the object the controller reconciled, the one this reconcile acted on. With cause_ref.uid, joins the row to the request that wrote that generation (that row's krateo.audit.object_ref.generation). |
-| `server.address` | string | stable | C: the target is not a Kubernetes object | R | C: the target is not a Kubernetes object | C: the controller wrote to an external endpoint | The external endpoint the action was sent to, host[:port] only. |
+| `server.address` | string | stable | C: the target is an external endpoint (neither a Kubernetes object nor a non-resource path) | R | C: the target is not a Kubernetes object | C: the controller wrote to an external endpoint | The external endpoint the action was sent to, host[:port] only. |
+| `url.path` | string | stable | O | — | — | — | The path of a route the writer served that names no Kubernetes object and no external endpoint (a non-resource path, as the apiserver calls it), e.g. snowplow's /debug/shadow-parity. The request writer's third target form: never beside object_ref or server.address. No query. Format `url_path`. |
+| `krateo.audit.endpoint_ref.namespace` | string | none | O | — | — | — | The namespace of the endpointRef a RESTAction stage named when it dialled an external endpoint (server.address). It names the Endpoint reference, never credential data. Optional: whether the stage named an endpointRef is not visible on the record. Format `k8s_namespace`. **Only when** `endpoint_target` holds; anywhere else `Check` reports it `unexpected`. **Never on a credential target**; there `Check` reports it `not-for-target`. |
+| `krateo.audit.endpoint_ref.name` | string | none | O | — | — | — | The name of the endpointRef (its Secret) a RESTAction stage named when it dialled an external endpoint (server.address). Never a per-user clientconfig Secret's name: that name embeds a username, so Check refuses it (format endpoint_ref_name) and Emit never writes it. A refusal of such a reference (per_user_credential_ref) names none. Optional, as for the namespace. Format `endpoint_ref_name`. **Only when** `endpoint_target` holds; anywhere else `Check` reports it `unexpected`. **Never on a credential target**; there `Check` reports it `not-for-target`. |
 | `krateo.request.uri` | string | none | R | C: the gateway proves no credential reaches the URI | C: the action was a received request | — | The path and query the writer received (Kubernetes requestURI). Never a scheme or host. **Identity.** |
 | `krateo.request.source_ips` | string[] | none | R | R | C: the action was a received request | — | Kubernetes sourceIPs: forwarded entries, then the TCP peer. Only the last entry is established by the writer. **Identity.** |
 | `user_agent.original` | string | stable | C: the header was sent | C: the header was sent | C: the header was sent | — | The User-Agent header, cut at 1024 bytes with ...TRUNCATED, as the apiserver does. |
@@ -105,14 +108,16 @@ through the generated `audit.Key*` constants and test their records with
 ## The target rule
 
 Every record names its target: `krateo.audit.object_ref.resource` (a Kubernetes object) or `server.address`
-(an external endpoint). Marker `target`.
+(an external endpoint), and, for a writer that lists more, one of its own
+target keys (`url.path`, a non-resource path, for the request writer).
+Marker `target`.
 
-| writer | targets |
-|---|---|
-| `request` | exactly one |
-| `gateway` | exactly one |
-| `action` | exactly one |
-| `controller` | at least one |
+| writer | targets | of the keys |
+|---|---|---|
+| `request` | exactly one | `krateo.audit.object_ref.resource`, `server.address`, `url.path` |
+| `gateway` | exactly one | `krateo.audit.object_ref.resource`, `server.address` |
+| `action` | exactly one | `krateo.audit.object_ref.resource`, `server.address` |
+| `controller` | at least one | `krateo.audit.object_ref.resource`, `server.address` |
 
 ## Credential targets
 
@@ -140,6 +145,7 @@ listed matches the resource and every subresource of it.
 - `client_rejected`: The writer rejected the client's provenance header: krateo.audit.client.rejected is present.
 - `client_provenance`: The record carries provenance the client asserted: a krateo.audit.client.* key other than source and rejected is present.
 - `confirmed_set`: The record names the confirmed set its write belongs to: any krateo.audit.client.confirmed_set.* key is present.
+- `endpoint_target`: The record's target is an external endpoint: server.address is present.
 - `succeeded`: krateo.audit.outcome is success: the authority answered and the action completed.
 
 ## Formats `Check` enforces
@@ -154,6 +160,9 @@ minimum, or not below its `less_than` key, is `out-of-range`.
 - `uuid` (`audit.ValidUUID`): a UUID in its canonical textual form, lowercase (8-4-4-4-12 hex digits). Pattern `^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`.
 - `opaque_id` (`audit.ValidOpaqueID`): 1 to 128 of `[A-Za-z0-9_-]`. Pattern `^[A-Za-z0-9_-]{1,128}$`.
 - `session_id` (`audit.ValidSessionID`): 1 to 128 of `[A-Za-z0-9._-]`: a correlation id safe in W3C baggage and on a log line. The shape snowplow, the id's origin, accepts and mints (audit#32): its minted ids, a trace id, a UUID all fit. Pattern `^[A-Za-z0-9._-]{1,128}$`.
+- `k8s_namespace` (`audit.ValidK8sNamespace`): a Kubernetes namespace name: a DNS-1123 label, 1 to 63 of `[a-z0-9-]`, starting and ending with a letter or digit. Pattern `^[a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?$`.
+- `endpoint_ref_name` (`audit.ValidEndpointRefName`): the name of the Secret an endpointRef names: 1 to 253 of `[a-z0-9.-]`, starting and ending with a letter or digit, and never a per-user clientconfig Secret's name (one ending in `-clientconfig` or `-clientconfig-stepup`), which embeds a username.
+- `url_path` (`audit.ValidURLPath`): a URL path: `/` and up to 1000 more characters, no query, no fragment, no whitespace. Pattern `^/[^?#\s]{0,1000}$`.
 - `rfc3339` (`audit.ValidRFC3339`): an RFC 3339 timestamp, with or without fractional seconds.
 
 ## Closed values per writer and per action
@@ -192,6 +201,18 @@ writers spell each value through its generated constant.
 | `krateo.audit.denial_reason` | `username_check_not_allowed` | `request` | any | `audit.DenialReasonUsernameCheckNotAllowed` |
 | `krateo.audit.denial_reason` | `invalid_request` | `request` | any | `audit.DenialReasonInvalidRequest` |
 | `krateo.audit.denial_reason` | `name_not_issued` | `request` | any | `audit.DenialReasonNameNotIssued` |
+| `krateo.audit.denial_reason` | `destination_refused` | `request` | any | `audit.DenialReasonDestinationRefused` |
+| `krateo.audit.denial_reason` | `per_user_credential_ref` | `request` | any | `audit.DenialReasonPerUserCredentialRef` |
+| `krateo.audit.denial_reason` | `endpoint_ref_malformed` | `request` | any | `audit.DenialReasonEndpointRefMalformed` |
+| `krateo.audit.denial_reason` | `internal_identity_context` | `request` | any | `audit.DenialReasonInternalIdentityContext` |
+| `krateo.audit.denial_reason` | `write_refused` | `request` | any | `audit.DenialReasonWriteRefused` |
+| `krateo.audit.denial_reason` | `dry_run_not_executed` | `request` | any | `audit.DenialReasonDryRunNotExecuted` |
+| `krateo.audit.denial_reason` | `dependency_failed` | `request` | any | `audit.DenialReasonDependencyFailed` |
+| `krateo.audit.denial_reason` | `uaf_on_write_verb` | `request` | any | `audit.DenialReasonUafOnWriteVerb` |
+| `krateo.audit.denial_reason` | `invalid_path` | `request` | any | `audit.DenialReasonInvalidPath` |
+| `krateo.audit.denial_reason` | `template_error` | `request` | any | `audit.DenialReasonTemplateError` |
+| `krateo.audit.denial_reason` | `session_credential_missing` | `request` | any | `audit.DenialReasonSessionCredentialMissing` |
+| `krateo.audit.denial_reason` | `step_up_required` | `request` | any | `audit.DenialReasonStepUpRequired` |
 | `krateo.audit.denial_reason` | `kept_resource_policy` | `controller` | any | `audit.DenialReasonKeptResourcePolicy` |
 | `krateo.audit.check_result` | `available` | `request` | `authn.username.check` | `audit.CheckResultAvailable` |
 | `krateo.audit.check_result` | `reserved` | `request` | `authn.username.check` | `audit.CheckResultReserved` |

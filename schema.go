@@ -167,6 +167,14 @@ type TargetRule struct {
 	Marker  string
 	Keys    []string
 	Writers map[Writer]TargetMode
+	// WriterKeys are target keys of one writer only: the request writer's
+	// url.path (v0.12.0), a non-resource path.
+	WriterKeys map[Writer][]string
+}
+
+// KeysFor returns writer w's target keys: Keys, then w's own WriterKeys.
+func (t TargetRule) KeysFor(w Writer) []string {
+	return append(slices.Clone(t.Keys), t.WriterKeys[w]...)
 }
 
 // Population is where one writer's records land in krateo_audit: the
@@ -223,6 +231,10 @@ func Target() TargetRule {
 	t := schemaTarget
 	t.Keys = slices.Clone(t.Keys)
 	t.Writers = maps.Clone(t.Writers)
+	t.WriterKeys = maps.Clone(t.WriterKeys)
+	for w, ks := range t.WriterKeys {
+		t.WriterKeys[w] = slices.Clone(ks)
+	}
 	return t
 }
 

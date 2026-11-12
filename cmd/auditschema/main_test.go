@@ -218,7 +218,9 @@ func TestSQL_IsGeneratedFromTheSchema(t *testing.T) {
 		if want == 0 {
 			t.Errorf("%s: no rules query can carry its column, so this arm tests nothing for it", k.Name)
 		}
-		if n := strings.Count(sql, "AS "+alias("unexpected", k.Name)); n != want {
+		// Whole aliases only: one key's alias may prefix another's
+		// (endpoint_ref.name, endpoint_ref.namespace).
+		if n := len(regexp.MustCompile(`AS ` + regexp.QuoteMeta(alias("unexpected", k.Name)) + `\b`).FindAllString(sql, -1)); n != want {
 			t.Errorf("%s: %d unexpected_ columns, want %d (one per rules query of a writer that may write it)", k.Name, n, want)
 		}
 	}

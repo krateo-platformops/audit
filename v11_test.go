@@ -71,6 +71,22 @@ var formatCases = map[string][]struct {
 		{"séance", false}, {"日本", false}, // non-ASCII
 		{"name@example.com", false},
 	},
+	// v0.12.0 (audit#22).
+	FormatK8sNamespace: {
+		{"example-ns", true}, {"a", true}, {strings.Repeat("a", 63), true},
+		{strings.Repeat("a", 64), false}, {"Example", false}, {"-ns", false}, {"ns-", false}, {"a.b", false}, {"", false}, {"ns\n", false},
+	},
+	FormatEndpointRefName: {
+		{"example-endpoint", true}, {"example.endpoint-1", true}, {"a", true}, {strings.Repeat("a", 253), true},
+		{strings.Repeat("a", 254), false}, {"", false}, {"Example", false}, {"-example", false}, {"example-", false}, {"a_b", false},
+		{"example-user-clientconfig", false}, {"example-user-clientconfig-stepup", false}, // per-user credential Secrets
+		{"clientconfig", true}, {"example-clientconfigs", true}, // not the per-user suffix
+		{"example\n", false},
+	},
+	FormatURLPath: {
+		{"/", true}, {"/debug/shadow-parity", true}, {"/" + strings.Repeat("a", 1000), true},
+		{"/" + strings.Repeat("a", 1001), false}, {"", false}, {"debug", false}, {"/a?b=c", false}, {"/a#b", false}, {"/a b", false}, {"/a\n", false},
+	},
 	FormatUUID: {
 		{"00000000-0000-4000-8000-0000000000aa", true},
 		{"00000000-0000-4000-8000-0000000000AA", false}, {"000000000000400080000000000000aa", false},

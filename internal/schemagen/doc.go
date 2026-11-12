@@ -78,13 +78,16 @@ through the generated `+"`audit.Key*`"+` constants and test their records with
 ## The target rule
 
 Every record names its target: `+"`%s`"+` (a Kubernetes object) or `+"`%s`"+`
-(an external endpoint). Marker `+"`%s`"+`.
+(an external endpoint), and, for a writer that lists more, one of its own
+target keys (`+"`url.path`"+`, a non-resource path, for the request writer).
+Marker `+"`%s`"+`.
 
-| writer | targets |
-|---|---|
+| writer | targets | of the keys |
+|---|---|---|
 `, s.Target.Keys[0], s.Target.Keys[1], s.Target.Marker)
 	for _, w := range s.Writers {
-		fmt.Fprintf(&b, "| `%s` | %s |\n", w.ID, strings.ReplaceAll(s.Target.Writers[w.ID], "_", " "))
+		keys := append(slices.Clone(s.Target.Keys), s.Target.WriterKeys[w.ID]...)
+		fmt.Fprintf(&b, "| `%s` | %s | `%s` |\n", w.ID, strings.ReplaceAll(s.Target.Writers[w.ID], "_", " "), strings.Join(keys, "`, `"))
 	}
 
 	b.WriteString(`
