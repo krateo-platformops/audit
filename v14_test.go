@@ -251,6 +251,72 @@ func TestCoverage_DerivedNameRuleIsScopedToRefusalsAndChecks(t *testing.T) {
 	}
 }
 
+// core-provider's rows (v0.14.0, core-provider@b1f9b5f): every row that emits
+// names the core-provider scope, cites b1f9b5f and says it is unreleased; the
+// seven literals are covered; and "audited" is claimed only by the row whose
+// conformance a core-provider test proves (audit_envtest_test.go:137). Every
+// other emitting row is "audited, conformance not yet proven".
+func TestCoverage_CoreProviderRows(t *testing.T) {
+	raw, err := os.ReadFile("docs/coverage.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	const scope = "github.com/krateo-platformops/core-provider/audit"
+	actions := map[string]bool{}
+	audited := 0
+	for _, r := range coverageRows(t, string(raw)) {
+		if r.component != "core-provider" || r.scope == "" {
+			continue
+		}
+		if r.scope != scope {
+			t.Errorf("docs/coverage.md:%d: scope %s, want %s", r.line, r.scope, scope)
+		}
+		if !strings.Contains(r.path, "b1f9b5f") || !strings.Contains(r.owner, "unreleased") {
+			t.Errorf("docs/coverage.md:%d: the row does not cite b1f9b5f or say it is unreleased", r.line)
+		}
+		switch r.status {
+		case "audited":
+			audited++
+			if !strings.Contains(r.path, "audit_envtest_test.go:137") {
+				t.Errorf("docs/coverage.md:%d: audited without the test that proves it", r.line)
+			}
+		case coverageUnproven:
+		default:
+			t.Errorf("docs/coverage.md:%d: status %q", r.line, r.status)
+		}
+		for _, a := range strings.Split(r.action, ", ") {
+			actions[strings.Trim(a, "`")] = true
+		}
+	}
+	for _, a := range []string{"rbac.apply", "rbac.delete", "secret.apply", "authn.mapping.apply", "composition.mirror", "composition.hub.delete", "composition.migrate"} {
+		if !actions[a] {
+			t.Errorf("no core-provider row carries %s", a)
+		}
+	}
+	if actions["secret.delete"] {
+		t.Error("a core-provider row carries secret.delete, which has no emit site")
+	}
+	if audited != 1 {
+		t.Errorf("%d core-provider rows are audited, want 1 (the composition RBAC set)", audited)
+	}
+	// The status is a closed value: an unproven path names its scope like any
+	// audited one, and a status that assumes conformance is refused.
+	row := coverageRow{line: 1, table: WriterController, component: "core-provider", path: "a write", writer: string(WriterController),
+		identity: "its own ServiceAccount", status: coverageUnproven, owner: "[core-provider#1]", action: "`rbac.apply`"}
+	defined := map[string]bool{"core-provider#1": true}
+	if p := coverageProblems([]coverageRow{row}, defined); len(p) != 1 || !strings.Contains(p[0], "an audited path names no scope") {
+		t.Errorf("an unproven row with no scope: %v, want refused for its scope", p)
+	}
+	row.scope = "github.com/krateo-platformops/core-provider/audit"
+	if p := coverageProblems([]coverageRow{row}, defined); len(p) != 0 {
+		t.Errorf("an unproven row with its scope: %v", p)
+	}
+	row.status = "audited, conformance assumed"
+	if p := coverageProblems([]coverageRow{row}, defined); len(p) != 1 || !strings.Contains(p[0], "is not audited") {
+		t.Errorf("a status that assumes conformance: %v, want refused", p)
+	}
+}
+
 // Emit writes the kept key, one record per conflicting key, and each record
 // passes Check; no value is written.
 func TestEmit_KeptExistingValue(t *testing.T) {

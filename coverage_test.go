@@ -43,6 +43,11 @@ var (
 	coverageOutOfScope = regexp.MustCompile(`^out of scope \(.+\)$`)
 )
 
+// coverageUnproven is the status of a path that emits records no owner test
+// has run AssertConformant on yet (v0.14.0): audited, so it names its scope,
+// but never assumed conformant.
+const coverageUnproven = "audited, conformance not yet proven"
+
 // coverageRows parses the inventory tables of docs/coverage.md. It fails on
 // an inventory table outside a writer section, on a table that looks like
 // the inventory but has another header, and on a row with the wrong number
@@ -121,9 +126,9 @@ func coverageProblems(rows []coverageRow, defined map[string]bool) []string {
 		}
 
 		outOfScope := coverageOutOfScope.MatchString(r.status)
-		audited := r.status == "audited" || strings.HasPrefix(r.status, "audited, non-conformant")
+		audited := r.status == "audited" || r.status == coverageUnproven || strings.HasPrefix(r.status, "audited, non-conformant")
 		if !audited && !outOfScope && r.status != "not audited" {
-			add(r, "status %q is not audited, audited, non-conformant, not audited or out of scope (reason)", r.status)
+			add(r, "status %q is not audited, audited, conformance not yet proven, audited, non-conformant, not audited or out of scope (reason)", r.status)
 		}
 
 		switch {

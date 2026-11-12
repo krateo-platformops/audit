@@ -26,7 +26,7 @@ records. Each row is one mutating path of one component.
 | path (what changes) | the route, tool or reconcile step, and the object or endpoint it changes |
 | writer class | `request`, `gateway`, `action` or `controller`, as defined in [schema.md](./schema.md#writers). `—` means no writer records this path, by decision |
 | identity source | where the emit site gets the actor |
-| status | one of the four values below |
+| status | one of the five values below |
 | owner issue | the issue that closes the gap, or the issue that records the decision. Where a merged PR added the emit site, it follows as `emit:` |
 | scope | the instrumentation scope of the emitter's logger. It must be a population of the same writer in `schema/v1.yaml`, so that `auditschema sql` judges the rows by that writer's rules. A path that is audited names its scope |
 | krateo.action | the action literal the records carry |
@@ -36,10 +36,15 @@ records. Each row is one mutating path of one component.
 The four schema columns are blank where they aren't known yet. The owner
 fills them in with the emit site.
 
-The four status values:
+The five status values:
 
 - **audited**: the owner's default branch emits a schema v1 record on this
   path.
+- **audited, conformance not yet proven** (v0.14.0): the owner's default
+  branch emits a record on this path, but no owner test runs
+  `audittest.AssertConformant` on this path's own records yet. A test of
+  the shared recorder with records built by hand doesn't count. The status
+  never assumes conformance.
 - **audited, non-conformant**: a record is emitted, but `Check` (or the
   schema's body rule) rejects it. The owner issue lists the gaps.
 - **not audited**: the path changes something and no record is emitted.
@@ -320,7 +325,14 @@ the predicate drops, by reason.
 
 - **authn**'s background credential writes are emitted since [authn#123]
   (the rows below cite authn@0fa999e0).
-- **cdc and core-provider** emit nothing today. [core-provider#423] waits
+- **core-provider**'s own writes are emitted since [core-provider#464]
+  (merged as core-provider@b1f9b5f, on `main`; unreleased: core-provider
+  ships it in 2.13.87, after 2.13.86 rolls), on the scope
+  `github.com/krateo-platformops/core-provider/audit` with the seven
+  controller literals schema.md registers. Only the composition RBAC set
+  has a test that runs `AssertConformant` on its own records; the other
+  core-provider rows are "audited, conformance not yet proven".
+- **cdc** emits nothing today. [core-provider#423] waits
   on [plumbing#106] (the uncapped per-object verdict, merged as
   plumbing#120) and on audit v0.5.0. It also renders
   `spec.principal: controller` on every cdc authn mapping, so cdc's tokens
@@ -361,11 +373,13 @@ the predicate drops, by reason.
 | cdc | helm install or upgrade of a Composition's child: create, update or patch | controller | cdc's own ServiceAccount | not audited | [core-provider#423], [plumbing#106] | | | | |
 | cdc | helm prune of a child the new revision no longer renders | controller | cdc's own ServiceAccount | not audited | [core-provider#423], [plumbing#106] | | | delete | |
 | cdc | a kept deletion: a child helm declined to delete (`resource-policy: keep`) | controller | cdc's own ServiceAccount | not audited | [core-provider#423], [plumbing#106] | | | delete | denied |
-| core-provider | the authn mapping `serviceaccount.authn.krateo.io`: create, update | controller | core-provider's own ServiceAccount | not audited | [core-provider#423] | | | | |
-| core-provider | the spoke mirror Composition: create, update, delete (the update runs on every resync today and must stop first) | controller | core-provider's own ServiceAccount | not audited | [core-provider#423] | | | | |
-| core-provider | the hub Composition delete | controller | core-provider's own ServiceAccount | not audited | [core-provider#423] | | | delete | |
-| core-provider | the migration path that can lose a Composition's spec (`getters.go:371`) | controller | core-provider's own ServiceAccount | not audited | [core-provider#423] | | | | |
-| core-provider | Roles, ClusterRoles, their bindings, ServiceAccounts and credential Secrets (named exception) | controller | core-provider's own ServiceAccount | not audited | [core-provider#423] | | | | |
+| core-provider | the authn mapping `serviceaccount.authn.krateo.io`: create, update. Emit at core-provider@b1f9b5f: a composition's apiRef mapping, `internal/tools/deploy/authnmapping.go:121` (`applyAuthnServiceAccountMapping`), and core-provider's own singleton mapping, `:170` (`ensureSelfAuthnMapping`), both through `applyRecorded` (`auditwrite.go:16`) | controller | core-provider's own ServiceAccount | audited, conformance not yet proven | [core-provider#423]; emit: [core-provider#464] (unreleased: ships in core-provider 2.13.87, after 2.13.86 rolls) | `github.com/krateo-platformops/core-provider/audit` | `authn.mapping.apply` | create, update | success, failure |
+| core-provider | the spoke mirror Composition: create, update, delete. Emit at core-provider@b1f9b5f: `internal/controllers/compositionmirror/compositionmirror.go:634` (create) and `:678` (update) in `mirrorDown`, which sends no update for a mirror that already matches the hub (`:609-612`); `:751` (delete) in `garbageCollect`, for a mirror with no hub counterpart | controller | core-provider's own ServiceAccount | audited, conformance not yet proven | [core-provider#423]; emit: [core-provider#464] (unreleased: ships in core-provider 2.13.87, after 2.13.86 rolls) | `github.com/krateo-platformops/core-provider/audit` | `composition.mirror` | create, update, delete | success, failure |
+| core-provider | the hub Composition delete: every hub Composition of a remote CompositionDefinition being deleted. Emit at core-provider@b1f9b5f: `internal/controllers/compositionmirror/compositionmirror.go:372` (`deleteAllHubCompositions`), called by `reconcileDelete` at `:303` | controller | core-provider's own ServiceAccount | audited, conformance not yet proven | [core-provider#423]; emit: [core-provider#464] (unreleased: ships in core-provider 2.13.87, after 2.13.86 rolls) | `github.com/krateo-platformops/core-provider/audit` | `composition.hub.delete` | delete | success, failure |
+| core-provider | the migration of a Composition to a CompositionDefinition's new version, the path that can lose a Composition's spec. Emit at core-provider@b1f9b5f: `internal/controllers/compositiondefinitions/helpers/getters/getters.go:381` (`updateCompositionWithRetry`), from `UpdateCompositionsVersion` (`:190`). Not proven: the recorder's own test runs `AssertConformant` on a `composition.migrate` update built by hand (`internal/tools/auditrec/auditrec_test.go:306`, `TestRecordUpdate`), not on this path's records | controller | core-provider's own ServiceAccount | audited, conformance not yet proven | [core-provider#423]; emit: [core-provider#464] (unreleased: ships in core-provider 2.13.87, after 2.13.86 rolls) | `github.com/krateo-platformops/core-provider/audit` | `composition.migrate` | update | success, failure |
+| core-provider | a composition's RBAC set (named exception): its ServiceAccount, ClusterRole, ClusterRoleBinding, Role and RoleBinding, installed and removed. Emit at core-provider@b1f9b5f: `internal/tools/deploy/deploy.go:225-271` (`installRBACResources`) and `:376-408` (`uninstallRBACResources`), through `applyRecorded` and `uninstallRecorded` (`auditwrite.go:16`, `:25`). Conformance: `internal/tools/deploy/audit_envtest_test.go:137` runs `AssertConformant` on every record of a first install, a rule change and an uninstall against a real apiserver (`TestAuditRecordsDeployRBACEnvtest`, run by core-provider's envtest CI job) | controller | core-provider's own ServiceAccount | audited | [core-provider#423]; emit: [core-provider#464] (unreleased: ships in core-provider 2.13.87, after 2.13.86 rolls) | `github.com/krateo-platformops/core-provider/audit` | `rbac.apply`, `rbac.delete` | create, update, delete | success, failure |
+| core-provider | core-provider's other RBAC writes (named exception): the credentials Secret's Role and RoleBinding (`internal/tools/deploy/deploy.go:450`, `:474`; removed at `:806`, `:820`), the RESTAction read-set ClusterRole and binding (`restactionrbac.go:148`, `:152`), the chart-inspector RBAC projected onto a spoke (`chartinspector.go:110-131`; removed at `:301`), a derived binding re-subjected to a new ServiceAccount (`resubject.go:119`), and dangling controller bindings with the roles no other binding references (`danglingrbac.go:204`, `:244`). At core-provider@b1f9b5f | controller | core-provider's own ServiceAccount | audited, conformance not yet proven | [core-provider#423]; emit: [core-provider#464] (unreleased: ships in core-provider 2.13.87, after 2.13.86 rolls) | `github.com/krateo-platformops/core-provider/audit` | `rbac.apply`, `rbac.delete` | create, update, delete | success, failure |
+| core-provider | credential Secrets (named exception): a Secret the chart-inspector pod references, copied from the hub onto a spoke. Emit at core-provider@b1f9b5f: `internal/tools/deploy/chartinspector.go:220` (`projectPodRefs`). No core-provider site deletes a credential Secret, so there is no `secret.delete` | controller | core-provider's own ServiceAccount | audited, conformance not yet proven | [core-provider#423]; emit: [core-provider#464] (unreleased: ships in core-provider 2.13.87, after 2.13.86 rolls) | `github.com/krateo-platformops/core-provider/audit` | `secret.apply` | create, update | success, failure |
 | core-provider | CRDs, Deployments, labels and status | controller | core-provider's own ServiceAccount | out of scope ([installer#413] condition 1; counted by the excluded-writes counter) | [core-provider#423] | | | | |
 | rest-dynamic-controller | an external `POST`, `PUT`, `PATCH` or `DELETE` to the API a RestDefinition describes | controller | none today; its own ServiceAccount is known to the process but not passed | audited, non-conformant (audit v0.3.0: no actor, error text in the body, `Kind` without `Resource`, no verb on delegated sites, emitted after its span ended) | [oasgen-provider#543] | `rest-dynamic-controller/audit` | `rest.write` | | |
 | oasgen-provider | ClusterRoles, Roles, their bindings and ServiceAccounts (named exception) | controller | oasgen-provider's own ServiceAccount | not audited | [oasgen-provider#543] (its scope registered in audit v0.14.0) | `github.com/krateo-platformops/oasgen-provider/audit` | `rbac.apply`, `rbac.delete` | | |
@@ -505,6 +519,7 @@ Each open question is asked on its owner's issue; the link goes to the comment. 
 [snowplow-agent#21]: https://github.com/krateo-agentiko/snowplow-agent/issues/21
 [plumbing#106]: https://github.com/krateo-platformops/plumbing/issues/106
 [core-provider#423]: https://github.com/krateo-platformops/core-provider/issues/423
+[core-provider#464]: https://github.com/krateo-platformops/core-provider/pull/464
 [oasgen-provider#543]: https://github.com/krateo-platformops/oasgen-provider/issues/543
 [access-review#25]: https://github.com/krateo-platformops/access-review/issues/25
 [access-review#28]: https://github.com/krateo-platformops/access-review/pull/28

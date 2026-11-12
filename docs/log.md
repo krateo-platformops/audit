@@ -49,6 +49,13 @@ timestamp: 2026-11-12T00:00:00Z
     `rbac.apply`, `rbac.delete`, `secret.apply`, `authn.mapping.apply`,
     `composition.mirror`, `composition.hub.delete`, `composition.migrate`.
     No `secret.delete`: no core-provider site deletes a credential Secret.
+  - [coverage.md](./coverage.md): core-provider's rows cite b1f9b5f, each
+    with its scope, literals and emit sites (unreleased: core-provider
+    ships it in 2.13.87, after 2.13.86 rolls). A fifth status, "audited,
+    conformance not yet proven", for a path that emits but whose own
+    records no owner test has run `AssertConformant` on. Only the
+    composition RBAC set is "audited", proven by core-provider's
+    `audit_envtest_test.go:137`.
   - Compatibility: `testdata/v0.13.0/` (30 records audit v0.13.0's own
     `Emit` wrote, its `rbac_not_allowed` refusal included) gives v0.13.0's
     own report, and every earlier replay is unchanged.
