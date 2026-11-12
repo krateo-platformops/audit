@@ -88,8 +88,10 @@ const (
 	// for the caller concluded, when the record's action is a check: one of the
 	// closed values its krateo.action declares, never free text. It is the check's
 	// answer, not the record's outcome: a check that completed is a success
-	// whatever it concluded. Optional: a record without it conforms. An action
-	// with no declared set cannot write it.
+	// whatever it concluded. Optional: a record without it conforms. Only on a
+	// success, when the check ran: a denied record (the check never ran) and a
+	// failure (the lookup failed) carry none. An action with no declared set
+	// cannot write it.
 	KeyCheckResult = "krateo.audit.check_result"
 	// KeyHTTPStatusCode is "http.response.status_code". The status code the
 	// authority answered (Kubernetes responseStatus.code). Never on a denied
@@ -380,6 +382,9 @@ const (
 	// DenialReasonNotAServiceAccount is "not_a_service_account", a
 	// krateo.audit.denial_reason value of writer request.
 	DenialReasonNotAServiceAccount = "not_a_service_account"
+	// DenialReasonUsernameCheckNotAllowed is "username_check_not_allowed", a
+	// krateo.audit.denial_reason value of writer request.
+	DenialReasonUsernameCheckNotAllowed = "username_check_not_allowed"
 	// DenialReasonKeptResourcePolicy is "kept_resource_policy", a
 	// krateo.audit.denial_reason value of writer controller.
 	DenialReasonKeptResourcePolicy = "kept_resource_policy"
@@ -457,11 +462,14 @@ const (
 	// CondConfirmedSet: The record names the confirmed set its write belongs to:
 	// any krateo.audit.client.confirmed_set.* key is present.
 	CondConfirmedSet Condition = "confirmed_set"
+	// CondSucceeded: krateo.audit.outcome is success: the authority answered and
+	// the action completed.
+	CondSucceeded Condition = "succeeded"
 )
 
 var schemaWriters = []Writer{WriterRequest, WriterGateway, WriterAction, WriterController}
 
-var schemaConditions = []Condition{CondK8sTarget, CondWrite, CondMethodOther, CondDelegated, CondImpersonated, CondCaused, CondDenied, CondContentWrite, CondClientRejected, CondClientProvenance, CondConfirmedSet}
+var schemaConditions = []Condition{CondK8sTarget, CondWrite, CondMethodOther, CondDelegated, CondImpersonated, CondCaused, CondDenied, CondContentWrite, CondClientRejected, CondClientProvenance, CondConfirmedSet, CondSucceeded}
 
 var schemaMarkers = []string{"actor", "actor_class", "action", "verb", "method", "preview", "target"}
 
@@ -904,7 +912,7 @@ var schemaKeys = []KeySpec{
 		LessThan:       "",
 		Description:    "Why the writer itself refused, on a denied record only: one of the closed values its writer class declares, never free text. The caller's answer can stay opaque while the audit reader gets the reason. Optional: a denied record without it conforms. A writer class with no declared value cannot write it.",
 		Writers: map[Writer]Requirement{
-			WriterRequest:    {Level: LevelOptional, Values: []string{"name_reserved", "name_claimed", "name_held_legacy", "name_provisioned", "name_bound", "system_group", "group_not_allowed", "delegation_not_allowed", "delegation_too_deep", "platform_group", "name_missing", "subject_token_expired", "subject_token_invalid", "stepup_not_enabled", "insufficient_assurance", "stale_authentication", "no_mapping", "ambiguous_mapping", "not_a_service_account"}},
+			WriterRequest:    {Level: LevelOptional, Values: []string{"name_reserved", "name_claimed", "name_held_legacy", "name_provisioned", "name_bound", "system_group", "group_not_allowed", "delegation_not_allowed", "delegation_too_deep", "platform_group", "name_missing", "subject_token_expired", "subject_token_invalid", "stepup_not_enabled", "insufficient_assurance", "stale_authentication", "no_mapping", "ambiguous_mapping", "not_a_service_account", "username_check_not_allowed"}},
 			WriterGateway:    {Level: LevelNotApplicable},
 			WriterAction:     {Level: LevelNotApplicable},
 			WriterController: {Level: LevelOptional, Values: []string{"kept_resource_policy"}},
@@ -921,12 +929,12 @@ var schemaKeys = []KeySpec{
 		Asserted:       false,
 		ReplacedBy:     "",
 		DualWrite:      false,
-		OnlyWhen:       "",
+		OnlyWhen:       CondSucceeded,
 		NotWhen:        "",
 		CredentialFree: false,
 		Min:            nil,
 		LessThan:       "",
-		Description:    "What a check the writer ran for the caller concluded, when the record's action is a check: one of the closed values its krateo.action declares, never free text. It is the check's answer, not the record's outcome: a check that completed is a success whatever it concluded. Optional: a record without it conforms. An action with no declared set cannot write it.",
+		Description:    "What a check the writer ran for the caller concluded, when the record's action is a check: one of the closed values its krateo.action declares, never free text. It is the check's answer, not the record's outcome: a check that completed is a success whatever it concluded. Optional: a record without it conforms. Only on a success, when the check ran: a denied record (the check never ran) and a failure (the lookup failed) carry none. An action with no declared set cannot write it.",
 		Writers: map[Writer]Requirement{
 			WriterRequest:    {Level: LevelOptional, ActionValues: map[string][]string{"authn.username.check": {"available", "reserved", "name_claimed", "name_held_legacy", "name_provisioned", "name_bound", "invalid"}}},
 			WriterGateway:    {Level: LevelNotApplicable},

@@ -34,8 +34,10 @@ const usernameCheck = `{"eventName":"audit","attributes":[
 ]}`
 
 const (
-	checkAction = `{"key":"krateo.action","value":{"stringValue":"authn.username.check"}},`
-	checkResult = `{"key":"krateo.audit.check_result","value":{"stringValue":"name_claimed"}},`
+	checkAction      = `{"key":"krateo.action","value":{"stringValue":"authn.username.check"}},`
+	checkResult      = `{"key":"krateo.audit.check_result","value":{"stringValue":"name_claimed"}},`
+	checkOutcome     = `{"key":"krateo.audit.outcome","value":{"stringValue":"success"}},`
+	notAllowedReason = `{"key":"krateo.audit.denial_reason","value":{"stringValue":"username_check_not_allowed"}},`
 )
 
 // `auditschema check` accepts and rejects what Check does for the v0.9.0
@@ -50,6 +52,9 @@ func TestCheck_V090CheckResult(t *testing.T) {
 		}
 		return out
 	}
+	// authn refuses a caller whose mapping has not opted in: denied, the
+	// checked name's Secret, no status code, no result.
+	notAllowed := sub(sub(usernameCheck, checkOutcome, `{"key":"krateo.audit.outcome","value":{"stringValue":"denied"}},`), checkResult, notAllowedReason)
 	result := func(v string) string {
 		if v == "name_claimed" { // the fixture's own result
 			return usernameCheck
@@ -74,6 +79,22 @@ func TestCheck_V090CheckResult(t *testing.T) {
 			[]string{"krateo.audit.check_result: not-for-action", "krateo.action: missing"}},
 		tcase{"on a controller", "controller", sub(controllerRecord, pruned, pruned+checkResult),
 			[]string{"krateo.audit.check_result: not-for-writer"}},
+		// A result only on a success: the check ran.
+		tcase{"a result on a failed lookup", "request", sub(usernameCheck, checkOutcome, `{"key":"krateo.audit.outcome","value":{"stringValue":"failure"}},`),
+			[]string{"krateo.audit.check_result: unexpected"}},
+		tcase{"a failed lookup without a result", "request",
+			sub(sub(usernameCheck, checkOutcome, `{"key":"krateo.audit.outcome","value":{"stringValue":"failure"}},`), checkResult, ""), nil},
+		tcase{"the mapping has not opted in", "request", notAllowed, nil},
+		tcase{"not opted in, with a result", "request", sub(notAllowed, notAllowedReason, notAllowedReason+checkResult),
+			[]string{"krateo.audit.check_result: unexpected"}},
+		tcase{"not opted in, with a status code", "request", sub(notAllowed, notAllowedReason, notAllowedReason+`{"key":"http.response.status_code","value":{"intValue":"403"}},`),
+			[]string{"http.response.status_code: unexpected"}},
+		tcase{"no mapping, on the check", "request", sub(sub(sub(notAllowed, "username_check_not_allowed", "no_mapping"),
+			`{"key":"krateo.audit.object_ref.resource","value":{"stringValue":"secrets"}},`,
+			`{"key":"krateo.audit.object_ref.api_group","value":{"stringValue":"serviceaccount.authn.krateo.io"}},{"key":"krateo.audit.object_ref.resource","value":{"stringValue":"serviceaccounts"}},`),
+			`{"key":"krateo.audit.object_ref.name","value":{"stringValue":"example-user-clientconfig"}},`, ""), nil},
+		tcase{"not opted in, on a controller", "controller", sub(sub(controllerRecord, pruned, keptOutcome), "kept_resource_policy", "username_check_not_allowed"),
+			[]string{"krateo.audit.denial_reason: bad-enum"}},
 	)
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -137,6 +158,28 @@ func TestSQL_CheckResultCountsWhatCheckReports(t *testing.T) {
 		if gotBad != tc.badEnum || reportedBad != tc.badEnum || gotNotFor != tc.notFA || reportedNotFor != tc.notFA {
 			t.Errorf("%s: SQL bad %v / not_for_action %v, Check bad-enum %v / not-for-action %v; want %v / %v",
 				tc.name, gotBad, gotNotFor, reportedBad, reportedNotFor, tc.badEnum, tc.notFA)
+		}
+	}
+	// A result only on a success: the unexpected_ column counts it on a
+	// denied, a failed or an outcome-less row, as Check reports it.
+	unexpected := countIfOf(t, q, alias("unexpected", audit.KeyCheckResult))
+	for _, outcome := range []string{audit.OutcomeSuccess, audit.OutcomeFailure, audit.OutcomeDenied, ""} {
+		for _, withResult := range []bool{true, false} {
+			row := []attribute.KeyValue{s(audit.KeyAction, "authn.username.check")}
+			if outcome != "" {
+				row = append(row, s(audit.KeyOutcome, outcome))
+			}
+			if withResult {
+				row = append(row, s(audit.KeyCheckResult, "available"))
+			}
+			counted, err := evalSQL(unexpected, rowOf(row))
+			if err != nil {
+				t.Fatalf("%v\n%s", err, unexpected)
+			}
+			reported := slices.Contains(audit.Check(audit.WriterRequest, row), audit.Violation{Key: audit.KeyCheckResult, Reason: audit.ReasonUnexpected})
+			if want := withResult && outcome != audit.OutcomeSuccess; counted != want || reported != want {
+				t.Errorf("outcome %q, result %v: SQL counts %v, Check reports %v; want %v", outcome, withResult, counted, reported, want)
+			}
 		}
 	}
 	for _, w := range []audit.Writer{audit.WriterGateway, audit.WriterController} {

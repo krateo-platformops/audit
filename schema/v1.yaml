@@ -156,6 +156,11 @@ conditions:
     description: >-
       The record names the confirmed set its write belongs to: any
       krateo.audit.client.confirmed_set.* key is present.
+  - id: succeeded
+    go: CondSucceeded
+    description: >-
+      krateo.audit.outcome is success: the authority answered and the action
+      completed.
 
 # Exactly one target per record: a Kubernetes object or an external endpoint.
 # A controller's record may name both: the object it wrote in object_ref and
@@ -566,7 +571,15 @@ keys:
       #   ambiguous_mapping (AmbiguousMapping): "ambiguous ServiceAccount
       #   mapping": more than one mapping names it.
       #   The ServiceAccount cases name the mapping resource without a name,
-      #   as name_missing names the Secret resource.
+      #   as name_missing names the Secret resource. authn's POST
+      #   /usernames/check (krateo.action authn.username.check, audit#23)
+      #   refuses its caller with the same three reasons, the same way.
+      # POST /usernames/check, after the TokenReview passed and one mapping
+      # admits the ServiceAccount (audit#23):
+      #   username_check_not_allowed: the mapping has not opted in
+      #   (spec.usernameCheck.allowed), so authn refuses the check (403). The
+      #   record names the checked name's clientconfig Secret, carries no
+      #   status code, and no check_result: the check never ran.
       # Not denial reasons:
       #   AudienceMismatch is part of verifying the token, so it is a counted
       #   pre-verification refusal and never a row.
@@ -577,7 +590,7 @@ keys:
       #   StepUpMisconfigured is a failure row with no status code: no
       #   authority answered. authn's own HTTP status (500) is never
       #   http.response.status_code.
-      request: {level: optional, values: [name_reserved, name_claimed, name_held_legacy, name_provisioned, name_bound, system_group, group_not_allowed, delegation_not_allowed, delegation_too_deep, platform_group, name_missing, subject_token_expired, subject_token_invalid, stepup_not_enabled, insufficient_assurance, stale_authentication, no_mapping, ambiguous_mapping, not_a_service_account]}
+      request: {level: optional, values: [name_reserved, name_claimed, name_held_legacy, name_provisioned, name_bound, system_group, group_not_allowed, delegation_not_allowed, delegation_too_deep, platform_group, name_missing, subject_token_expired, subject_token_invalid, stepup_not_enabled, insufficient_assurance, stale_authentication, no_mapping, ambiguous_mapping, not_a_service_account, username_check_not_allowed]}
       gateway: not_applicable
       action: not_applicable
       # kept_resource_policy: helm declined a delete because the object carries
@@ -593,8 +606,10 @@ keys:
       action is a check: one of the closed values its krateo.action declares,
       never free text. It is the check's answer, not the record's outcome: a
       check that completed is a success whatever it concluded. Optional: a
-      record without it conforms. An action with no declared set cannot
-      write it.
+      record without it conforms. Only on a success, when the check ran: a
+      denied record (the check never ran) and a failure (the lookup failed)
+      carry none. An action with no declared set cannot write it.
+    only_when: succeeded
     writers:
       # authn.username.check (audit#23): authn's POST /usernames/check, which
       # identity-lifecycle's AccessRequest controller calls to learn whether a

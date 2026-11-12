@@ -33,6 +33,7 @@ var conditionSQL = map[audit.Condition]string{
 	audit.CondClientRejected:   "(" + attr(audit.KeyClientRejected) + " != '')",
 	audit.CondClientProvenance: clientProvenanceSQL(),
 	audit.CondConfirmedSet:     "arrayExists(k -> startsWith(k, 'krateo.audit.client.confirmed_set.'), mapKeys(LogAttributes))",
+	audit.CondSucceeded:        "(" + attr(audit.KeyOutcome) + " = " + lit(audit.OutcomeSuccess) + ")",
 }
 
 var k8sTargetSQL = "(" + attr(audit.KeyNamespace) + " != '' OR arrayExists(k -> startsWith(k, 'krateo.audit.object_ref.'), mapKeys(LogAttributes)))"

@@ -114,3 +114,99 @@ func TestEmit_UsernameCheck(t *testing.T) {
 		t.Error("check_result written for an Event without one")
 	}
 }
+
+// authn's refusals on authn.username.check (audit#23): the mapping has not
+// opted in (username_check_not_allowed, naming the checked name's Secret),
+// or v0.8.0's ServiceAccount refusals (naming the mapping resource without a
+// name, as on /delegate). Each is denied, with no status code and no check
+// result: the check never ran. A check result appears only on a success.
+func TestCheck_UsernameCheckRefusalsAndTheResultOnlyOnSuccess(t *testing.T) {
+	v := func(k string, r Reason) Violation { return Violation{Key: k, Reason: r} }
+	refused := func(reason string) []attribute.KeyValue {
+		base := deniedRecord(without(usernameCheckRecord(CheckResultAvailable), KeyCheckResult))
+		if reason != DenialReasonUsernameCheckNotAllowed {
+			base = without(onObject(base, "serviceaccount.authn.krateo.io", "serviceaccounts", ""), KeyObjectName, KeyLegacyResourceName)
+		}
+		return with(base, attribute.String(KeyDenialReason, reason))
+	}
+	result := attribute.String(KeyCheckResult, CheckResultAvailable)
+	failed := func(attrs []attribute.KeyValue) []attribute.KeyValue {
+		return with(attrs, attribute.String(KeyOutcome, OutcomeFailure), attribute.String(KeyLegacyOutcome, OutcomeFailure))
+	}
+	type tcase struct {
+		name  string
+		w     Writer
+		attrs []attribute.KeyValue
+		want  []Violation
+	}
+	cases := []tcase{
+		{"the mapping has not opted in", WriterRequest, refused(DenialReasonUsernameCheckNotAllowed), nil},
+		{"not opted in, with a status code", WriterRequest, with(refused(DenialReasonUsernameCheckNotAllowed), attribute.Int(KeyHTTPStatusCode, 403)),
+			[]Violation{v(KeyHTTPStatusCode, ReasonUnexpected)}},
+		{"not opted in, with a check result", WriterRequest, with(refused(DenialReasonUsernameCheckNotAllowed), result),
+			[]Violation{v(KeyCheckResult, ReasonUnexpected)}},
+		{"not opted in, on a controller", WriterController,
+			with(deniedRecord(baseRecord(WriterController)), attribute.String(KeyDenialReason, DenialReasonUsernameCheckNotAllowed)),
+			[]Violation{v(KeyDenialReason, ReasonBadEnum)}},
+		{"not opted in, on the gateway", WriterGateway,
+			with(deniedRecord(baseRecord(WriterGateway)), attribute.String(KeyDenialReason, DenialReasonUsernameCheckNotAllowed)),
+			[]Violation{v(KeyDenialReason, ReasonNotForWriter)}},
+		{"a failed lookup with a check result", WriterRequest, failed(usernameCheckRecord(CheckResultAvailable)),
+			[]Violation{v(KeyCheckResult, ReasonUnexpected)}},
+		{"a failed lookup without one", WriterRequest, failed(without(usernameCheckRecord(CheckResultAvailable), KeyCheckResult)), nil},
+		{"a result with no outcome", WriterRequest, without(usernameCheckRecord(CheckResultAvailable), KeyOutcome, KeyLegacyOutcome),
+			[]Violation{v(KeyCheckResult, ReasonUnexpected), v(KeyOutcome, ReasonMissing)}},
+	}
+	for _, reason := range []string{DenialReasonNoMapping, DenialReasonAmbiguousMapping, DenialReasonNotAServiceAccount} {
+		cases = append(cases,
+			tcase{reason + " on the check", WriterRequest, refused(reason), nil},
+			tcase{reason + " on the check, with a check result", WriterRequest, with(refused(reason), result), []Violation{v(KeyCheckResult, ReasonUnexpected)}})
+	}
+	for _, r := range usernameCheckResults {
+		cases = append(cases, tcase{r + " on a denied check", WriterRequest,
+			with(refused(DenialReasonUsernameCheckNotAllowed), attribute.String(KeyCheckResult, r)), []Violation{v(KeyCheckResult, ReasonUnexpected)}})
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := Check(tc.w, tc.attrs); !slices.Equal(got, tc.want) {
+				t.Errorf("Check(%s):\n got %v\nwant %v", tc.w, got, tc.want)
+			}
+		})
+	}
+	if DenialReasonUsernameCheckNotAllowed != "username_check_not_allowed" {
+		t.Errorf("the constant is %q", DenialReasonUsernameCheckNotAllowed)
+	}
+	k, _ := LookupKey(KeyCheckResult)
+	if k.OnlyWhen != CondSucceeded {
+		t.Errorf("check_result only_when = %q, want %s", k.OnlyWhen, CondSucceeded)
+	}
+	for outcome, want := range map[string]bool{OutcomeSuccess: true, OutcomeFailure: false, OutcomeDenied: false, "": false} {
+		var a []attribute.KeyValue
+		if outcome != "" {
+			a = append(a, attribute.String(KeyOutcome, outcome))
+		}
+		if got := Holds(CondSucceeded, a); got != want {
+			t.Errorf("succeeded on outcome %q = %v, want %v", outcome, got, want)
+		}
+	}
+}
+
+// Emit writes the not-opted-in refusal as a conforming denied record.
+func TestEmit_UsernameCheckNotAllowed(t *testing.T) {
+	e, rec := newEmitter(t, WithWriter(WriterRequest))
+	e.Emit(WithSessionIDForTest(t, spanCtx(t), "s1"), Event{UserName: "system:serviceaccount:example-system:example-controller", ActorClass: ClassService,
+		// The verb and method of the lookup authn would have sent, as on its
+		// other refusals; no status code: no authority answered.
+		Action: usernameCheck, Verb: "get", HTTPMethod: "GET", Outcome: OutcomeDenied, DenialReason: DenialReasonUsernameCheckNotAllowed,
+		Namespace: "example-system", Version: "v1", Resource: "secrets", ObjectName: "example-user-clientconfig",
+		Preview: PreviewFalse, RequestURI: "/usernames/check", SourceIPs: []string{"192.0.2.10"}})
+	got := attrs(only(t, rec))
+	if vs := Check(WriterRequest, kvs(got)); len(vs) > 0 {
+		t.Errorf("%v", vs)
+	}
+	for _, k := range []string{KeyCheckResult, KeyHTTPStatusCode} {
+		if _, ok := got[k]; ok {
+			t.Errorf("%s on the refusal", k)
+		}
+	}
+}

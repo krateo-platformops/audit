@@ -21,7 +21,17 @@ timestamp: 2026-11-12T00:00:00Z
   `name_provisioned`, `name_bound`, `invalid`. `Check` reports a value
   outside the record's action's set as `bad-enum`, and the key on an action
   that declares no set (or a record with no action) as the new reason
-  `not-for-action`; every other writer class gets `not-for-writer`.
+  `not-for-action`; every other writer class gets `not-for-writer`. The
+  key appears only on a success, when the check ran: a new condition,
+  `succeeded` (outcome `success`), is its `only_when`, so a failure (the
+  lookup failed) or a denied record (the check never ran) carrying it is
+  `unexpected`. One request denial reason for the same route,
+  `username_check_not_allowed`: the caller's TokenReview passed but its
+  mapping has not opted in (`spec.usernameCheck.allowed`), 403, naming the
+  checked name's clientconfig Secret, with no status code and no check
+  result. authn's other refusals there reuse v0.8.0's `no_mapping`,
+  `ambiguous_mapping` and `not_a_service_account`, naming the mapping
+  resource without a name.
   `auditschema sql` counts both (`bad_` and `not_for_action_` columns on the
   request writer's rules), and the column test runs them on fixture rows
   derived from the schema: every value of every action, a value outside the

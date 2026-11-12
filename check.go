@@ -372,6 +372,9 @@ func evalCondition(c Condition, present map[string]attribute.Value) (holds, know
 		return false, true
 	case CondConfirmedSet:
 		return hasPrefix(present, confirmedSetPrefix), true
+	case CondSucceeded:
+		o, ok := present[KeyOutcome]
+		return ok && o.Type() == attribute.STRING && o.AsString() == OutcomeSuccess, true
 	}
 	return false, false
 }

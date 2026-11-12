@@ -292,6 +292,23 @@ is `CheckResultAvailable`, `CheckResultReserved`,
 `CheckResultNameProvisioned`, `CheckResultNameBound` and
 `CheckResultInvalid`. authn owns each value's meaning.
 
+The key appears **only on a success**, when the check ran (a new condition,
+`succeeded`, as its `only_when`). A `failure` (the lookup failed) and a
+`denied` record (the check never ran) carry none; `Check` reports it there
+as `unexpected`.
+
+authn's refusals on this action are denied records with no status code and
+no check result:
+
+- `DenialReasonUsernameCheckNotAllowed` (`username_check_not_allowed`, new):
+  the caller's TokenReview passed, but its mapping has not opted in
+  (`spec.usernameCheck.allowed`), so authn answers 403. The record names the
+  checked name's clientconfig Secret.
+- v0.8.0's `DenialReasonNoMapping`, `DenialReasonAmbiguousMapping` and
+  `DenialReasonNotAServiceAccount`, which name the mapping resource without
+  a name, as on `/delegate`. A denial reason is the request writer's on any
+  action, so the schema allows them here unchanged.
+
 `Check` reports a value outside the set of the record's action as
 `bad-enum`, and the key on any action that declares no set (a record with
 no `krateo.action` included) as the new `not-for-action`. Every writer
