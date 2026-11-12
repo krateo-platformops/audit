@@ -4,11 +4,33 @@ title: audit — log
 description: Curated history of the audit package.
 resource: github.com/krateo-platformops/audit
 tags: [library, audit, log]
-timestamp: 2026-11-11T00:00:00Z
+timestamp: 2026-11-12T00:00:00Z
 ---
 
 # Log
 
+- **2026-11-12**: v0.9.0 (audit#23). One optional key,
+  `krateo.audit.check_result` (`Event.CheckResult`): what a check the writer
+  ran concluded. Its closed set is declared per writer **and per action**
+  (`actions:` on a writer's requirement, `Requirement.ActionValues`,
+  generated `CheckResult*` constants), the way `denial_reason` is declared
+  per writer. The first action is authn's `authn.username.check` (`POST
+  /usernames/check`, which identity-lifecycle's AccessRequest controller
+  calls so it can drop its RBAC on Secrets), request writer, with the set
+  `available`, `reserved`, `name_claimed`, `name_held_legacy`,
+  `name_provisioned`, `name_bound`, `invalid`. `Check` reports a value
+  outside the record's action's set as `bad-enum`, and the key on an action
+  that declares no set (or a record with no action) as the new reason
+  `not-for-action`; every other writer class gets `not-for-writer`.
+  `auditschema sql` counts both (`bad_` and `not_for_action_` columns on the
+  request writer's rules), and the column test runs them on fixture rows
+  derived from the schema: every value of every action, a value outside the
+  set, an action with no set, and no action. `audittest.AssertEnumsDetected`
+  exercises per-action sets. The collector's `logs/audit` pipeline
+  (observability@2d92f2b8) drops only attributes whose key names a
+  credential (`authorization`, `cookie`) and redacts JWT-shaped values, so
+  `krateo_audit` stores this key in `LogAttributes` with no observability
+  change. Additive, so a minor version per docs/release.md.
 - **2026-11-11**: v0.8.0 (audit#20, authn#132). The AUDIT-4 lead ruled that
   every refusal of an identity that has already verified gets a row. Six
   request-writer denial reasons for authn, each denied with no status code,

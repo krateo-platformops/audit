@@ -14,6 +14,7 @@ import (
 	"flag"
 	"fmt"
 	"go/format"
+	"maps"
 	"os"
 	"regexp"
 	"slices"
@@ -152,20 +153,24 @@ type key struct {
 func (k key) DualWrites() bool { return k.ReplacedBy != "" && (k.DualWrite == nil || *k.DualWrite) }
 
 // requirement is a scalar level ("required") or a mapping
-// ({level: conditional, when: ..., check: ..., markable: true, values: [...]}).
+// ({level: conditional, when: ..., check: ..., markable: true, values: [...]},
+// or {level: optional, actions: {<krateo.action>: [...]}}).
 type requirement struct {
 	Level    string   `yaml:"level"`
 	When     string   `yaml:"when"`
 	Check    string   `yaml:"check"`
 	Markable bool     `yaml:"markable"`
 	Values   []string `yaml:"values"`
+	// Actions is the closed set per krateo.action: the values this writer
+	// may write on a record of that action (krateo.audit.check_result).
+	Actions map[string][]string `yaml:"actions"`
 }
 
 // requirementFields are the fields a requirement mapping may have. Decoding
 // the mapping by hand loses the decoder's KnownFields, so UnmarshalYAML checks
 // them itself: an unquoted comma in a flow mapping's `when` silently starts a
 // new, unknown field ({when: a, b} is when "a" and a field "b").
-var requirementFields = []string{"level", "when", "check", "markable", "values"}
+var requirementFields = []string{"level", "when", "check", "markable", "values", "actions"}
 
 func (r *requirement) UnmarshalYAML(n *yaml.Node) error {
 	if n.Kind == yaml.ScalarNode {
@@ -203,6 +208,9 @@ var (
 	goIdent          = regexp.MustCompile(`^[A-Z][A-Za-z0-9]*$`)
 	markerName       = regexp.MustCompile(`^[a-z][a-z_]*$`)
 	valueName        = regexp.MustCompile(`^[a-z][a-z0-9]*(_[a-z0-9]+)*$`)
+	// actionName is a krateo.action literal a per-action set is declared
+	// for: dot-separated lower_snake_case words (authn.username.check).
+	actionName = regexp.MustCompile(`^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)*$`)
 )
 
 func parse(raw []byte) (*schema, error) {
@@ -410,65 +418,122 @@ func (s *schema) validate() error {
 	return nil
 }
 
-// validateWriterValues checks the per-writer closed sets of k: a string key
-// with no key-level values, declared by every writer that may write the key,
-// and by no other.
+// validateWriterValues checks the per-writer and per-action closed sets of
+// k: a string key with no key-level values, whose sets are all per writer or
+// all per action, declared by every writer that may write the key, and by no
+// other.
 func (k *key) validateWriterValues(writers []writer) error {
-	declared := false
+	perWriter, perAction := false, false
 	for _, r := range k.Writers {
-		declared = declared || r.Values != nil
+		perWriter = perWriter || r.Values != nil
+		perAction = perAction || r.Actions != nil
 	}
-	if !declared {
+	if !perWriter && !perAction {
 		return nil
 	}
+	kind := "per-writer values"
+	if perAction {
+		kind = "per-action values"
+	}
+	if perWriter && perAction {
+		return fmt.Errorf("key %q: per-writer values and per-action values exclude each other", k.Name)
+	}
 	if k.Type != "string" {
-		return fmt.Errorf("key %q: per-writer values need a string key, not %s", k.Name, k.Type)
+		return fmt.Errorf("key %q: %s need a string key, not %s", k.Name, kind, k.Type)
 	}
 	if len(k.Values) > 0 {
-		return fmt.Errorf("key %q: per-writer values and key-level values exclude each other", k.Name)
+		return fmt.Errorf("key %q: %s and key-level values exclude each other", k.Name, kind)
 	}
 	for _, w := range writers {
 		r := k.Writers[w.ID]
 		writes := r.Level != "not_applicable" && r.Level != "not_established"
-		if writes != (len(r.Values) > 0) {
-			return fmt.Errorf("key %q, writer %q: every writer that may write a key with per-writer values declares its own, and no other writer does", k.Name, w.ID)
+		if writes != (len(r.Values) > 0 || len(r.Actions) > 0) {
+			return fmt.Errorf("key %q, writer %q: every writer that may write a key with %s declares its own, and no other writer does", k.Name, w.ID, kind)
 		}
-		seen := map[string]bool{}
-		for _, v := range r.Values {
-			if !valueName.MatchString(v) || seen[v] {
-				return fmt.Errorf("key %q, writer %q: value %q is malformed (lower_snake_case) or duplicate", k.Name, w.ID, v)
+		if !writes {
+			continue
+		}
+		sets := map[string][]string{"": r.Values}
+		if perAction {
+			sets = r.Actions
+		}
+		for action, values := range sets {
+			if perAction && !actionName.MatchString(action) {
+				return fmt.Errorf("key %q, writer %q: action %q is not a krateo.action literal (dot-separated lower_snake_case)", k.Name, w.ID, action)
 			}
-			seen[v] = true
+			if len(values) == 0 {
+				return fmt.Errorf("key %q, writer %q, action %q: an empty set", k.Name, w.ID, action)
+			}
+			seen := map[string]bool{}
+			for _, v := range values {
+				if !valueName.MatchString(v) || seen[v] {
+					return fmt.Errorf("key %q, writer %q: value %q is malformed (lower_snake_case) or duplicate", k.Name, w.ID, v)
+				}
+				seen[v] = true
+			}
 		}
 	}
 	return nil
 }
 
-// valueConst is one generated constant for a per-writer value.
+// valueConst is one generated constant for a per-writer or per-action value.
 type valueConst struct {
 	Name, Value, Key string
 	Writers          []string
+	// Actions lists the krateo.action values whose set holds the value; empty
+	// for a per-writer value.
+	Actions []string
 }
 
-// valueConsts is a constant per value of every key with per-writer values,
-// named after the key's Go name and the value (DenialReasonNameReserved), in
-// schema order, each listing the writers that may write it.
+// valueConsts is a constant per value of every key with per-writer or
+// per-action values, named after the key's Go name and the value
+// (DenialReasonNameReserved, CheckResultAvailable), in schema order (actions
+// sorted), each listing the writers, and the actions, that may write it.
 func (s *schema) valueConsts() []valueConst {
 	var out []valueConst
 	for _, k := range s.Keys {
 		at := map[string]int{}
+		add := func(v, w, action string) {
+			i, ok := at[v]
+			if !ok {
+				at[v], i = len(out), len(out)
+				out = append(out, valueConst{Name: k.Go + camel(v), Value: v, Key: k.Name})
+			}
+			if !slices.Contains(out[i].Writers, w) {
+				out[i].Writers = append(out[i].Writers, w)
+			}
+			if action != "" && !slices.Contains(out[i].Actions, action) {
+				out[i].Actions = append(out[i].Actions, action)
+			}
+		}
 		for _, w := range s.Writers {
-			for _, v := range k.Writers[w.ID].Values {
-				if i, ok := at[v]; ok {
-					out[i].Writers = append(out[i].Writers, w.ID)
-					continue
+			r := k.Writers[w.ID]
+			for _, v := range r.Values {
+				add(v, w.ID, "")
+			}
+			for _, action := range slices.Sorted(maps.Keys(r.Actions)) {
+				for _, v := range r.Actions[action] {
+					add(v, w.ID, action)
 				}
-				at[v] = len(out)
-				out = append(out, valueConst{Name: k.Go + camel(v), Value: v, Key: k.Name, Writers: []string{w.ID}})
 			}
 		}
 	}
 	return out
+}
+
+// actionSets renders a per-action closed set as a Go map literal, actions
+// sorted so the generated file is stable.
+func actionSets(m map[string][]string) string {
+	var b strings.Builder
+	b.WriteString("map[string][]string{")
+	for i, a := range slices.Sorted(maps.Keys(m)) {
+		if i > 0 {
+			b.WriteString(", ")
+		}
+		b.WriteString(strconv.Quote(a) + ": " + strings.TrimPrefix(strs(m[a]), "[]string"))
+	}
+	b.WriteString("}")
+	return b.String()
 }
 
 // camel is a lower_snake_case value in CamelCase: name_reserved is
@@ -515,7 +580,7 @@ func (s *schema) requirementsOf(k key) map[string]requirement {
 		case "not_established", "not_applicable":
 			out[w] = requirement{Level: r.Level}
 		default:
-			out[w] = requirement{Level: "optional", Values: r.Values}
+			out[w] = requirement{Level: "optional", Values: r.Values, Actions: r.Actions}
 		}
 	}
 	return out
@@ -534,6 +599,7 @@ func render(s *schema) ([]byte, error) {
 		"markers":  s.markers,
 		"strs":     strs,
 		"consts":   s.valueConsts,
+		"actions":  actionSets,
 		"join":     strings.Join,
 		"deref":    func(p *int64) int64 { return *p },
 	}
@@ -619,11 +685,17 @@ const (
 
 {{- with consts}}
 
-// The closed values of the keys whose values depend on the writer. Check
-// reports any other value, and a value written by a writer it does not list.
+// The closed values of the keys whose values depend on the writer, or on the
+// record's krateo.action. Check reports any other value, a value written by a
+// writer it does not list, and a per-action value on an action it does not
+// list.
 const (
 {{- range .}}
+{{- if .Actions}}
+	{{doc (printf "%s is %q," .Name .Value) (printf "a %s value of action %s (writer %s)." .Key (join .Actions ", ") (join .Writers ", "))}}
+{{- else}}
 	{{doc (printf "%s is %q," .Name .Value) (printf "a %s value of writer %s." .Key (join .Writers ", "))}}
+{{- end}}
 	{{.Name}} = {{q .Value}}
 {{- end}}
 )
@@ -708,7 +780,8 @@ var schemaKeys = []KeySpec{
 				{{- if $w.When}}, When: {{q $w.When}}{{end}}
 				{{- if $w.Check}}, Check: {{condGo $w.Check}}{{end}}
 				{{- if $w.Markable}}, Markable: true{{end}}
-				{{- if $w.Values}}, Values: {{strs $w.Values}}{{end}}},
+				{{- if $w.Values}}, Values: {{strs $w.Values}}{{end}}
+				{{- if $w.Actions}}, ActionValues: {{actions $w.Actions}}{{end}}},
 {{- end}}
 		},
 	},

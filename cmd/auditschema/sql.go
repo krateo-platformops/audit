@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"maps"
 	"regexp"
 	"slices"
 	"strings"
@@ -208,6 +209,19 @@ func rulesSQL(w audit.Writer) string {
 		// both (schemagen refuses a key with both).
 		if vs := append(slices.Clone(k.Values), r.Values...); len(vs) > 0 {
 			add(alias("bad", k.Name), attr(k.Name)+" NOT IN ("+strings.Join(append([]string{"''"}, quoted(vs)...), ", ")+")")
+		}
+		// A per-action closed set (krateo.audit.check_result): a value
+		// outside the set of the row's action, and the key on an action that
+		// declares none (krateo.action absent included). Never both on one
+		// row, as Check reports one of them.
+		if len(r.ActionValues) > 0 {
+			actions := slices.Sorted(maps.Keys(r.ActionValues))
+			var outside []string
+			for _, a := range actions {
+				outside = append(outside, "("+attr(audit.KeyAction)+" = "+lit(a)+" AND "+attr(k.Name)+" NOT IN "+inList(r.ActionValues[a])+")")
+			}
+			add(alias("bad", k.Name), attr(k.Name)+" != '' AND ("+strings.Join(outside, " OR ")+")")
+			add(alias("not_for_action", k.Name), attr(k.Name)+" != '' AND "+attr(audit.KeyAction)+" NOT IN "+inList(actions))
 		}
 	}
 	add("not_in_schema", "arrayExists(k -> NOT has("+lits(allKeys)+", k), mapKeys(LogAttributes))")

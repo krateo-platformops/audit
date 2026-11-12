@@ -1,10 +1,10 @@
 ---
 type: Usage
 title: audit — usage
-description: Install the package, when and how to emit, who the actor is, adopting v0.4.0, v0.5.0, v0.6.0, v0.7.0 and v0.8.0, testing a writer against the schema, and checking the live table.
+description: Install the package, when and how to emit, who the actor is, adopting v0.4.0, v0.5.0, v0.6.0, v0.7.0, v0.8.0 and v0.9.0, testing a writer against the schema, and checking the live table.
 resource: github.com/krateo-platformops/audit
 tags: [library, audit, usage]
-timestamp: 2026-11-11T00:00:00Z
+timestamp: 2026-11-12T00:00:00Z
 ---
 
 # Usage
@@ -273,6 +273,30 @@ status code is the authority's answer, never authn's own HTTP status. A
 failed mapping lookup carries the apiserver's code when the apiserver
 answered, and no code when nothing answered. A misconfigured step-up
 carries no status code.
+
+## Adopting v0.9.0
+
+v0.9.0 is additive: a plain bump changes no record. It adds one optional
+key, **`Event.CheckResult`** (`krateo.audit.check_result`): what a check
+the writer ran concluded, on a record whose `Action` is a check. Its closed
+set is declared **per action** in `schema/v1.yaml` (a requirement's
+`actions:`), not per writer, and spelled through the generated
+`audit.CheckResult*` constants.
+
+The first action is authn's `authn.username.check` (`POST
+/usernames/check`, audit#23): a request record, verb `get`, targeting the
+clientconfig Secret the name guard protects, outcome `success` whenever the
+check completed and `failure` when a lookup failed, never `denied`. Its set
+is `CheckResultAvailable`, `CheckResultReserved`,
+`CheckResultNameClaimed`, `CheckResultNameHeldLegacy`,
+`CheckResultNameProvisioned`, `CheckResultNameBound` and
+`CheckResultInvalid`. authn owns each value's meaning.
+
+`Check` reports a value outside the set of the record's action as
+`bad-enum`, and the key on any action that declares no set (a record with
+no `krateo.action` included) as the new `not-for-action`. Every writer
+class other than `request` cannot write it (`not-for-writer`). An action
+gains a value, or the key gains an action, in a minor release.
 
 ## Testing a writer
 

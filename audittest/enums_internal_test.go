@@ -6,8 +6,38 @@ import (
 	"testing"
 
 	"github.com/krateo-platformops/audit"
+	"go.opentelemetry.io/otel/baggage"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 )
+
+// v0.9.0 (audit#23): a per-action set (krateo.audit.check_result) is
+// exercised on a record of its action, so a value outside the set of
+// authn.username.check is caught as bad-enum and nothing else is.
+func TestAssertEnumsDetected_ExercisesThePerActionSet(t *testing.T) {
+	var got []string
+	enumsTested = func(keys []string) { got = keys }
+	t.Cleanup(func() { enumsTested = nil })
+
+	tp := sdktrace.NewTracerProvider()
+	t.Cleanup(func() { _ = tp.Shutdown(context.Background()) })
+	ctx, span := tp.Tracer("test").Start(context.Background(), "usernames.check")
+	defer span.End()
+	m, _ := baggage.NewMember(audit.BaggageSessionKey, "sess-1")
+	b, _ := baggage.New(m)
+	ctx = baggage.ContextWithBaggage(ctx, b)
+
+	rec := NewRecorder(t)
+	audit.New(rec.Logger("test/audit"), audit.WithWriter(audit.WriterRequest)).Emit(ctx, audit.Event{
+		UserName: "system:serviceaccount:example-system:example-controller", ActorClass: audit.ClassService,
+		Action: "authn.username.check", Verb: "get", HTTPMethod: "GET", Outcome: audit.OutcomeSuccess,
+		CheckResult: audit.CheckResultNameClaimed, Namespace: "example-system", Version: "v1", Resource: "secrets",
+		ObjectName: "example-user-clientconfig", Preview: audit.PreviewFalse, RequestURI: "/usernames/check",
+		SourceIPs: []string{"192.0.2.10"}})
+	AssertEnumsDetected(t, audit.WriterRequest, rec.Only(t))
+	if !slices.Contains(got, audit.KeyCheckResult) {
+		t.Errorf("AssertEnumsDetected did not exercise %s: %v", audit.KeyCheckResult, got)
+	}
+}
 
 // AssertEnumsDetected exercises every closed set the record carries: the
 // key-level enums, and the writer's own set for the denial reason. Without

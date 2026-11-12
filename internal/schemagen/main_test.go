@@ -88,6 +88,19 @@ func TestParse_RefusesABrokenSchema(t *testing.T) {
 		// A `when` with an unquoted comma splits into a second, unknown field.
 		"unquoted comma in when":    {`when: "a successful, non-dry-run write"}`, `when: a successful, non-dry-run write}`, `requirement field "non-dry-run write" is not one of`},
 		"unknown requirement field": {"controller: {level: optional, values: [kept_resource_policy]}", "controller: {level: optional, values: [kept_resource_policy], colour: red}", `requirement field "colour" is not one of`},
+		// Per-action values (v0.9.0, audit#23): a closed set per krateo.action,
+		// declared by every writer that may write the key, and by no other.
+		"per-action and per-writer values":  {"request: {level: optional, actions: {authn.username.check:", "request: {level: optional, values: [x], actions: {authn.username.check:", "per-writer values and per-action values exclude each other"},
+		"per-action and key-level values":   {"    go: CheckResult\n    type: string\n", "    go: CheckResult\n    type: string\n    values: [x]\n", "per-action values and key-level values exclude each other"},
+		"per-action values on a non-string": {"    go: CheckResult\n    type: string\n", "    go: CheckResult\n    type: int\n", `key "krateo.audit.check_result": per-action values need a string key, not int`},
+		"per-action values, a writer without": {"invalid]}}\n      gateway: not_applicable\n", "invalid]}}\n      gateway: optional\n",
+			`key "krateo.audit.check_result", writer "gateway": every writer that may write a key with per-action values declares its own`},
+		"per-action values on a writer that cannot write": {"invalid]}}\n      gateway: not_applicable\n", "invalid]}}\n      gateway: {level: not_applicable, actions: {gateway.mcp: [x]}}\n",
+			`key "krateo.audit.check_result", writer "gateway": every writer that may write a key with per-action values declares its own`},
+		"malformed action":            {"actions: {authn.username.check:", "actions: {Authn.UsernameCheck:", `action "Authn.UsernameCheck" is not a krateo.action literal`},
+		"an action with an empty set": {"actions: {authn.username.check: [available, reserved, name_claimed, name_held_legacy, name_provisioned, name_bound, invalid]}", "actions: {authn.username.check: []}", `action "authn.username.check": an empty set`},
+		"malformed per-action value":  {"authn.username.check: [available,", "authn.username.check: [Available,", `value "Available" is malformed`},
+		"duplicate per-action value":  {"authn.username.check: [available,", "authn.username.check: [available, available,", `value "available" is malformed (lower_snake_case) or duplicate`},
 		// Per-writer values: a closed set for every writer that may write the key, and for no other.
 		"per-writer values, a writer without":             {"controller: {level: optional, values: [kept_resource_policy]}", "controller: optional", `key "krateo.audit.denial_reason", writer "controller": every writer that may write`},
 		"per-writer values on a writer that cannot write": {"      gateway: not_applicable\n      action: not_applicable\n      # kept", "      gateway: {level: not_applicable, values: [x]}\n      action: not_applicable\n      # kept", `writer "gateway": every writer that may write`},

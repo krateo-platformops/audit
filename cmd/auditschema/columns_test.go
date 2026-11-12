@@ -1,6 +1,7 @@
 package main
 
 import (
+	"maps"
 	"regexp"
 	"slices"
 	"strings"
@@ -76,6 +77,22 @@ var fixtureValue = map[string]attribute.Value{
 	audit.KeyClientConfirmedSetOp:           attribute.Int64Value(1),
 	audit.KeyClientRequestedAt:              attribute.StringValue("2026-11-11T10:00:00.000Z"),
 	audit.KeyClientRejected:                 attribute.StringValue("schema"),
+	// v0.9.0: the check result is per action; richRow takes the first value
+	// of the first action that declares a set, and sets krateo.action to it.
+	audit.KeyCheckResult: attribute.StringValue("per-action"),
+}
+
+// firstActionValue is the first action, in sorted order, that declares a set
+// for key on writer w, and that set's first value; ok is false when the key's
+// values do not depend on the action.
+func firstActionValue(key string, w audit.Writer) (action, value string, ok bool) {
+	spec, _ := audit.LookupKey(key)
+	sets := spec.Writers[w].ActionValues
+	if len(sets) == 0 {
+		return "", "", false
+	}
+	action = slices.Sorted(maps.Keys(sets))[0]
+	return action, sets[action][0], true
 }
 
 // fixtureDenialReason is one value of each writer's own closed set.
@@ -111,6 +128,11 @@ func richRow(t *testing.T, w audit.Writer) []attribute.KeyValue {
 			t.Fatalf("no fixture value for %s (writer %s): add one to fixtureValue", k.Name, w)
 		}
 		cur[k.Name] = v
+	}
+	for _, k := range audit.Keys() { // a per-action key: a value of an action that declares it, on that action
+		if a, v, ok := firstActionValue(k.Name, w); ok {
+			cur[k.Name], cur[audit.KeyAction] = attribute.StringValue(v), attribute.StringValue(a)
+		}
 	}
 	var out []attribute.KeyValue
 	for _, k := range audit.Keys() { // schema order, v0.3 keys after their replacements' values are known
@@ -232,6 +254,18 @@ func fixtureRows(t *testing.T, w audit.Writer) []fixtureRow {
 				rows = append(rows, fixtureRow{k + " = " + v, withValue(rich, k, v)})
 			}
 		}
+		if sets := spec.Writers[w].ActionValues; len(sets) > 0 {
+			for _, a := range slices.Sorted(maps.Keys(sets)) {
+				on := setKey(rich, attribute.String(audit.KeyAction, a))
+				for _, v := range sets[a] {
+					rows = append(rows, fixtureRow{k + " = " + v + " on " + a, withValue(on, k, v)})
+				}
+				rows = append(rows, fixtureRow{k + " outside the set of " + a, withValue(on, k, "outside-the-closed-set")})
+			}
+			rows = append(rows,
+				fixtureRow{k + " on an action that declares no set", setKey(rich, attribute.String(audit.KeyAction, "example.action"))},
+				fixtureRow{k + " on a record with no action", dropKeys(rich, func(x string) bool { return x == audit.KeyAction })})
+		}
 		if len(set) > 0 {
 			bad := attribute.StringValue("outside-the-closed-set")
 			if kv.Value.Type() == attribute.BOOL {
@@ -261,7 +295,7 @@ func fixtureRows(t *testing.T, w audit.Writer) []fixtureRow {
 }
 
 // columnRe finds a rules query's per-key columns.
-var columnRe = regexp.MustCompile(`\) AS ((unmet|unexpected|bad|not_for_target)_[a-z0-9_]+)\b`)
+var columnRe = regexp.MustCompile(`\) AS ((unmet|unexpected|bad|not_for_target|not_for_action)_[a-z0-9_]+)\b`)
 
 // rulesQuery returns writer w's rules query.
 func rulesQuery(t *testing.T, sql string, w audit.Writer) string {
@@ -279,7 +313,7 @@ func rulesQuery(t *testing.T, sql string, w audit.Writer) string {
 // for the same fact.
 func columnKey(t *testing.T, col string) (string, audit.Reason) {
 	t.Helper()
-	for prefix, reason := range map[string]audit.Reason{"unmet": audit.ReasonMissing, "unexpected": audit.ReasonUnexpected, "bad": audit.ReasonBadEnum, "not_for_target": audit.ReasonNotForTarget} {
+	for prefix, reason := range map[string]audit.Reason{"unmet": audit.ReasonMissing, "unexpected": audit.ReasonUnexpected, "bad": audit.ReasonBadEnum, "not_for_target": audit.ReasonNotForTarget, "not_for_action": audit.ReasonNotForAction} {
 		for _, k := range audit.Keys() {
 			if alias(prefix, k.Name) == col {
 				return k.Name, reason

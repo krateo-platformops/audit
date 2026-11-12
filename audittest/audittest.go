@@ -215,7 +215,8 @@ const outsideTheSet = "audittest.outside-the-closed-set"
 // AssertEnumsDetected is the falsifier for the closed sets: rec must conform
 // (opts as for AssertConformant), and for every key rec carries whose values
 // writer w may only pick from a closed set (the key's enum, or the writer's
-// own set, as for krateo.audit.denial_reason), the same attributes with that
+// own set, as for krateo.audit.denial_reason, or the set of the record's
+// action, as for krateo.audit.check_result), the same attributes with that
 // value replaced by one outside the set must make audit.Check newly report
 // the key bad-enum. Any other new violation must name the key, its v0.3 name,
 // or a key whose only_when condition the new value turned false.
@@ -237,7 +238,7 @@ func AssertEnumsDetected(t testing.TB, w audit.Writer, rec sdklog.Record, opts .
 	}()
 	for i, kv := range attrs {
 		spec, ok := audit.LookupKey(string(kv.Key))
-		if !ok || len(spec.Values)+len(spec.Writers[w].Values) == 0 {
+		if !ok || len(spec.Values)+len(spec.Writers[w].Values)+len(spec.Writers[w].ActionValues) == 0 {
 			continue
 		}
 		var bad attribute.Value

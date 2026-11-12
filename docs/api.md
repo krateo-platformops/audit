@@ -4,7 +4,7 @@ title: audit — API
 description: The exported Go API of the audit package (emitter, schema, checker, claim parser, sanitiser), audittest, cmd/auditschema, and how each Event field maps to a record attribute.
 resource: github.com/krateo-platformops/audit
 tags: [library, audit, api]
-timestamp: 2026-11-11T00:00:00Z
+timestamp: 2026-11-12T00:00:00Z
 ---
 
 # API
@@ -113,10 +113,14 @@ type Requirement struct {
 	Check    Condition // the condition Check evaluates for When, or ""
 	Markable bool      // omitted and named in krateo.audit.incomplete when not established
 	Values   []string  // this writer's own closed set, for a key whose values depend on the writer
+	// ActionValues is the closed set per krateo.action, for a key whose
+	// values depend on the record's action (krateo.audit.check_result)
+	ActionValues map[string][]string
 }
 
 const KeyEventName = "event.name" // ... one Key* constant per key, generated
 const DenialReasonKeptResourcePolicy = "kept_resource_policy" // ... one constant per per-writer value, generated
+const CheckResultAvailable = "available"                       // ... one constant per per-action value, generated
 
 func Keys() []KeySpec                  // every key: type, semconv status, enum, marker, identity, per-writer Requirement
 func LookupKey(name string) (KeySpec, bool)
@@ -155,7 +159,10 @@ established by, or not applicable to, this writer), `bad-type`, `bad-enum`,
 `denied`; or under the condition it is never written under, its `not_when`:
 `http.response.status_code` on a `denied` record, a client key beside
 `krateo.audit.client.rejected`), `not-for-target` (a credential-free key,
-the content hash, on a credential target), `out-of-range` (an int below its
+the content hash, on a credential target), `not-for-action` (a key whose
+values depend on the record's `krateo.action`, `krateo.audit.check_result`,
+on an action that declares no set for it, or on a record with no action),
+`out-of-range` (an int below its
 minimum, or not below its `less_than` key: `confirmed_set.op` not below
 `confirmed_set.count`), `two-targets`, `legacy-without-replacement`,
 `legacy-disagrees`,

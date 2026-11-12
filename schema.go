@@ -94,6 +94,13 @@ type Requirement struct {
 	// whose values depend on the writer (krateo.audit.denial_reason). Such a
 	// key has no KeySpec.Values; Check reports any other value as bad-enum.
 	Values []string
+	// ActionValues is the closed set per krateo.action, for a key whose
+	// values depend on the record's action (krateo.audit.check_result): the
+	// values this writer may write on a record of that action. Such a key has
+	// no KeySpec.Values and no Values. Check reports a value outside the
+	// record's action's set as bad-enum, and the key on a record whose action
+	// has no set (krateo.action absent included) as not-for-action.
+	ActionValues map[string][]string
 }
 
 // KeySpec is one attribute of the schema.
@@ -262,6 +269,13 @@ func (k KeySpec) clone() KeySpec {
 	k.Writers = maps.Clone(k.Writers)
 	for w, r := range k.Writers {
 		r.Values = slices.Clone(r.Values)
+		if r.ActionValues != nil {
+			sets := make(map[string][]string, len(r.ActionValues))
+			for a, vs := range r.ActionValues {
+				sets[a] = slices.Clone(vs)
+			}
+			r.ActionValues = sets
+		}
 		k.Writers[w] = r
 	}
 	return k

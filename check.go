@@ -52,6 +52,10 @@ const (
 	// the condition it is never written under (KeySpec.NotWhen) holds, e.g.
 	// http.response.status_code on a denied record.
 	ReasonUnexpected Reason = "unexpected"
+	// ReasonNotForAction: a key whose values depend on the record's
+	// krateo.action (Requirement.ActionValues) is written on a record whose
+	// action declares no set for it, or that carries no krateo.action.
+	ReasonNotForAction Reason = "not-for-action"
 	// ReasonNotForTarget: a credential-free key (KeySpec.CredentialFree) is
 	// written on a record whose Kubernetes target carries a credential
 	// (CredentialTargets), e.g. a content hash of a Secret.
@@ -95,8 +99,11 @@ func (v Violation) String() string { return v.Key + ": " + string(v.Reason) }
 // Check validates one record's attributes against the schema for writer w. It
 // reports, in a fixed order: per attribute, keys outside the closed set, keys
 // this writer cannot write, type, enum, format, minimum and UTF-8 errors,
-// duplicates; then marks of keys the record carries; then keys written
-// outside their only_when condition or under their not_when condition; then
+// duplicates; then, for a key whose values depend on the record's
+// krateo.action, the key on an action with no set (not-for-action) or a
+// value outside the action's set (bad-enum); then marks of keys the record
+// carries; then keys written outside their only_when condition or under
+// their not_when condition; then
 // credential-free keys on a credential target; then every key the writer must
 // write here that is absent (missing, or incomplete when marked); then the
 // target rule; then the W1 pairs; then an affected user equal to the actor;
@@ -110,6 +117,7 @@ func Check(w Writer, attrs []attribute.KeyValue) []Violation {
 	}
 	var out []Violation
 	present := map[string]attribute.Value{}
+	var perAction []string // keys whose values depend on the action, with a value that passed checkValue
 	for _, kv := range attrs {
 		k := string(kv.Key)
 		if !utf8.ValidString(k) {
@@ -132,6 +140,13 @@ func Check(w Writer, attrs []attribute.KeyValue) []Violation {
 			continue
 		}
 		if r, bad := checkValue(spec, spec.Writers[w], kv.Value); bad {
+			out = append(out, Violation{Key: k, Reason: r})
+		} else if spec.Writers[w].ActionValues != nil {
+			perAction = append(perAction, k)
+		}
+	}
+	for _, k := range perAction {
+		if r, bad := checkActionValue(schemaKeys[schemaIndex[k]].Writers[w].ActionValues, present[k], present[KeyAction]); bad {
 			out = append(out, Violation{Key: k, Reason: r})
 		}
 	}
@@ -215,6 +230,25 @@ func Check(w Writer, attrs []attribute.KeyValue) []Violation {
 		}
 	}
 	return out
+}
+
+// checkActionValue checks a per-action key's value v against sets, the
+// closed set of each action, for the record's krateo.action (zero when the
+// record carries none): not-for-action when that action has no set,
+// bad-enum when v is outside it.
+func checkActionValue(sets map[string][]string, v, action attribute.Value) (Reason, bool) {
+	a := ""
+	if action.Type() == attribute.STRING {
+		a = action.AsString()
+	}
+	set, ok := sets[a]
+	switch {
+	case !ok:
+		return ReasonNotForAction, true
+	case !slices.Contains(set, v.AsString()):
+		return ReasonBadEnum, true
+	}
+	return "", false
 }
 
 // unexpected reports whether a key spec, present on the record, is written

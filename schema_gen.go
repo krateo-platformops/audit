@@ -84,6 +84,13 @@ const (
 	// audit reader gets the reason. Optional: a denied record without it conforms.
 	// A writer class with no declared value cannot write it.
 	KeyDenialReason = "krateo.audit.denial_reason"
+	// KeyCheckResult is "krateo.audit.check_result". What a check the writer ran
+	// for the caller concluded, when the record's action is a check: one of the
+	// closed values its krateo.action declares, never free text. It is the check's
+	// answer, not the record's outcome: a check that completed is a success
+	// whatever it concluded. Optional: a record without it conforms. An action
+	// with no declared set cannot write it.
+	KeyCheckResult = "krateo.audit.check_result"
 	// KeyHTTPStatusCode is "http.response.status_code". The status code the
 	// authority answered (Kubernetes responseStatus.code). Never on a denied
 	// record: denied means the writer itself refused, so no authority answered.
@@ -311,8 +318,10 @@ const (
 	KeyLegacyObjectResourceVersion = "k8s.object.resource_version"
 )
 
-// The closed values of the keys whose values depend on the writer. Check
-// reports any other value, and a value written by a writer it does not list.
+// The closed values of the keys whose values depend on the writer, or on the
+// record's krateo.action. Check reports any other value, a value written by a
+// writer it does not list, and a per-action value on an action it does not
+// list.
 const (
 	// DenialReasonNameReserved is "name_reserved", a krateo.audit.denial_reason
 	// value of writer request.
@@ -374,6 +383,28 @@ const (
 	// DenialReasonKeptResourcePolicy is "kept_resource_policy", a
 	// krateo.audit.denial_reason value of writer controller.
 	DenialReasonKeptResourcePolicy = "kept_resource_policy"
+	// CheckResultAvailable is "available", a krateo.audit.check_result value of
+	// action authn.username.check (writer request).
+	CheckResultAvailable = "available"
+	// CheckResultReserved is "reserved", a krateo.audit.check_result value of
+	// action authn.username.check (writer request).
+	CheckResultReserved = "reserved"
+	// CheckResultNameClaimed is "name_claimed", a krateo.audit.check_result value
+	// of action authn.username.check (writer request).
+	CheckResultNameClaimed = "name_claimed"
+	// CheckResultNameHeldLegacy is "name_held_legacy", a krateo.audit.check_result
+	// value of action authn.username.check (writer request).
+	CheckResultNameHeldLegacy = "name_held_legacy"
+	// CheckResultNameProvisioned is "name_provisioned", a
+	// krateo.audit.check_result value of action authn.username.check (writer
+	// request).
+	CheckResultNameProvisioned = "name_provisioned"
+	// CheckResultNameBound is "name_bound", a krateo.audit.check_result value of
+	// action authn.username.check (writer request).
+	CheckResultNameBound = "name_bound"
+	// CheckResultInvalid is "invalid", a krateo.audit.check_result value of action
+	// authn.username.check (writer request).
+	CheckResultInvalid = "invalid"
 )
 
 // The writer classes.
@@ -877,6 +908,30 @@ var schemaKeys = []KeySpec{
 			WriterGateway:    {Level: LevelNotApplicable},
 			WriterAction:     {Level: LevelNotApplicable},
 			WriterController: {Level: LevelOptional, Values: []string{"kept_resource_policy"}},
+		},
+	},
+	{
+		Name:           KeyCheckResult,
+		Type:           TypeString,
+		Semconv:        "none",
+		Values:         nil,
+		Format:         "",
+		Marker:         "",
+		Identity:       false,
+		Asserted:       false,
+		ReplacedBy:     "",
+		DualWrite:      false,
+		OnlyWhen:       "",
+		NotWhen:        "",
+		CredentialFree: false,
+		Min:            nil,
+		LessThan:       "",
+		Description:    "What a check the writer ran for the caller concluded, when the record's action is a check: one of the closed values its krateo.action declares, never free text. It is the check's answer, not the record's outcome: a check that completed is a success whatever it concluded. Optional: a record without it conforms. An action with no declared set cannot write it.",
+		Writers: map[Writer]Requirement{
+			WriterRequest:    {Level: LevelOptional, ActionValues: map[string][]string{"authn.username.check": {"available", "reserved", "name_claimed", "name_held_legacy", "name_provisioned", "name_bound", "invalid"}}},
+			WriterGateway:    {Level: LevelNotApplicable},
+			WriterAction:     {Level: LevelNotApplicable},
+			WriterController: {Level: LevelNotApplicable},
 		},
 	},
 	{

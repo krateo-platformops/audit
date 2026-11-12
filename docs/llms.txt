@@ -1,10 +1,10 @@
-# audit — LLM doc index (pinned: v0.5.0)
+# audit — LLM doc index (pinned: v0.9.0)
 # One line per file; regenerate the pin on release.
 docs/index.md: the map of this bundle
 docs/overview.md: why one shared emitter and schema, and how a record flows to krateo_audit
 docs/schema.md: the record contract, key by key, per writer class (generated from schema/v1.yaml)
 docs/coverage.md: the cross-component audit inventory (AUDIT-4): one row per mutating path per component, in one table per writer class
-docs/usage.md: install, when to emit, the actor, adopting v0.4, v0.5, v0.6, v0.7 and v0.8, testing a writer, the live check
+docs/usage.md: install, when to emit, the actor, adopting v0.4, v0.5, v0.6, v0.7, v0.8 and v0.9, testing a writer, the live check
 docs/configuration.md: the Emitter's options and metrics, and the OTel Logs SDK setup
 docs/api.md: the Go API, audittest and cmd/auditschema
 docs/examples.md: examples index

@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"maps"
 	"regexp"
 	"slices"
 	"strings"
@@ -128,19 +129,27 @@ minimum, or not below its ` + "`less_than`" + ` key, is ` + "`out-of-range`" + `
 
 	if consts := s.valueConsts(); len(consts) > 0 {
 		b.WriteString(`
-## Closed values per writer
+## Closed values per writer and per action
 
 A key whose values depend on the writer lists them per writer class. ` + "`Check`" + `
 reports any other value as ` + "`bad-enum`" + `, and the key on a writer class that
-declares none as ` + "`not-for-writer`" + `. A writer gains a value in a minor
-release, by adding it to ` + "`schema/v1.yaml`" + `. Go writers spell each value
-through its generated constant.
+declares none as ` + "`not-for-writer`" + `. A key whose values depend on the
+record's ` + "`krateo.action`" + ` lists them per action, within a writer class:
+` + "`Check`" + ` reports a value outside the set of the record's action as
+` + "`bad-enum`" + `, and the key on a record whose action declares no set
+(` + "`krateo.action`" + ` absent included) as ` + "`not-for-action`" + `. A writer or an action
+gains a value in a minor release, by adding it to ` + "`schema/v1.yaml`" + `. Go
+writers spell each value through its generated constant.
 
-| key | value | writers | Go constant |
-|---|---|---|---|
+| key | value | writers | actions | Go constant |
+|---|---|---|---|---|
 `)
 		for _, c := range consts {
-			fmt.Fprintf(&b, "| `%s` | `%s` | %s | `audit.%s` |\n", c.Key, c.Value, "`"+strings.Join(c.Writers, "`, `")+"`", c.Name)
+			actions := "any"
+			if len(c.Actions) > 0 {
+				actions = "`" + strings.Join(c.Actions, "`, `") + "`"
+			}
+			fmt.Fprintf(&b, "| `%s` | `%s` | %s | %s | `audit.%s` |\n", c.Key, c.Value, "`"+strings.Join(c.Writers, "`, `")+"`", actions, c.Name)
 		}
 	}
 
@@ -464,7 +473,7 @@ func levelCell(r requirement) string {
 		}
 		return "C: " + cell(r.When) + checked + mark + oneOf(r.Values)
 	case "optional":
-		return "O" + oneOf(r.Values)
+		return "O" + oneOf(r.Values) + perAction(r.Actions)
 	case "not_established":
 		return "NE"
 	}
@@ -516,6 +525,19 @@ func oneOf(values []string) string {
 		return ""
 	}
 	return ", one of `" + strings.Join(values, "`, `") + "`"
+}
+
+// perAction is a per-action closed set in a level cell: each action, sorted,
+// with its values.
+func perAction(sets map[string][]string) string {
+	if len(sets) == 0 {
+		return ""
+	}
+	var parts []string
+	for _, a := range slices.Sorted(maps.Keys(sets)) {
+		parts = append(parts, "on `"+a+"` one of `"+strings.Join(sets[a], "`, `")+"`")
+	}
+	return ", " + strings.Join(parts, "; ")
 }
 
 // exampleNames are the regions docs/schema.md shows, each marked in the
