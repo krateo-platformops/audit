@@ -49,7 +49,9 @@ timestamp: 2026-11-12T00:00:00Z
     pending snowplow#1379. The RESTAction stage row is audited, though the
     endpointRef is not yet written (snowplow#1283). The inline dry-run and
     refused-before-dial stage rows are now not audited (snowplow#1381's
-    rule: a refused request gets a row when admitted it would have had one). The reads row is split by identity.
+    rule: a refused request gets a row when admitted it would have had one).
+    `write_refused` has a requester only on an export's read (a new row, not
+    audited, snowplow#1381); background work has none and stays rowless. The reads row is split by identity.
   - The registry accepts camel-case words in a literal (`call.dryRun`,
     `debug.shadowParity`). The SQL column-count test now matches whole
     aliases, since `endpoint_ref.name`'s prefixes `endpoint_ref.namespace`'s.

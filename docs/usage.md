@@ -403,7 +403,10 @@ v0.12.0 is additive (audit#22): a plain bump changes no record.
   `session_credential_missing`, `step_up_required` (schema/v1.yaml cites
   each refusal site in snowplow). A refusal before the endpoint is resolved
   may know no address: the record marks `target` rather than invent one.
-  `per_user_credential_ref` never names the Secret it refused. Not denials: a
+  `per_user_credential_ref` never names the Secret it refused.
+  `write_refused` is written only when the refused write had a requester:
+  in snowplow, an export's read (snowplow#970). Background work has none and
+  writes no record (snowplow#1381). Not denials: a
   Secret the apiserver answered NotFound or Forbidden for, a page-budget
   cut, and a refused 3xx redirect stay failures with the authority's code.
 - **A controller's own actor.** `audit.ControllerActor()` returns

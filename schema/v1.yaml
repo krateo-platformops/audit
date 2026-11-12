@@ -704,8 +704,14 @@ keys:
       #   a context carrying snowplow's internal identity
       #   (resolvers/restactions/api/provenance.go:32-38).
       # write-stage refusals:
-      #   write_refused: a write stage in a background resolve, not a
-      #   customer's request (resolvers/restactions/api/background_write.go:155-173).
+      #   write_refused: a write stage refused because the resolve is not
+      #   the customer's own write
+      #   (resolvers/restactions/api/background_write.go:155-173). Of its
+      #   origins (cache/background_writes.go:129-147), only an export's
+      #   read (snowplow#970) has a requester, and only it is a denied
+      #   record. Background work (the refresher, a cohort seed, a prewarm,
+      #   a demand revalidation, a background hop; snowplow#903) has no
+      #   requester and writes no record (snowplow#1381).
       #   dry_run_not_executed: a write stage in a dry run
       #   (resolvers/restactions/api/resolve.go:831-840).
       #   dependency_failed: the stage the write depends on did not succeed
