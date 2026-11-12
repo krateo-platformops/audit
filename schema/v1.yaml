@@ -1001,13 +1001,16 @@ keys:
     type: string
     semconv: development
     format: session_id
+    marker: session
     description: >-
       The business/session correlation id from W3C baggage. A correlation
       key a client can set: never identity, never a policy key. Of format
       session_id (v0.11.0): a writer refuses an inbound value of any other
-      shape, with audit.ValidSessionID, before writing it.
+      shape, with audit.ValidSessionID, before writing it. Emit never writes
+      an invalid one: it omits the key and, where the writer must write it,
+      marks it session.
     writers:
-      request: required
+      request: {level: required, markable: true}
       gateway: {level: conditional, when: inbound baggage carries it}
       action: {level: conditional, when: inbound baggage carries it}
       controller: not_applicable

@@ -235,7 +235,8 @@ func TestMissingMarkers(t *testing.T) {
 	if got, want := missingMarkers(schemaWriters, cluster), []string{"actor_class", "action", "verb", "preview"}; !slices.Equal(got, want) {
 		t.Errorf("cluster-scoped object: %v, want %v (preview is required there too)", got, want)
 	}
-	if got, want := missingMarkers([]Writer{WriterRequest}, k8s), []string{"actor_class", "action", "verb", "method", "preview"}; !slices.Equal(got, want) {
+	// The request writer must also carry session.id (marker session, v0.11.0).
+	if got, want := missingMarkers([]Writer{WriterRequest}, k8s), []string{"actor_class", "action", "verb", "method", "preview", "session"}; !slices.Equal(got, want) {
 		t.Errorf("request writer: %v, want %v", got, want)
 	}
 	if got, want := missingMarkers(schemaWriters, bare), []string{"actor_class", "action", "verb", "target"}; !slices.Equal(got, want) {

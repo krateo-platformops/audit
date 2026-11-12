@@ -197,7 +197,9 @@ const (
 	// KeySessionID is "session.id". The business/session correlation id from W3C
 	// baggage. A correlation key a client can set: never identity, never a policy
 	// key. Of format session_id (v0.11.0): a writer refuses an inbound value of
-	// any other shape, with audit.ValidSessionID, before writing it.
+	// any other shape, with audit.ValidSessionID, before writing it. Emit never
+	// writes an invalid one: it omits the key and, where the writer must write it,
+	// marks it session.
 	KeySessionID = "session.id"
 	// KeyRESTActionNamespace is "krateo.restaction.namespace". The namespace of
 	// the RESTAction whose stage performed the action.
@@ -573,7 +575,7 @@ var schemaWriters = []Writer{WriterRequest, WriterGateway, WriterAction, WriterC
 
 var schemaConditions = []Condition{CondK8sTarget, CondWrite, CondMethodOther, CondDelegated, CondImpersonated, CondCaused, CondDenied, CondContentWrite, CondClientRejected, CondClientProvenance, CondConfirmedSet, CondSucceeded}
 
-var schemaMarkers = []string{"actor", "actor_class", "action", "verb", "method", "preview", "target"}
+var schemaMarkers = []string{"actor", "actor_class", "action", "verb", "method", "preview", "session", "target"}
 
 var schemaTarget = TargetRule{
 	Marker: "target",
@@ -1650,7 +1652,7 @@ var schemaKeys = []KeySpec{
 		Semconv:        "development",
 		Values:         nil,
 		Format:         "session_id",
-		Marker:         "",
+		Marker:         "session",
 		Identity:       false,
 		Asserted:       false,
 		ReplacedBy:     "",
@@ -1660,9 +1662,9 @@ var schemaKeys = []KeySpec{
 		CredentialFree: false,
 		Min:            nil,
 		LessThan:       "",
-		Description:    "The business/session correlation id from W3C baggage. A correlation key a client can set: never identity, never a policy key. Of format session_id (v0.11.0): a writer refuses an inbound value of any other shape, with audit.ValidSessionID, before writing it.",
+		Description:    "The business/session correlation id from W3C baggage. A correlation key a client can set: never identity, never a policy key. Of format session_id (v0.11.0): a writer refuses an inbound value of any other shape, with audit.ValidSessionID, before writing it. Emit never writes an invalid one: it omits the key and, where the writer must write it, marks it session.",
 		Writers: map[Writer]Requirement{
-			WriterRequest:    {Level: LevelRequired},
+			WriterRequest:    {Level: LevelRequired, Markable: true},
 			WriterGateway:    {Level: LevelConditional, When: "inbound baggage carries it"},
 			WriterAction:     {Level: LevelConditional, When: "inbound baggage carries it"},
 			WriterController: {Level: LevelNotApplicable},

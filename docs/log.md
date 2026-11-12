@@ -38,7 +38,34 @@ timestamp: 2026-11-12T00:00:00Z
   `testdata/v0.10.0/` holds 25 records audit v0.10.0's own `Emit` wrote,
   and this release gives v0.10.0's own report. New API and one tightened
   rule that no recorded writer's output breaks: a minor version per
-  docs/release.md.
+  docs/release.md, under its tightening rule (added in this release).
+
+  **The tightening, and each registered writer's status** (the release
+  note docs/release.md asks for):
+  - `session.id` must be of format `session_id`; it was any value.
+  - authn: conformant. It keeps a valid inbound id and mints one otherwise
+    (authn#139 at `498828bf`, `internal/auditlog/middleware.go:52-63`; a
+    minted id is 32 lowercase hex, `:74-78`).
+  - snowplow, `internal/support/audit`: conformant. Its accepted shape is the
+    same pattern, at most 128 characters (snowplow `219a076e`,
+    `go/snowplow/internal/support/audit/audit.go:88-96`).
+  - this library's `Emit`: conformant by construction. It never writes an
+    invalid inbound `session.id`; it omits it and marks it `session`, with
+    the key markable for the request writer. Proved by
+    `TestEmit_InvalidInboundSessionIDIsOmittedAndMarked`,
+    `TestEmit_InvalidInboundSessionIDConformsMarked` and the fuzz test
+    `FuzzEmit_RecordPassesItsOwnCheck` (for any inbound value, the record
+    passes its own `Check`).
+  - observability's gateway projection: **not conformant** for odd baggage.
+    It copies `baggage_session` verbatim, so an inbound value outside the
+    format becomes a `session.id` that `Check` reports `bad-format`. The
+    evidence went to observability before the tag.
+  - The compatibility fixtures v0.4.0 to v0.10.0 hold only
+    `example-session`, so their replays don't prove that real writers fit;
+    the per-writer evidence above does.
+  - The character set is pinned by hand-written rows that don't derive from
+    the generated pattern (`TestSessionID_CharacterSetIsPinned`): widening
+    it to `:` or `/` and regenerating turns the test red.
 - **2026-11-12**: v0.10.0 (audit#29, authn#136). Two request-writer denial
   reasons. `name_not_issued` (`DenialReasonNameNotIssued`, plumbing's
   `usernames.ErrNotIssued`): a sign-in for a username authn would issue in

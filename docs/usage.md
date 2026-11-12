@@ -357,7 +357,15 @@ it, and dots are safe in baggage and on a log line. `Check` now reports any
 other `session.id` as `bad-format`, on every writer that writes it. A writer
 that takes the id from inbound baggage refuses a value that isn't of this
 format (`ValidSessionID`, or `ValidValue(KeySessionID, s)`) and mints its
-own instead. Every `session.id` that v0.4.0, v0.5.0, v0.8.0, v0.9.1 and
+own instead.
+
+**Emit never writes an invalid inbound `session.id`.** A baggage `session.id`
+that isn't of format `session_id` is left out of the record, and marked
+`session` in `krateo.audit.incomplete` where the writer must write it (the
+request writer: the key is markable from v0.11.0). The gap is stated, never
+filled with a value `Check` would refuse. A writer that wants an id on the
+record puts a valid one on the context first, as authn's request middleware
+does: it keeps a valid inbound id and mints one otherwise. Every `session.id` that v0.4.0, v0.5.0, v0.8.0, v0.9.1 and
 v0.10.0 wrote in this module's compatibility fixtures is of the format.
 
 ## Testing a writer

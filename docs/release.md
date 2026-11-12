@@ -32,6 +32,12 @@ window, renaming or removing an attribute needs a major version.
 Adding a key, a writer's value to a per-writer closed set, or a population is
 a minor version: every record that was valid stays valid.
 
+A tightening, i.e. a value a rule newly rejects, is a minor version when the
+library's own writer paths are proved by test to stay conformant, and the
+release note names the tightening and each registered writer's status with
+evidence (code file:line). A writer whose current output the tightening
+rejects gets that evidence before the tag.
+
 A change to the schema is a change to `schema/v1.yaml` followed by
 `go generate ./...`. CI fails when `schema_gen.go` or `docs/schema.md` is
 stale.

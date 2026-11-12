@@ -316,6 +316,12 @@ func New(logger log.Logger, opts ...Option) *Emitter {
 //     MetricIncomplete;
 //   - it rejects nothing: a key outside the schema is a Check finding in the
 //     writer's tests, never a reason not to emit;
+//   - it never writes an inbound session.id its own Check rejects: a baggage
+//     session.id that is not of format session_id (ValidSessionID) is
+//     omitted, and marked session where the writer must write it. A writer
+//     that wants an id there puts a valid one on ctx first, as authn's
+//     request middleware does (it keeps a valid inbound id and mints one
+//     otherwise);
 //   - it sets the LogRecord EventName and the event.name attribute, stamps
 //     krateo.audit.schema_version, writes the v0.3 keys beside their
 //     replacements (W1), and makes every string valid UTF-8 (Sanitize);
@@ -488,7 +494,10 @@ func attributes(ctx context.Context, ev Event, actor principal) []attribute.KeyV
 	if !ev.ReceivedTime.IsZero() {
 		num(KeyRequestReceivedTime, ev.ReceivedTime.UnixNano())
 	}
-	if m := baggage.FromContext(ctx).Member(BaggageSessionKey); m.Key() != "" {
+	// The inbound session.id only when it is of format session_id: Emit
+	// never writes a record its own Check rejects. An invalid one is
+	// omitted, and marked session where the writer must write it.
+	if m := baggage.FromContext(ctx).Member(BaggageSessionKey); m.Key() != "" && ValidSessionID(m.Value()) {
 		add(KeySessionID, m.Value())
 	}
 	add(KeyRESTActionNamespace, ev.RESTActionNamespace)
