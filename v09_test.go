@@ -194,6 +194,32 @@ func TestCheck_UsernameCheckRefusalsAndTheResultOnlyOnSuccess(t *testing.T) {
 	}
 }
 
+// docs/schema.md's registry of krateo.action literals documents them, and
+// says schema v1 enforces none: a controller record conforms with each of
+// core-provider's helm literals (core-provider#423) and with an unregistered
+// one alike, and only an empty literal is reported. If a release starts
+// enforcing literals, this test and the registry's text change together.
+func TestCheck_ActionLiteralsAreNotEnforced(t *testing.T) {
+	ctrl := baseRecord(WriterController)
+	for _, a := range []string{"helm.install", "helm.upgrade", "helm.reconcile", "helm.uninstall", "example.unregistered"} {
+		if got := Check(WriterController, with(ctrl, attribute.String(KeyAction, a))); len(got) != 0 {
+			t.Errorf("krateo.action %q: %v", a, got)
+		}
+	}
+	if got := Check(WriterController, with(ctrl, attribute.String(KeyAction, ""))); !slices.Equal(got, []Violation{{Key: KeyAction, Reason: ReasonEmpty}}) {
+		t.Errorf("an empty literal: %v", got)
+	}
+	k, _ := LookupKey(KeyAction)
+	if len(k.Values) != 0 {
+		t.Errorf("krateo.action has values %v: the registry says no literal is enforced", k.Values)
+	}
+	for _, w := range Writers() {
+		if r := k.Writers[w]; len(r.Values) != 0 || len(r.ActionValues) != 0 {
+			t.Errorf("krateo.action has a closed set for %s: the registry says no literal is enforced", w)
+		}
+	}
+}
+
 // Emit writes the not-opted-in refusal as a conforming denied record.
 func TestEmit_UsernameCheckNotAllowed(t *testing.T) {
 	e, rec := newEmitter(t, WithWriter(WriterRequest))

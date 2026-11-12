@@ -198,6 +198,23 @@ writers spell each value through its generated constant.
 | `krateo.audit.check_result` | `name_bound` | `request` | `authn.username.check` | `audit.CheckResultNameBound` |
 | `krateo.audit.check_result` | `invalid` | `request` | `authn.username.check` | `audit.CheckResultInvalid` |
 
+## `krateo.action` literals
+
+`krateo.action` is the emit site's own literal. Schema v1 does not enforce
+its values: `Check` accepts any non-empty literal. The only rule that
+reads it is a per-action closed set (above): `krateo.audit.check_result`
+on `authn.username.check`. The literals below are registered so that
+writers spell the same action the same way and readers can query by it. A
+writer registers a literal by adding it here, in `internal/schemagen/doc.go`.
+
+| writer | literal | the action |
+|---|---|---|
+| `controller` | `helm.install` | helm installs a release that does not exist yet (cdc's Create, no release) |
+| `controller` | `helm.upgrade` | helm upgrades an existing release (cdc's Create, a release exists) |
+| `controller` | `helm.reconcile` | helm reconciles a release to its desired state: Observe's self-heal or Update, through plumbing's Reconcile, a three-way merge that patches drift and prunes children |
+| `controller` | `helm.uninstall` | helm uninstalls a release (cdc's Delete) |
+| `request` | `authn.username.check` | authn's `POST /usernames/check`, whether a username is free; its result is `krateo.audit.check_result` |
+
 ## A controller row: the object written and the object reconciled
 
 A controller row has two objects. `krateo.audit.object_ref.*` (with

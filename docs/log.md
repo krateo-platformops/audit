@@ -40,6 +40,11 @@ timestamp: 2026-11-12T00:00:00Z
   follow (authn's methodOf, authn@0fa999e0): the method is derived from the
   verb of the authority request the writer sent, never the method of the
   request it served; no rule changed.
+  docs/schema.md gains a registry of `krateo.action` literals, documentation
+  only (schema v1 enforces no literal; `TestCheck_ActionLiteralsAreNotEnforced`
+  pins that): core-provider's helm literals for cdc (core-provider#423),
+  `helm.install`, `helm.upgrade`, `helm.reconcile` and `helm.uninstall`,
+  and authn's `authn.username.check`.
   `auditschema sql` counts both (`bad_` and `not_for_action_` columns on the
   request writer's rules), and the column test runs them on fixture rows
   derived from the schema: every value of every action, a value outside the

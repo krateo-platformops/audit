@@ -153,6 +153,8 @@ writers spell each value through its generated constant.
 		}
 	}
 
+	b.WriteString(actionLiterals)
+
 	b.WriteString(`
 ## A controller row: the object written and the object reconciled
 
@@ -445,6 +447,27 @@ const (
 	contentVectorBytes = `{"binaryData":{"logo":"iVBORw=="},"data":{"a\"b":"line1\nline2","k":"<é>"},"metadata":{"annotations":{"authn.krateo.io/groups":"devs\nops"}}}`
 	contentVectorHash  = "c1:e8374f859e140054ea17527c08740cd2439bc7bcad48dd777a3e3cc0921d708c"
 )
+
+// actionLiterals is the registry of krateo.action literals in docs/schema.md.
+// It documents them only: Check enforces no krateo.action value.
+const actionLiterals = `
+## ` + "`krateo.action`" + ` literals
+
+` + "`krateo.action`" + ` is the emit site's own literal. Schema v1 does not enforce
+its values: ` + "`Check`" + ` accepts any non-empty literal. The only rule that
+reads it is a per-action closed set (above): ` + "`krateo.audit.check_result`" + `
+on ` + "`authn.username.check`" + `. The literals below are registered so that
+writers spell the same action the same way and readers can query by it. A
+writer registers a literal by adding it here, in ` + "`internal/schemagen/doc.go`" + `.
+
+| writer | literal | the action |
+|---|---|---|
+| ` + "`controller`" + ` | ` + "`helm.install`" + ` | helm installs a release that does not exist yet (cdc's Create, no release) |
+| ` + "`controller`" + ` | ` + "`helm.upgrade`" + ` | helm upgrades an existing release (cdc's Create, a release exists) |
+| ` + "`controller`" + ` | ` + "`helm.reconcile`" + ` | helm reconciles a release to its desired state: Observe's self-heal or Update, through plumbing's Reconcile, a three-way merge that patches drift and prunes children |
+| ` + "`controller`" + ` | ` + "`helm.uninstall`" + ` | helm uninstalls a release (cdc's Delete) |
+| ` + "`request`" + ` | ` + "`authn.username.check`" + ` | authn's ` + "`POST /usernames/check`" + `, whether a username is free; its result is ` + "`krateo.audit.check_result`" + ` |
+`
 
 // formatDocs is what each format of `formats` requires of a value, as Check
 // enforces it. TestFormatsAreDocumented fails on a format without an entry.
