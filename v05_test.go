@@ -148,7 +148,8 @@ func TestSchema_CauseRefAndDenialReason(t *testing.T) {
 			// v0.12.0 (audit#22): snowplow's refusals.
 			"destination_refused", "per_user_credential_ref", "endpoint_ref_malformed", "internal_identity_context",
 			"write_refused", "dry_run_not_executed", "dependency_failed", "uaf_on_write_verb", "invalid_path", "template_error",
-			"session_credential_missing", "step_up_required"},
+			"session_credential_missing", "step_up_required",
+			"rbac_not_allowed"}, // v0.13.0: the writer's own RBAC evaluation
 		WriterController: {"kept_resource_policy"},
 	}
 	for _, w := range Writers() {

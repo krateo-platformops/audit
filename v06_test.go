@@ -466,9 +466,10 @@ func TestContentSHA256_Vector(t *testing.T) {
 }
 
 // The declared authorization annotations, by hand: authn's
-// storage.AuthorizationAnnotations, as the schema collects them.
+// storage.AuthorizationAnnotations, as the schema collects them, and from
+// v0.13.0 plumbing's endpoints.UsernameAnnotation.
 func TestAuthorizationAnnotations(t *testing.T) {
-	if got, want := AuthorizationAnnotations(), []string{"authn.krateo.io/strategy", "authn.krateo.io/groups"}; !slices.Equal(got, want) {
+	if got, want := AuthorizationAnnotations(), []string{"authn.krateo.io/strategy", "authn.krateo.io/groups", "authn.krateo.io/username"}; !slices.Equal(got, want) {
 		t.Errorf("AuthorizationAnnotations() = %v, want %v", got, want)
 	}
 	a := AuthorizationAnnotations()
@@ -478,9 +479,10 @@ func TestAuthorizationAnnotations(t *testing.T) {
 	}
 }
 
-// The probe: two objects that differ only in a declared annotation hash
+// The probe: two objects that differ only in one of c1's annotations hash
 // differently; two that differ only in an undeclared one, or in a label, hash
-// the same. For every family, and for every declared key.
+// the same. For every family, and for every c1 key (v0.13.0: c1's frozen set,
+// not the growing AuthorizationAnnotations).
 func TestContentSHA256_AnnotationsProbe(t *testing.T) {
 	hash := func(group, resource string, annotations, labels map[string]any) string {
 		t.Helper()
@@ -498,7 +500,7 @@ func TestContentSHA256_AnnotationsProbe(t *testing.T) {
 		if none != hash(g, r, map[string]any{}, nil) {
 			t.Errorf("%s/%s: no annotations and empty annotations differ", g, r)
 		}
-		for _, k := range AuthorizationAnnotations() {
+		for _, k := range ContentFormC1Annotations() {
 			if hash(g, r, map[string]any{k: "oidc"}, nil) == hash(g, r, map[string]any{k: "ldap"}, nil) {
 				t.Errorf("%s/%s: a changed %s is not detected", g, r, k)
 			}

@@ -56,7 +56,7 @@ through the generated `audit.Key*` constants and test their records with
 | `http.request.method_original` | string | stable | C: http.request.method is _OTHER [checked] | C: http.request.method is _OTHER [checked] | C: http.request.method is _OTHER [checked] | C: http.request.method is _OTHER [checked] | The HTTP method exactly as the writer was given it, when http.request.method records it as _OTHER. Written only then, so no value a writer passes is lost. Semconv also lets a framework that treats methods as case-insensitive pair a canonical method with its original; this schema does not: a method semconv does not name, lowercase included, is _OTHER. **Only when** `method_other` holds; anywhere else `Check` reports it `unexpected`. |
 | `krateo.audit.dry_run` | bool | none | C: the record is a write [checked] | NE | C: the record is a write [checked] | — | true when the write was validated and not persisted (Kubernetes dryRun=All, or an endpoint's own dry run), false for a write meant to persist. On every write record of a writer that serves requests or performs actions; never on a read. Readers use this key, not a suffix on krateo.action. **Only when** `write` holds; anywhere else `Check` reports it `unexpected`. |
 | `krateo.audit.outcome` | string | none | R | R | R | R | What the authority this writer sent to answered, at the protocol level the writer observes. denied means the writer itself refused; krateo.audit.denial_reason may say why. One of `success`, `failure`, `denied`. |
-| `krateo.audit.denial_reason` | string | none | O, one of `name_reserved`, `name_claimed`, `name_held_legacy`, `name_provisioned`, `name_bound`, `system_group`, `group_not_allowed`, `delegation_not_allowed`, `delegation_too_deep`, `platform_group`, `name_missing`, `subject_token_expired`, `subject_token_invalid`, `stepup_not_enabled`, `insufficient_assurance`, `stale_authentication`, `no_mapping`, `ambiguous_mapping`, `not_a_service_account`, `username_check_not_allowed`, `invalid_request`, `name_not_issued`, `destination_refused`, `per_user_credential_ref`, `endpoint_ref_malformed`, `internal_identity_context`, `write_refused`, `dry_run_not_executed`, `dependency_failed`, `uaf_on_write_verb`, `invalid_path`, `template_error`, `session_credential_missing`, `step_up_required` | — | — | O, one of `kept_resource_policy` | Why the writer itself refused, on a denied record only: one of the closed values its writer class declares, never free text. The caller's answer can stay opaque while the audit reader gets the reason. Optional: a denied record without it conforms. A writer class with no declared value cannot write it. **Only when** `denied` holds; anywhere else `Check` reports it `unexpected`. |
+| `krateo.audit.denial_reason` | string | none | O, one of `name_reserved`, `name_claimed`, `name_held_legacy`, `name_provisioned`, `name_bound`, `system_group`, `group_not_allowed`, `delegation_not_allowed`, `delegation_too_deep`, `platform_group`, `name_missing`, `subject_token_expired`, `subject_token_invalid`, `stepup_not_enabled`, `insufficient_assurance`, `stale_authentication`, `no_mapping`, `ambiguous_mapping`, `not_a_service_account`, `username_check_not_allowed`, `invalid_request`, `name_not_issued`, `destination_refused`, `per_user_credential_ref`, `endpoint_ref_malformed`, `internal_identity_context`, `write_refused`, `dry_run_not_executed`, `dependency_failed`, `uaf_on_write_verb`, `invalid_path`, `template_error`, `session_credential_missing`, `step_up_required`, `rbac_not_allowed` | — | — | O, one of `kept_resource_policy` | Why the writer itself refused, on a denied record only: one of the closed values its writer class declares, never free text. The caller's answer can stay opaque while the audit reader gets the reason. Optional: a denied record without it conforms. A writer class with no declared value cannot write it. **Only when** `denied` holds; anywhere else `Check` reports it `unexpected`. |
 | `krateo.audit.check_result` | string | none | O, on `authn.username.check` one of `available`, `reserved`, `name_claimed`, `name_held_legacy`, `name_provisioned`, `name_bound`, `invalid` | — | — | — | What a check the writer ran for the caller concluded, when the record's action is a check: one of the closed values its krateo.action declares, never free text. It is the check's answer, not the record's outcome: a check that completed is a success whatever it concluded. Optional: a record without it conforms. Only on a success, when the check ran: a denied record (the check never ran) and a failure (the lookup failed) carry none. An action with no declared set cannot write it. **Only when** `succeeded` holds; anywhere else `Check` reports it `unexpected`. |
 | `http.response.status_code` | int | stable | C: the authority answered | C: the backend answered | C: the authority answered | C: the action was an HTTP request that was answered | The status code the authority answered (Kubernetes responseStatus.code). Never on a denied record: denied means the writer itself refused, so no authority answered. **Never when** `denied` holds; there `Check` reports it `unexpected`. |
 | `krateo.audit.preview` | bool | none | C: the target is a Kubernetes object (false when cluster-scoped) [checked] (mark) | NE | C: the target is a Kubernetes object (false when cluster-scoped) [checked] (mark) | C: the target is a Kubernetes object (false when cluster-scoped) [checked] (mark) | true when the target is a namespaced Kubernetes object whose Namespace carries the label krateo.io/purpose=preview-sandbox, read by the writer from apiserver state. false for any other Kubernetes target, a cluster-scoped one included (installer#716 §2.4). Omitted and marked when the Namespace could not be read. Not written for an external endpoint alone. Not a retention key, not a filter. Marker `preview`. |
@@ -213,6 +213,7 @@ writers spell each value through its generated constant.
 | `krateo.audit.denial_reason` | `template_error` | `request` | any | `audit.DenialReasonTemplateError` |
 | `krateo.audit.denial_reason` | `session_credential_missing` | `request` | any | `audit.DenialReasonSessionCredentialMissing` |
 | `krateo.audit.denial_reason` | `step_up_required` | `request` | any | `audit.DenialReasonStepUpRequired` |
+| `krateo.audit.denial_reason` | `rbac_not_allowed` | `request` | any | `audit.DenialReasonRbacNotAllowed` |
 | `krateo.audit.denial_reason` | `kept_resource_policy` | `controller` | any | `audit.DenialReasonKeptResourcePolicy` |
 | `krateo.audit.check_result` | `available` | `request` | `authn.username.check` | `audit.CheckResultAvailable` |
 | `krateo.audit.check_result` | `reserved` | `request` | `authn.username.check` | `audit.CheckResultReserved` |
@@ -368,12 +369,12 @@ Any other writer computes the same bytes.
    `data` and `binaryData`. Any other object: every top-level field
    but `apiVersion`, `kind`, `metadata` and `status` (a custom
    resource's `spec`; a RoleBinding's `roleRef` and `subjects`).
-2. **Plus the authorization annotations**, for every family:
-   `metadata.annotations` kept to the keys below, as
-   `{"metadata":{"annotations":{...}}}`, and left out when none of them is
+2. **Plus c1's annotations**, for every family:
+   `metadata.annotations` kept to `authn.krateo.io/strategy` and
+   `authn.krateo.io/groups`, as
+   `{"metadata":{"annotations":{...}}}`, and left out when neither is
    set. Authorization reads them, so changing one changes what an identity
-   may do (AUDIT-4). Every other annotation, and every label, is metadata
-   and is not hashed.
+   may do (AUDIT-4). Every other annotation, and every label, is not hashed.
 3. **Nulls.** An object member whose value is null is left out, at every
    depth, so a typed object and its unstructured form (a
    `creationTimestamp: null` in a pod template) hash the same. A null
@@ -389,13 +390,14 @@ Any other writer computes the same bytes.
 5. **The hash.** `c1:` and the SHA-256 of those bytes, as 64 lowercase hex
    digits.
 
-The annotations c1 counts (`audit.AuthorizationAnnotations()`):
-
-- `authn.krateo.io/strategy`
-- `authn.krateo.io/groups`
-
-They are authn's `storage.AuthorizationAnnotations`. plumbing's
-`helm/v3/verdicts.go` declares none: its change verdict counts no annotation.
+**c1's key set is frozen** (`audit.ContentFormC1Annotations()`): the two
+annotations v0.12.0 declared, `authn.krateo.io/strategy` and `authn.krateo.io/groups`,
+and no label. It is not `audit.AuthorizationAnnotations()`: the
+authorization-bearing metadata below grows (v0.13.0 adds
+`authn.krateo.io/username`), and a form is fixed, so growing it never changes a
+c1 hash. A content comparator still counts every declared key; c1 may then
+say "unchanged" where the comparator says "changed". Hashing another key set
+is a new form, c2.
 
 The test vector (`TestContentSHA256_Vector`): a ConfigMap whose data is
 `k: <é>` and `a"b: line1⏎line2`, whose binaryData is
@@ -407,6 +409,33 @@ and an undeclared `example.com/note`, has the content bytes
 ```
 
 and the value `c1:e8374f859e140054ea17527c08740cd2439bc7bcad48dd777a3e3cc0921d708c`.
+
+### Authorization-bearing metadata
+
+The annotations and labels that authorization reads (schema/v1.yaml
+`authorization_metadata`). A write that changes one, by its value, or by adding
+or removing it, changes what an identity may do, so it is a content change
+as the AUDIT-4 ruling counts it. **Content** is the desired state
+([coverage.md](./coverage.md), boundary ruling 1) plus these, compared by
+key and value: an annotation only as an annotation, a label only as a
+label. Every other annotation and label is metadata.
+`audit.AuthorizationAnnotations()` and `audit.AuthorizationLabels()` are generated
+from this one list. plumbing's `kubeutil/content` compares by it, from
+v1.59.0: `content.DiffersWith(before, after, content.Keys{Annotations, Labels})`.
+
+| kind | key | why it is content |
+|---|---|---|
+| annotation | `authn.krateo.io/strategy` | the identity source a session was issued by; authorization reads it |
+| annotation | `authn.krateo.io/groups` | the session's groups, which RBAC binds |
+| annotation | `authn.krateo.io/username` | the exact username a session Secret holds the credential of; a reader proves the Secret is the requester's by it (plumbing endpoints.OwnsSecret), so it decides credential ownership |
+| label | `authn.krateo.io/principal` | the session's principal class (human, service, agent or controller): acmp's tenant onboarding selects humans by it |
+| label | `authn.krateo.io/username-label` | the session's username bounded to a label value; acmp's tenant onboarding names a tenant's namespaces from it |
+
+Form c1 hashes its frozen two annotations (`authn.krateo.io/strategy`,
+`authn.krateo.io/groups`) and no label, whatever this table declares. A form
+is fixed, so another annotation or a label in the hash would be a new form,
+c2. The labels' and `authn.krateo.io/username`'s carrier, the session Secret, is a
+credential target, which carries no content hash at all.
 
 ## Client-asserted provenance
 

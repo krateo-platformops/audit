@@ -105,7 +105,9 @@ type ConfirmedSet struct{ Count int64; Irreversible bool; SHA256 string; Op int6
 type CredentialTarget struct{ Group, Resource, Subresource string } // Subresource "": any
 
 func ContentSHA256(group, resource, subresource string, obj any) (string, error) // "c1:<hex>"; ErrCredentialTarget where Check refuses the key
-func AuthorizationAnnotations() []string // the annotations form c1 counts as content
+func AuthorizationAnnotations() []string // the authorization-bearing annotations: content (v0.13.0 adds authn.krateo.io/username); not what c1 reads
+func AuthorizationLabels() []string      // the authorization-bearing labels (v0.13.0): content; form c1 counts no label
+func ContentFormC1Annotations() []string // v0.13.0: c1's annotation keys, FROZEN at v0.12.0's two (strategy, groups); a new set is a new form
 const ContentFormC1 = "c1"
 var ErrCredentialTarget error
 
@@ -277,6 +279,9 @@ func AssertRemovalDetected(t testing.TB, w audit.Writer, rec sdklog.Record, key 
 func AssertRequiredKeysDetected(t testing.TB, w audit.Writer, rec sdklog.Record, opts ...Option)       // ... for every required key
 func AssertEnumsDetected(t testing.TB, w audit.Writer, rec sdklog.Record, opts ...Option)              // ... for every closed set on the record
 func AllowIncomplete(keys ...string) Option
+
+type ContentCase struct{ Name string; Before, After map[string]any; Changed bool }
+func AuthorizationMetadataCases() []ContentCase // v0.13.0: what a content comparator must say for each declared annotation and label, changed, added or removed, and for undeclared ones
 ```
 
 ## cmd/auditschema

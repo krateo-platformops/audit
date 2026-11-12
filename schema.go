@@ -251,13 +251,29 @@ func IsCredentialTarget(group, resource, subresource string) bool {
 	})
 }
 
-// AuthorizationAnnotations returns the annotation keys the content hash counts
-// as content (schema/v1.yaml content_annotations): authorization reads them,
-// so changing one changes what an identity may do (AUDIT-4). It is the one
-// declared list, collected from authn's storage.AuthorizationAnnotations
-// (authn@26c4456d: authn.krateo.io/strategy, authn.krateo.io/groups);
-// plumbing's helm/v3/verdicts.go (plumbing@3a581c7d) declares none.
+// AuthorizationAnnotations returns the authorization-bearing annotation keys
+// (schema/v1.yaml authorization_metadata, kind annotation): authorization
+// reads them, so a write that changes one, adds it or removes it changes what
+// an identity may do, and is a content change (AUDIT-4). Content is the
+// desired state plus these and AuthorizationLabels, compared by key and
+// value. They are authn's storage.AuthorizationAnnotations (authn@26c4456d)
+// and, from v0.13.0, plumbing's endpoints.UsernameAnnotation
+// (authn.krateo.io/username), by which a reader proves a session Secret is
+// the requester's. The content hash, form c1, does not read this list: its
+// key set is frozen (ContentFormC1Annotations).
 func AuthorizationAnnotations() []string { return slices.Clone(schemaContentAnnotations) }
+
+// AuthorizationLabels returns the authorization-bearing label keys
+// (schema/v1.yaml authorization_metadata, kind label, v0.13.0): authn will
+// stamp them on every session Secret (planned, per authn#144, behind
+// exactUsernames.enabled, off by default), and authorization reads them
+// (acmp's tenant onboarding selects humans by authn.krateo.io/principal and
+// names a tenant's namespaces from authn.krateo.io/username-label). A write that
+// changes one, adds it or removes it is a content change, as for
+// AuthorizationAnnotations; a label is compared only as a label. Form c1 of
+// the content hash counts no label: a form is fixed, and the labels' carrier
+// is a credential target, which has no hash.
+func AuthorizationLabels() []string { return slices.Clone(schemaContentLabels) }
 
 // Populations returns where each writer's records land, by scope name.
 func Populations() []Population { return slices.Clone(schemaPopulations) }

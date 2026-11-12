@@ -9,6 +9,60 @@ timestamp: 2026-11-12T00:00:00Z
 
 # Log
 
+- **2026-11-12**: v0.13.0. Additive: one more declared annotation, one more
+  request denial reason; no record shape, rule or content hash changes.
+  - The authorization-bearing labels: `AuthorizationLabels()`
+    (`authn.krateo.io/principal`, `authn.krateo.io/username-label`). authn
+    will stamp them on every session Secret (planned, per authn#144, behind
+    `exactUsernames.enabled`, off by default), and acmp's tenant onboarding
+    reads them. The AUDIT-4 lead ruled them content (2026-11-12).
+  - One more authorization annotation, `authn.krateo.io/username`
+    (plumbing v1.58.0's `endpoints.UsernameAnnotation`): the exact username a
+    session Secret holds the credential of. A reader proves the Secret is the
+    requester's by it before using it (plumbing `endpoints.OwnsSecret`;
+    snowplow#1382, planned, will read it so), so it decides credential
+    ownership. acmp's tenant onboarding requires the session Secret's name
+    to equal the annotation's value + `-clientconfig`. authn will stamp it
+    on every session Secret (planned, per authn#144, behind
+    `exactUsernames.enabled`, off by default).
+    `AuthorizationAnnotations()` now returns three keys.
+  - One schema list for both kinds: `content_annotations` becomes
+    `authorization_metadata`, each entry with its kind (annotation or
+    label), its key and its reason. Both functions are generated from the
+    list. The generator refuses an unknown kind, an unqualified key, a key
+    repeated within one kind (one key may be declared once as each kind),
+    an entry with no reason or a blank one, and a list with no annotation
+    or no label.
+  - Content, as [coverage.md](./coverage.md) ruling 1 now states it: the
+    desired state plus the declared annotations and labels, compared by key
+    and value, a key only as its declared kind.
+    `audittest.AuthorizationMetadataCases()` is that rule as cases, for a
+    comparator to run. The comparator is plumbing's `kubeutil/content`,
+    which counts labels from v1.59.0 (`DiffersWith`, `content.Keys`);
+    usage.md shows a writer calling it with both lists.
+  - The content hash, form c1, is frozen: its annotation keys are an
+    explicit list, `ContentFormC1Annotations()`, equal to v0.12.0's two
+    (`authn.krateo.io/strategy`, `authn.krateo.io/groups`), and no label. It
+    no longer reads `AuthorizationAnnotations()`, so growing the declared
+    list (`authn.krateo.io/username` now) never changes a c1 hash; every c1
+    value is the one v0.12.0 computed. Hashing another key set is a new
+    form, c2. The new keys' carrier, the session Secret, is a credential
+    target, which has no hash.
+  - A request denial reason, `rbac_not_allowed`
+    (`DenialReasonRbacNotAllowed`): the writer's own RBAC evaluation refused
+    a verified caller before its handler ran and before any dial for the
+    request. With the cache off the evaluation is a SelfSubjectAccessReview,
+    still the writer's own decision. Denied, no status code. First user:
+    snowplow's DebugAuthz on `POST /debug/shadow-parity`, which evaluates the
+    non-resource URL through `rbac.EvaluateRBAC` (schema/v1.yaml cites
+    snowplow `219a076e`, `go/snowplow/debug_routes.go:211`, `:308`, and
+    `internal/handlers/middleware/debugauthz.go:85-88`, `:93-99`). An
+    authority's 403, such as the apiserver answering 403, is not this
+    reason: it stays a failure with the authority's status code, as before.
+  - Compatibility: `testdata/v0.12.0/` (29 records audit v0.12.0's own
+    `Emit` wrote, the v0.12.0 shapes included) gives v0.12.0's own report,
+    and every earlier replay is unchanged.
+
 - **2026-11-12**: v0.12.0 (audit#22, for snowplow#1283 and snowplow's
   adoption). Additive.
   - `krateo.audit.endpoint_ref.{namespace,name}` (`Event.EndpointRefNamespace`,

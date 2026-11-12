@@ -1,7 +1,7 @@
 ---
 type: Usage
 title: audit — usage
-description: Install the package, when and how to emit, who the actor is, adopting v0.4.0, v0.5.0, v0.6.0, v0.7.0, v0.8.0, v0.9.0, v0.10.0, v0.11.0 and v0.12.0, testing a writer against the schema, and checking the live table.
+description: Install the package, when and how to emit, who the actor is, adopting v0.4.0, v0.5.0, v0.6.0, v0.7.0, v0.8.0, v0.9.0, v0.10.0, v0.11.0, v0.12.0 and v0.13.0, testing a writer against the schema, and checking the live table.
 resource: github.com/krateo-platformops/audit
 tags: [library, audit, usage]
 timestamp: 2026-11-12T00:00:00Z
@@ -440,6 +440,77 @@ v0.12.0 is additive (audit#22): a plain bump changes no record.
   }
   emitter := audit.New(logger, opts...)
   ```
+
+## Adopting v0.13.0
+
+v0.13.0 is additive: a plain bump changes no record and no content hash.
+A content comparator that takes `audit.AuthorizationAnnotations()` now also
+counts `authn.krateo.io/username`.
+
+- **Authorization-bearing labels.** `audit.AuthorizationLabels()` returns
+  `authn.krateo.io/principal` and `authn.krateo.io/username-label`, which
+  authn will stamp on every session Secret (planned, per authn#144, behind
+  `exactUsernames.enabled`, off by default) and which acmp's tenant
+  onboarding reads. It sits beside
+  `audit.AuthorizationAnnotations()`, and both are generated from one
+  schema list, `authorization_metadata`, where each entry declares its
+  kind, its key and why it is content.
+- **One more authorization annotation.** `audit.AuthorizationAnnotations()`
+  adds `authn.krateo.io/username` (plumbing v1.58.0's
+  `endpoints.UsernameAnnotation`): the exact username a session Secret
+  holds the credential of, by which a reader proves the Secret is the
+  requester's (`endpoints.OwnsSecret`; snowplow#1382, planned, will read
+  it so). acmp's tenant onboarding requires the session Secret's name to
+  equal the annotation's value + `-clientconfig`. authn will stamp it on
+  every session Secret (planned, per authn#144, behind
+  `exactUsernames.enabled`, off by default).
+- **What content is.** The desired state (coverage.md, boundary ruling 1)
+  plus the declared annotations and labels, compared by key and value. A
+  write that changes a declared annotation or label, adds it or removes it
+  is a content change; an undeclared one is metadata; a key counts only as
+  the kind it is declared as. The comparator is plumbing's
+  `kubeutil/content`, which takes both lists from v1.59.0
+  (`content.DiffersWith`, `content.Keys`). `content.Differs` is unchanged
+  and counts the annotations only, so a writer moves to `DiffersWith` to
+  count the labels:
+
+  ```go
+  import (
+  	"github.com/krateo-platformops/audit"
+  	"github.com/krateo-platformops/plumbing/kubeutil/content"
+  )
+
+  // before and after are runtime.Object values, the object as it was and as the write leaves it.
+  changed, err := content.DiffersWith(before, after, content.Keys{
+  	Annotations: audit.AuthorizationAnnotations(),
+  	Labels:      audit.AuthorizationLabels(),
+  })
+  ```
+
+  `content.CanonicalWith(obj, keys)` is the form it compares.
+- **Testing a comparator.** `audittest.AuthorizationMetadataCases()` is the
+  rule as cases, derived from the schema: run each `Before` and `After`
+  through the comparator (as `&unstructured.Unstructured{Object: c.Before}`
+  for `DiffersWith`), and its verdict must be `Changed`.
+- **The content hash.** Form c1's key set is frozen:
+  `audit.ContentFormC1Annotations()`, v0.12.0's two annotations
+  (`authn.krateo.io/strategy`, `authn.krateo.io/groups`), and no label. It
+  is not `audit.AuthorizationAnnotations()`, so declaring
+  `authn.krateo.io/username` (or any later key) never changes a c1 hash. A
+  comparator counts every declared key, so it can report a content change
+  that c1 does not hash. To check a c1 hash against the annotations,
+  compare `ContentFormC1Annotations()`. Hashing another key set is a new
+  form, c2. The new keys' carrier, the session Secret, is a credential
+  target, which carries no content hash.
+- **The writer's own RBAC refusal.** `audit.DenialReasonRbacNotAllowed`
+  (`rbac_not_allowed`), a request denial reason: the writer itself
+  evaluated Kubernetes RBAC for a verified caller and refused before its
+  handler ran and before any dial for the request. With the cache off the
+  evaluation is a SelfSubjectAccessReview, still the writer's own decision.
+  A denied record with no status code. In snowplow, DebugAuthz
+  refusing `POST /debug/shadow-parity` (schema/v1.yaml cites the sites).
+  An authority's 403, such as the apiserver answering 403, is not this
+  reason: it stays a failure with the authority's status code.
 
 ## Testing a writer
 

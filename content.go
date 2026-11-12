@@ -19,6 +19,19 @@ import (
 // it. docs/schema.md defines c1.
 const ContentFormC1 = "c1"
 
+// contentFormC1Annotations is form c1's annotation key set, FROZEN at
+// v0.12.0's two authorization annotations. It is deliberately not
+// AuthorizationAnnotations: that list grows (v0.13.0 adds
+// authn.krateo.io/username), and a form is fixed, so growing it must never
+// change a c1 hash. Hashing another key set is a new form, c2.
+var contentFormC1Annotations = []string{"authn.krateo.io/strategy", "authn.krateo.io/groups"}
+
+// ContentFormC1Annotations returns form c1's annotation keys: frozen at
+// authn.krateo.io/strategy and authn.krateo.io/groups, whatever
+// AuthorizationAnnotations declares. A comparator that checks a c1 hash
+// against the annotations compares these.
+func ContentFormC1Annotations() []string { return slices.Clone(contentFormC1Annotations) }
+
 // ErrCredentialTarget is ContentSHA256's refusal of a credential target (a
 // Secret, a token request or review): a hash of low-entropy secret data can be
 // guessed offline, so such a write carries no content hash.
@@ -36,7 +49,8 @@ var ErrCredentialTarget = errors.New("audit: no content hash for a credential ta
 //     binaryData; any other object's top-level fields but apiVersion, kind,
 //     metadata and status;
 //   - plus, for every family, metadata.annotations kept to
-//     AuthorizationAnnotations, left out when none is set;
+//     ContentFormC1Annotations (frozen; not AuthorizationAnnotations), left
+//     out when none is set;
 //   - an object member whose value is null is left out, at every depth (a
 //     null array element stays);
 //   - UTF-8 JSON with no whitespace, object keys sorted by their bytes,
@@ -72,7 +86,7 @@ func ContentSHA256(group, resource, subresource string, obj any) (string, error)
 			content[k] = v
 		}
 	}
-	if a := authorizationAnnotations(fields); len(a) > 0 {
+	if a := formC1Annotations(fields); len(a) > 0 {
 		content["metadata"] = map[string]any{"annotations": a}
 	}
 	var b bytes.Buffer
@@ -92,13 +106,13 @@ func contentField(group, resource, k string) bool {
 	return !slices.Contains([]string{"apiVersion", "kind", "metadata", "status"}, k)
 }
 
-// authorizationAnnotations is the object's metadata.annotations kept to
-// AuthorizationAnnotations, without the null ones.
-func authorizationAnnotations(fields map[string]any) map[string]any {
+// formC1Annotations is the object's metadata.annotations kept to form c1's
+// frozen key set, without the null ones.
+func formC1Annotations(fields map[string]any) map[string]any {
 	meta, _ := fields["metadata"].(map[string]any)
 	all, _ := meta["annotations"].(map[string]any)
 	out := map[string]any{}
-	for _, k := range schemaContentAnnotations {
+	for _, k := range contentFormC1Annotations {
 		if v, ok := all[k]; ok && v != nil {
 			out[k] = v
 		}
