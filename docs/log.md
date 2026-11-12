@@ -9,6 +9,29 @@ timestamp: 2026-11-12T00:00:00Z
 
 # Log
 
+- **2026-11-12**: v0.10.0 (audit#29, authn#136). Two request-writer denial
+  reasons. `name_not_issued` (`DenialReasonNameNotIssued`, plumbing's
+  `usernames.ErrNotIssued`): a sign-in for a username authn would issue in
+  another form, one the clientconfig Secret's name derivation would rewrite;
+  denied, no status code, no `check_result`, naming the Secret resource with
+  no name under the aliasing rule below. `invalid_request`
+  (`DenialReasonInvalidRequest`): on
+  `authn.username.check`, a verified, mapped and opted-in caller sent a body
+  with no username, or one that isn't JSON, so authn answers 400 and the
+  check never runs (the AUDIT-4 lead's ruling of 2026-11-12). Denied, no
+  status code, no `check_result`; with no username the record names the
+  Secret resource without a name, and its verb and method are marked, as
+  `name_missing`'s are. Both are the request writer's alone: `bad-enum` on a
+  controller, `not-for-writer` on the gateway and action writers. The
+  derived column fixtures pick them up from the schema. Compatibility:
+  `testdata/v0.9.1/` holds 23 records audit v0.9.1's own `Emit` wrote (each
+  username-check result, `username_check_not_allowed`, a failed lookup, and
+  the v0.6.0 to v0.8.0 shapes), with v0.9.1's own `auditschema` report; this
+  release gives the same report. [coverage.md](./coverage.md) states the
+  rule for naming a derived credential Secret: `object_ref.name` is the
+  derived name only when `MakeDNS1123Compatible(username) == username`,
+  otherwise the resource with no name, because the derivation aliases
+  distinct usernames. Additive, so a minor version per docs/release.md.
 - **2026-11-12**: [coverage.md](./coverage.md), authn's rows refreshed from
   authn's code at authn@0fa999e0 (authn#123 merged; audit v0.8.0), each row
   citing its emit site and recorder by file and line, and the authn PR that

@@ -1,7 +1,7 @@
 ---
 type: Usage
 title: audit — usage
-description: Install the package, when and how to emit, who the actor is, adopting v0.4.0, v0.5.0, v0.6.0, v0.7.0, v0.8.0 and v0.9.0, testing a writer against the schema, and checking the live table.
+description: Install the package, when and how to emit, who the actor is, adopting v0.4.0, v0.5.0, v0.6.0, v0.7.0, v0.8.0, v0.9.0 and v0.10.0, testing a writer against the schema, and checking the live table.
 resource: github.com/krateo-platformops/audit
 tags: [library, audit, usage]
 timestamp: 2026-11-12T00:00:00Z
@@ -314,6 +314,27 @@ no check result:
 no `krateo.action` included) as the new `not-for-action`. Every writer
 class other than `request` cannot write it (`not-for-writer`). An action
 gains a value, or the key gains an action, in a minor release.
+
+## Adopting v0.10.0
+
+v0.10.0 is additive: a plain bump changes no record. It adds two request
+denial reasons (audit#29).
+
+`DenialReasonNameNotIssued` (`name_not_issued`) is for a sign-in with a
+username authn would issue in another form, one the clientconfig Secret's
+name derivation would rewrite. The record is denied, with no status code and
+no `check_result`, and names the Secret resource without a name: the derived
+name would be another username's (coverage.md, "Naming a derived credential
+Secret").
+
+`DenialReasonInvalidRequest` (`invalid_request`) is for authn's
+`authn.username.check`: a verified, mapped and opted-in caller
+sent a body with no username, or one that isn't JSON, so authn answers 400
+and the check never runs. The record is denied, with no status code and no
+`check_result`. With no username it names the Secret resource without a
+name, as `name_missing` does. Like every denial reason, both are the request
+writer's alone: `Check` reports it `bad-enum` on a controller and
+`not-for-writer` on the gateway and action writers.
 
 ## Testing a writer
 
