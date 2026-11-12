@@ -332,7 +332,11 @@ the predicate drops, by reason.
   controller literals schema.md registers. Only the composition RBAC set
   has a test that runs `AssertConformant` on its own records; the other
   core-provider rows are "audited, conformance not yet proven".
-- **cdc** emits nothing today. [core-provider#423] waits
+- **cdc** emits its helm child writes since [core-provider#459] (released
+  in core-provider 2.13.86). A child write that changes only an
+  authorization annotation or label is not recorded, pending
+  [core-provider#465]. Its prune and kept-deletion rows below are not yet
+  re-derived from that code. [core-provider#423] waits
   on [plumbing#106] (the uncapped per-object verdict, merged as
   plumbing#120) and on audit v0.5.0. It also renders
   `spec.principal: controller` on every cdc authn mapping, so cdc's tokens
@@ -370,7 +374,7 @@ the predicate drops, by reason.
 | authn | identity backfill at startup, with exact naming on: a credential Secret whose username annotation, principal label or username-label already holds a value other than its certificate proves is left as found, nothing sent. [authn#147] at `fdd4b61f`: `go/authn/internal/identitybackfill/backfill.go:161-169`, conflicts from `missingExact` (`:334-347`); recorder `internal/auditlog/controller.go:174-190` (`IdentityInconsistent`; literal `:31`), on audit v0.11.0: one denied record per Secret with no reason | controller | authn's own ServiceAccount | not audited | [authn#147] (pending authn#147 merge; behind `exactUsernames.enabled`, off by default) | `github.com/krateo-platformops/authn/audit/controller` | `authn.identity.inconsistent` | update | denied (`kept_existing_value`, audit v0.14.0: one record per conflicting key, `krateo.audit.authorization_key` naming it, never a value; no status code) |
 | authn | its own credential's identity annotations brought in line with its certificate, recorded only when an authorization-bearing annotation changed. Emit: `internal/certrenewal/renewal.go:411-421`; recorder `controller.go:139-159`; literal `controller.go:24-26` | controller | authn's own ServiceAccount | audited | [authn#119]; emit: [authn#123] | `github.com/krateo-platformops/authn/audit/controller` | `authn.servicecert.annotated` | update | success, failure |
 | authn | the leader-election Lease that elects the replica doing authn's own-identity work (`internal/leader/leader.go:24-26`); no emit | controller | authn's own ServiceAccount | out of scope (not `*.krateo.io`, and not an RBAC, admission or credential write) | [authn#119] | | | | |
-| cdc | helm install or upgrade of a Composition's child: create, update or patch | controller | cdc's own ServiceAccount | not audited | [core-provider#423], [plumbing#106] | | | | |
+| cdc | helm install or upgrade of a Composition's child: create, update or patch. Emit at core-provider@b1f9b5f (since [core-provider#459], released in 2.13.86): `go/composition-dynamic-controller/internal/composition/composition.go:1020` (install), `:1002` (upgrade), `:644`, `:1232` (reconcile), `:518`, `:1478` (rollback); literals `internal/auditrec/verdict.go:23-30` | controller | cdc's own ServiceAccount | audited, non-conformant for authorization-metadata-only changes: a child write that changes only an authorization-bearing annotation or label is counted `metadata_only` (`composition_audit_excluded_total`) and not recorded. The cdc passes no `ContentAnnotations` to plumbing's helm verdicts (`helm/helm.go:368`; none in the cdc's non-test code at b1f9b5f), and plumbing's helm config has no `ContentLabels` (v1.53.0, the cdc's pin, through v1.62.0). Pending [core-provider#465] | [core-provider#423], [plumbing#106]; fix: [core-provider#465]; emit: [core-provider#459] | `github.com/krateo-platformops/composition-dynamic-controller/audit` | `helm.install`, `helm.upgrade`, `helm.reconcile`, `helm.rollback` | | |
 | cdc | helm prune of a child the new revision no longer renders | controller | cdc's own ServiceAccount | not audited | [core-provider#423], [plumbing#106] | | | delete | |
 | cdc | a kept deletion: a child helm declined to delete (`resource-policy: keep`) | controller | cdc's own ServiceAccount | not audited | [core-provider#423], [plumbing#106] | | | delete | denied |
 | core-provider | the authn mapping `serviceaccount.authn.krateo.io`: create, update. Emit at core-provider@b1f9b5f: a composition's apiRef mapping, `internal/tools/deploy/authnmapping.go:121` (`applyAuthnServiceAccountMapping`), and core-provider's own singleton mapping, `:170` (`ensureSelfAuthnMapping`), both through `applyRecorded` (`auditwrite.go:16`) | controller | core-provider's own ServiceAccount | audited, conformance not yet proven | [core-provider#423]; emit: [core-provider#464] (unreleased: ships in core-provider 2.13.87, after 2.13.86 rolls) | `github.com/krateo-platformops/core-provider/audit` | `authn.mapping.apply` | create, update | success, failure |
@@ -520,6 +524,8 @@ Each open question is asked on its owner's issue; the link goes to the comment. 
 [plumbing#106]: https://github.com/krateo-platformops/plumbing/issues/106
 [core-provider#423]: https://github.com/krateo-platformops/core-provider/issues/423
 [core-provider#464]: https://github.com/krateo-platformops/core-provider/pull/464
+[core-provider#459]: https://github.com/krateo-platformops/core-provider/pull/459
+[core-provider#465]: https://github.com/krateo-platformops/core-provider/issues/465
 [oasgen-provider#543]: https://github.com/krateo-platformops/oasgen-provider/issues/543
 [access-review#25]: https://github.com/krateo-platformops/access-review/issues/25
 [access-review#28]: https://github.com/krateo-platformops/access-review/pull/28

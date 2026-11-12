@@ -317,6 +317,33 @@ func TestCoverage_CoreProviderRows(t *testing.T) {
 	}
 }
 
+// The cdc's helm child-write row (core-provider#459, 2.13.86) is audited but
+// non-conformant for authorization-metadata-only changes, which it counts as
+// metadata_only and does not record, pending core-provider#465.
+func TestCoverage_CdcHelmWriteRow(t *testing.T) {
+	raw, err := os.ReadFile("docs/coverage.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	found := 0
+	for _, r := range coverageRows(t, string(raw)) {
+		if r.component != "cdc" || !strings.HasPrefix(r.path, "helm install or upgrade") {
+			continue
+		}
+		found++
+		if !strings.HasPrefix(r.status, "audited, non-conformant for authorization-metadata-only changes: ") ||
+			!strings.Contains(r.status, "metadata_only") || !strings.Contains(r.status, "[core-provider#465]") {
+			t.Errorf("docs/coverage.md:%d: status %q", r.line, r.status)
+		}
+		if r.scope != "github.com/krateo-platformops/composition-dynamic-controller/audit" {
+			t.Errorf("docs/coverage.md:%d: scope %q", r.line, r.scope)
+		}
+	}
+	if found != 1 {
+		t.Errorf("%d cdc helm-write rows, want 1", found)
+	}
+}
+
 // Emit writes the kept key, one record per conflicting key, and each record
 // passes Check; no value is written.
 func TestEmit_KeptExistingValue(t *testing.T) {
