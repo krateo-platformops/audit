@@ -31,7 +31,11 @@ timestamp: 2026-11-12T00:00:00Z
   checked name's clientconfig Secret, with no status code and no check
   result. authn's other refusals there reuse v0.8.0's `no_mapping`,
   `ambiguous_mapping` and `not_a_service_account`, naming the mapping
-  resource without a name.
+  resource without a name. Compatibility: `testdata/v0.8.0/` holds records
+  audit v0.8.0's own `Emit` wrote (gen, pinned to v0.8.0: the content hash,
+  client provenance and its rejection, a delegated call, the denial reasons
+  v0.6.0 to v0.8.0 added, a failure row, a kept deletion), with v0.8.0's own
+  `auditschema` report on them; this release gives the same report.
   `auditschema sql` counts both (`bad_` and `not_for_action_` columns on the
   request writer's rules), and the column test runs them on fixture rows
   derived from the schema: every value of every action, a value outside the

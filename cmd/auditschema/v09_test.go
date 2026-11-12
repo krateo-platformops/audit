@@ -40,6 +40,13 @@ const (
 	notAllowedReason = `{"key":"krateo.audit.denial_reason","value":{"stringValue":"username_check_not_allowed"}},`
 )
 
+// A v0.8.0 record stays valid: the records audit v0.8.0's own Emit wrote, per
+// writer (testdata/v0.8.0/gen: the content hash, client provenance and its
+// rejection, a delegated call, the request denial reasons v0.6.0 to v0.8.0
+// added, a failure row, a kept deletion), get exactly the report v0.8.0's
+// auditschema gave them, and the same exit code.
+func TestCheck_V080RecordsStayValid(t *testing.T) { recordsStayValid(t, "v0.8.0") }
+
 // `auditschema check` accepts and rejects what Check does for the v0.9.0
 // rule: krateo.audit.check_result, one of the closed values of the record's
 // action, and on no other action. It names keys and reasons, never a value.
