@@ -9,6 +9,15 @@ timestamp: 2026-11-12T00:00:00Z
 
 # Log
 
+- **2026-11-12**: [coverage.md](./coverage.md), authn's rows refreshed from
+  authn's code at authn@0fa999e0 (authn#123 merged; audit v0.8.0), each row
+  citing its emit site and recorder by file and line: the four logins, the
+  ServiceAccount login, the mapping-lookup refusals and failures (marked
+  incomplete by design), the step-up, `/delegate`, the step-up sweep, the
+  service certificate, and two controller rows the inventory lacked:
+  `authn.identity.backfilled` (which answers open question 1) and
+  `authn.servicecert.annotated`. `/usernames/check` is listed from authn#136
+  at `751f089d`, pending its merge. Docs only.
 - **2026-11-12**: docs and the action-literal registry only, no release (no
   exported API, schema rule or record changes). The registry gains the
   controller literal `helm.rollback` (cdc: Observe clearing a release stuck
