@@ -32,8 +32,14 @@ const undeclaredKey = "example.com/unrelated"
 //     a label, and the reverse) changed, added or removed: not one, since a
 //     key counts only as the kind it is declared as.
 //
-// plumbing's kubeutil/content runs them against its comparator. Values are
-// placeholders; none is an identity.
+// Run them against plumbing's kubeutil/content comparator (v1.59.0) as
+//
+//	content.DiffersWith(&unstructured.Unstructured{Object: c.Before},
+//		&unstructured.Unstructured{Object: c.After},
+//		content.Keys{Annotations: audit.AuthorizationAnnotations(), Labels: audit.AuthorizationLabels()})
+//
+// and its verdict must be c.Changed. Values are placeholders; none is an
+// identity.
 func AuthorizationMetadataCases() []ContentCase {
 	var out []ContentCase
 	edits := func(kind, key string, changed bool, why string) {

@@ -413,8 +413,8 @@ as the AUDIT-4 ruling counts it. **Content** is the desired state
 key and value: an annotation only as an annotation, a label only as a
 label. Every other annotation and label is metadata.
 `audit.AuthorizationAnnotations()` and `audit.AuthorizationLabels()` are generated
-from this one list. plumbing's `kubeutil/content` compares the annotations
-by it today (v1.56.0); the labels need its matching change.
+from this one list. plumbing's `kubeutil/content` compares by it, from
+v1.59.0: `content.DiffersWith(before, after, content.Keys{Annotations, Labels})`.
 
 | kind | key | why it is content |
 |---|---|---|

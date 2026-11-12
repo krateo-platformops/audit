@@ -291,8 +291,8 @@ credential_targets:
 # annotation and label is metadata. Each entry declares its kind
 # (annotation or label), its key and why it is here. The one declared list:
 # audit.AuthorizationAnnotations() and audit.AuthorizationLabels() are
-# generated from it. plumbing's kubeutil/content compares the annotations by
-# it today (v1.56.0); the labels need its matching change.
+# generated from it. plumbing's kubeutil/content compares by it:
+# content.DiffersWith with content.Keys{Annotations, Labels} (v1.59.0).
 #
 # Form c1 of krateo.audit.object_ref.content_sha256 hashes the annotations
 # below and no label: a form is fixed (a label in it would be c2). The

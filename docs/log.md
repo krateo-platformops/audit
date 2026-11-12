@@ -26,8 +26,9 @@ timestamp: 2026-11-12T00:00:00Z
     desired state plus the declared annotations and labels, compared by key
     and value, a key only as its declared kind.
     `audittest.AuthorizationMetadataCases()` is that rule as cases, for a
-    comparator to run (plumbing's `kubeutil/content`, whose label support
-    is its own change).
+    comparator to run. The comparator is plumbing's `kubeutil/content`,
+    which counts labels from v1.59.0 (`DiffersWith`, `content.Keys`);
+    usage.md shows a writer calling it with both lists.
   - The content hash, form c1, counts no label: a form is fixed. The
     labels' carrier, the session Secret, is a credential target, which has
     no hash.

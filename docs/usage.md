@@ -455,12 +455,30 @@ v0.13.0 is additive: a plain bump changes no record and no content hash.
   plus the declared annotations and labels, compared by key and value. A
   write that changes a declared annotation or label, adds it or removes it
   is a content change; an undeclared one is metadata; a key counts only as
-  the kind it is declared as. A comparator takes both lists. plumbing's
-  `kubeutil/content` is that comparator: it takes the annotations today,
-  and the labels need its matching change.
+  the kind it is declared as. The comparator is plumbing's
+  `kubeutil/content`, which takes both lists from v1.59.0
+  (`content.DiffersWith`, `content.Keys`). `content.Differs` is unchanged
+  and counts the annotations only, so a writer moves to `DiffersWith` to
+  count the labels:
+
+  ```go
+  import (
+  	"github.com/krateo-platformops/audit"
+  	"github.com/krateo-platformops/plumbing/kubeutil/content"
+  )
+
+  // before and after are runtime.Object values, the object as it was and as the write leaves it.
+  changed, err := content.DiffersWith(before, after, content.Keys{
+  	Annotations: audit.AuthorizationAnnotations(),
+  	Labels:      audit.AuthorizationLabels(),
+  })
+  ```
+
+  `content.CanonicalWith(obj, keys)` is the form it compares.
 - **Testing a comparator.** `audittest.AuthorizationMetadataCases()` is the
   rule as cases, derived from the schema: run each `Before` and `After`
-  through the comparator, and its verdict must be `Changed`.
+  through the comparator (as `&unstructured.Unstructured{Object: c.Before}`
+  for `DiffersWith`), and its verdict must be `Changed`.
 - **The content hash.** Form c1 hashes the declared annotations and no
   label: a form is fixed. The labels' carrier, the session Secret, is a
   credential target, which carries no content hash.
