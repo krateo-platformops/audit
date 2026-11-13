@@ -328,7 +328,9 @@ func TestCoverage_CoreProviderRows(t *testing.T) {
 
 // The cdc's helm child-write row (core-provider#459, 2.13.86) is audited but
 // non-conformant for authorization-metadata-only changes, which it counts as
-// metadata_only and does not record, pending core-provider#465.
+// metadata_only and does not record (core-provider#465). It is fixed in
+// core-provider#467 (a644558), unreleased, so the row stays non-conformant
+// until a released cdc carries the fix.
 func TestCoverage_CdcHelmWriteRow(t *testing.T) {
 	raw, err := os.ReadFile("docs/coverage.md")
 	if err != nil {
@@ -342,8 +344,12 @@ func TestCoverage_CdcHelmWriteRow(t *testing.T) {
 		found++
 		if !strings.HasPrefix(r.status, "audited, non-conformant for authorization-metadata-only changes: ") ||
 			!strings.Contains(r.status, "metadata_only") || !strings.Contains(r.status, "[core-provider#465]") ||
-			!strings.Contains(r.status, "[core-provider#467], is not yet merged") {
+			!strings.Contains(r.status, "is fixed in [core-provider#467] (`a644558`), unreleased; ships in 2.13.87") ||
+			!strings.Contains(r.status, "Non-conformant until a released cdc carries it") {
 			t.Errorf("docs/coverage.md:%d: status %q", r.line, r.status)
+		}
+		if strings.Contains(r.status, "not yet merged") || strings.Contains(r.owner, "not yet merged") {
+			t.Errorf("docs/coverage.md:%d: still says core-provider#467 is not yet merged", r.line)
 		}
 		if r.scope != "github.com/krateo-platformops/composition-dynamic-controller/audit" {
 			t.Errorf("docs/coverage.md:%d: scope %q", r.line, r.scope)
@@ -434,6 +440,20 @@ func TestKeptExistingValue_TextMatchesTheEmitter(t *testing.T) {
 		if !strings.Contains(text, "exactUsernames.enabled") || !strings.Contains(text, "off by default") {
 			t.Errorf("%s: does not say the backfill compares the keys only with exact naming on", name)
 		}
+	}
+	// coverage.md's backfill row: authn#147 (since 98e4c9e) logs each
+	// differing key and records nothing; the record it once wrote on audit
+	// v0.11.0 is gone, and no doc may say otherwise.
+	cov := read("docs/coverage.md")
+	for _, stale := range []string{"records it today as", "one denied record per Secret"} {
+		for _, p := range []string{"docs/coverage.md", "docs/usage.md", "docs/log.md", "schema/v1.yaml", "docs/schema.md"} {
+			if strings.Contains(read(p), stale) {
+				t.Errorf("%s still says %q: authn#147 no longer writes that record", p, stale)
+			}
+		}
+	}
+	if !strings.Contains(cov, "logs each differing key (key and uid, never a value) and records nothing until it adopts v0.14.0's kept_existing_value") {
+		t.Error("docs/coverage.md: the backfill row does not say what authn#147 does today")
 	}
 	if strings.Contains(bullet, "HTTPMethod:") {
 		t.Error("docs/usage.md: the kept-value example sends a method, but nothing was sent")

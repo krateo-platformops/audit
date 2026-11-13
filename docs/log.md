@@ -34,8 +34,10 @@ timestamp: 2026-11-12T00:00:00Z
     sent, so the record has no `http.request.method` and no status code.
     First user: authn's startup identity backfill (authn#147, pending
     merge; line pins follow its merge), only with exact naming on
-    (`exactUsernames.enabled`, off by default). The authn controller
-    population's `who` names that backfill.
+    (`exactUsernames.enabled`, off by default). Until it adopts v0.14.0,
+    the backfill logs each differing key (key and uid, never a value) and
+    records nothing. The authn controller population's `who` names that
+    backfill.
   - [coverage.md](./coverage.md), "Naming a derived credential Secret":
     the derived-name rule (nameless unless the derivation leaves the
     username unchanged) is scoped to refusals and username checks. A
@@ -64,8 +66,11 @@ timestamp: 2026-11-12T00:00:00Z
     `audit_envtest_test.go:137`. The cdc's helm child-write row is
     "audited, non-conformant for authorization-metadata-only changes": it
     counts a write that changes only an authorization annotation or label
-    as `metadata_only` and records nothing, pending core-provider#465 (its
-    fix, core-provider#467, is not yet merged).
+    as `metadata_only` and records nothing (core-provider#465). It is fixed
+    in core-provider#467 (`a644558`), unreleased; ships in 2.13.87: every
+    cdc upgrade, reconcile and rollback declares both authorization lists,
+    rollbacks through plumbing v1.64.0's `RollbackConfig`. The row stays
+    non-conformant until a released cdc carries it.
     The cdc's other rows are re-derived at b1f9b5f: a new uninstall row is
     "audited" (its real records are checked by core-provider's
     integration suite, `composition_test.go:1811`); the prune and the kept
