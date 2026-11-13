@@ -9,6 +9,22 @@ timestamp: 2026-11-12T00:00:00Z
 
 # Log
 
+- **2026-11-13**: v0.14.1. Docs and coverage only: no code, schema, record
+  or content hash changes.
+  - [coverage.md](./coverage.md)'s authn rows cite authn's `main` at
+    `b0c25cb5` (authn#152 merged), for both the emit sites and the
+    conformance evidence; the emit lines that moved are re-pinned (basic,
+    LDAP and OAuth logins, the ServiceAccount login, `RecordUnmapped`, the
+    mapping recorder, the step-up sweep, the identity backfill).
+  - authn#152 adds the outcomes the v0.14.0 rule found unchecked. The
+    ServiceAccount login is now "audited" (success, denied and failure on
+    real records). The logins stay "audited, conformance not yet proven":
+    basic and OIDC check all three outcomes, but no test reads an OAuth or
+    LDAP denied login.
+  - The "audited, conformance not yet proven" definition says it also
+    covers a path whose own records are checked, but not for every outcome
+    it lists.
+
 - **2026-11-12**: v0.14.0. Additive: no record of an earlier
   release changes, and no content hash.
   - `authn.username.check` gains two check results,

@@ -331,6 +331,40 @@ func TestCoverage_CoreProviderRows(t *testing.T) {
 	}
 }
 
+// v0.14.1: the authn rows cite one commit, authn@b0c25cb5 (authn#152), for
+// emit sites and evidence alike, and none of the superseded pins remain. The
+// ServiceAccount login is audited on all three outcomes; the logins are not,
+// for the OAuth and LDAP denied outcome no test reads.
+func TestCoverage_AuthnRowsCiteB0c25cb(t *testing.T) {
+	raw, err := os.ReadFile("docs/coverage.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	doc := string(raw)
+	for _, stale := range []string{"authn@0fa999e0", "authn@1365bf03", "authn@a222a326", "authn@8e275506", "`d733a5ad`"} {
+		if strings.Contains(doc, stale) {
+			t.Errorf("docs/coverage.md still cites %s", stale)
+		}
+	}
+	status := map[string]string{}
+	for _, r := range coverageRows(t, doc) {
+		if r.component != "authn" {
+			continue
+		}
+		for _, prefix := range []string{"basic, LDAP, OAuth and OIDC login", "ServiceAccount login:"} {
+			if strings.HasPrefix(r.path, prefix) {
+				status[prefix] = r.status
+				if !strings.Contains(r.path, "authn@b0c25cb5") {
+					t.Errorf("docs/coverage.md:%d: %s does not cite authn@b0c25cb5", r.line, prefix)
+				}
+			}
+		}
+	}
+	if status["ServiceAccount login:"] != "audited" || status["basic, LDAP, OAuth and OIDC login"] != coverageUnproven {
+		t.Errorf("statuses %v: want the ServiceAccount login audited and the logins %q", status, coverageUnproven)
+	}
+}
+
 // The cdc's helm child-write row (core-provider#459): up to 2.13.86 it counted
 // an authorization-metadata-only write as metadata_only and recorded nothing
 // (core-provider#465); core-provider#467 (a644558) fixed it, released in
