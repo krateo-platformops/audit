@@ -86,9 +86,9 @@ timestamp: 2026-11-12T00:00:00Z
     step-up sweep, certificate renewal, identity backfill and annotation sync
     (route and controller tests at authn@1365bf03; the route tests check
     each record through `auditlogtest.Only`); and the three agent-gateway
-    rows stay "audited" with their tests named. authn's OIDC step-up becomes
-    "audited, conformance not yet proven": its tests check only refusals,
-    and the success arm is authn#150, pending merge. The
+    rows stay "audited" with their tests named. authn's OIDC step-up is
+    "audited" from authn#150's merge (`8e275506`), whose test checks a
+    granted step-up's record beside the refusals. The
     `/usernames/check` row is re-derived from authn#136's merge
     (`d733a5ad`) and is "audited". The krateo.action column's planned form
     is documented, with a unit test of its guard.
