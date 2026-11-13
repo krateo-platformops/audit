@@ -1,4 +1,4 @@
-# audit — LLM doc index (pinned: v0.14.0)
+# audit — LLM doc index (pinned: v0.14.1)
 # One line per file; regenerate the pin on release.
 docs/index.md: the map of this bundle
 docs/overview.md: why one shared emitter and schema, and how a record flows to krateo_audit

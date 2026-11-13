@@ -520,7 +520,7 @@ v0.14.0 is additive: a plain bump changes no record and no content hash.
   results, `audit.CheckResultNameClaimedByClaimant` and
   `audit.CheckResultNameClaimedByAnother`: the name is claimed, and the
   claim is (or is not) the claimant's, the identity the request said it
-  expects (authn#146, pending merge). The writer's obligation, which
+  expects (authn#146, merged; authn writes them). The writer's obligation, which
   `Check` can't verify because it never sees the request: write these two
   only when the request carried a claimant, and bare `name_claimed` only
   when it didn't. Never record the claimant's identity.
@@ -547,7 +547,7 @@ v0.14.0 is additive: a plain bump changes no record and no content hash.
   (`<kind>:<key>`), so it grows with that list. `Check` reports the key
   without the reason as `unexpected` and the reason without the key as
   `missing`. First user: authn's startup identity backfill (authn#147,
-  pending merge), which compares those keys only with exact naming on
+  merged; it writes `authn.identity.inconsistent`), which compares those keys only with exact naming on
   (`exactUsernames.enabled`, off by default): on authn's default path it
   writes no such record.
 - **Naming a derived credential Secret** ([coverage.md](./coverage.md)) now
