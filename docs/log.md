@@ -9,18 +9,25 @@ timestamp: 2026-11-12T00:00:00Z
 
 # Log
 
-- **2026-11-13**: v0.14.1. Docs and coverage only: no code, schema, record
-  or content hash changes.
-  - [coverage.md](./coverage.md)'s authn rows cite authn's `main` at
-    `b0c25cb5` (authn#152 merged), for both the emit sites and the
-    conformance evidence; the emit lines that moved are re-pinned (basic,
-    LDAP and OAuth logins, the ServiceAccount login, `RecordUnmapped`, the
-    mapping recorder, the step-up sweep, the identity backfill).
-  - authn#152 adds the outcomes the v0.14.0 rule found unchecked. The
-    ServiceAccount login is now "audited" (success, denied and failure on
-    real records). The logins stay "audited, conformance not yet proven":
-    basic and OIDC check all three outcomes, but no test reads an OAuth or
-    LDAP denied login.
+- **2026-11-13**: v0.14.1. Docs and coverage only: no code, schema rule,
+  record or content hash changes (schema/v1.yaml's comments are updated).
+  - [coverage.md](./coverage.md)'s authn rows cite one commit, authn's
+    `main` at `3dd1695b` (after authn#146, #147 and #150 to #153 merged),
+    for both the emit sites and the conformance evidence. Every emit line
+    and test citation is re-derived at that commit; `auditlogtest.Only` is
+    cited at its exact range, `auditlogtest.go:37-43`.
+  - The logins are "audited": every outcome of all four strategies is
+    checked on real records (authn#152, and authn#153 for OAuth's and LDAP's
+    denied login). The ServiceAccount login is "audited" too.
+  - authn#146 merged: `/usernames/check` writes the claimant's results
+    (`name_claimed_by_claimant`, `name_claimed_by_another`), and its row and
+    the schema's `check_result` comment are re-derived from the merged code;
+    the claimant's records are checked through the route
+    (`claimant_test.go:126`).
+  - authn#147 merged: the startup backfill writes `kept_existing_value`
+    records (`authn.identity.inconsistent`, one per conflicting key, only
+    with exact naming on). Its row is "audited" (`exact_test.go:303`), and
+    the schema comment and usage.md say it is merged.
   - The "audited, conformance not yet proven" definition says it also
     covers a path whose own records are checked, but not for every outcome
     it lists.

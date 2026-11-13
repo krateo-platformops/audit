@@ -812,12 +812,14 @@ keys:
       # obligation, which Check doesn't verify. The record names the object
       # and, in krateo.audit.authorization_key, the one key it left as found:
       # one record per conflicting key, never a value. First user: authn's
-      # startup identity backfill (authn#147, pending merge; line pins follow
-      # its merge): a credential Secret whose username annotation, principal
-      # label or username-label differs from what its certificate proves is
-      # left as found. The backfill compares those keys only with exact
-      # naming on (exactUsernames.enabled, off by default), so authn writes
-      # no such record on its default path.
+      # startup identity backfill (authn#147, merged, at 3dd1695b,
+      # go/authn/internal/: identitybackfill/backfill.go:172, recorder
+      # auditlog/controller.go:180-198, IdentityKept, action
+      # authn.identity.inconsistent): a credential Secret whose username
+      # annotation, principal label or username-label differs from what its
+      # certificate proves is left as found. The backfill compares those keys
+      # only with exact naming on (backfill.go:157, exactUsernames.enabled,
+      # off by default), so authn writes no such record on its default path.
       controller: {level: optional, values: [kept_resource_policy, kept_existing_value]}
 
   - name: krateo.audit.check_result
@@ -842,14 +844,15 @@ keys:
       # authn owns each value's meaning: available, or the name guard's
       # answer (reserved, name_claimed, name_held_legacy, name_provisioned,
       # name_bound), or invalid.
-      # The claimant's results (v0.14.0; authn#146, pending merge, at
-      # 967e455e, go/authn/): a request may carry a claimant, the identity the
+      # The claimant's results (v0.14.0; authn#146, merged, at 3dd1695b,
+      # go/authn/internal/): a request may carry a claimant, the identity the
       # caller expects to hold the name (routes/usernames/check.go:53-57,
-      # :64-68; read by readRequest, :250-274, its claim built by
+      # :64-68; read by readRequest, :267-291, its claim built by
       # Claimant.claim, :79-87; a claimant that names no identity is
       # invalid_request). When the name is claimed, config.CheckUsernameFor
-      # (internal/helpers/kube/config/availability.go:69-104, the comparison
-      # :97-104) says whether the claim is the claimant's:
+      # (helpers/kube/config/availability.go:94-162, the comparison
+      # :105-114) says whether the claim is the claimant's, and checkResult
+      # (check.go:237-242, claimedResults :227-231) writes:
       #   name_claimed_by_claimant: the name's claim is the claimant's.
       #   name_claimed_by_another: the name's claim is someone else's.
       # The writer's obligation, which Check can't verify (it never sees the

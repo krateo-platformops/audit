@@ -331,37 +331,54 @@ func TestCoverage_CoreProviderRows(t *testing.T) {
 	}
 }
 
-// v0.14.1: the authn rows cite one commit, authn@b0c25cb5 (authn#152), for
-// emit sites and evidence alike, and none of the superseded pins remain. The
-// ServiceAccount login is audited on all three outcomes; the logins are not,
-// for the OAuth and LDAP denied outcome no test reads.
-func TestCoverage_AuthnRowsCiteB0c25cb(t *testing.T) {
+// v0.14.1: the authn rows cite one commit, authn@3dd1695b (main after
+// authn#146, #147 and #153 merged), for emit sites and evidence alike, and
+// none of the superseded pins remain. The logins (every outcome, all four
+// strategies), the ServiceAccount login, the username check and the
+// kept-value backfill are audited; `Only` is cited at its exact range.
+func TestCoverage_AuthnRowsCite3dd1695b(t *testing.T) {
 	raw, err := os.ReadFile("docs/coverage.md")
 	if err != nil {
 		t.Fatal(err)
 	}
 	doc := string(raw)
-	for _, stale := range []string{"authn@0fa999e0", "authn@1365bf03", "authn@a222a326", "authn@8e275506", "`d733a5ad`"} {
+	for _, stale := range []string{"authn@0fa999e0", "authn@1365bf03", "authn@a222a326", "authn@8e275506", "authn@b0c25cb5", "`d733a5ad`",
+		"auditlogtest.go:36-42", "(authn#147) |"} {
 		if strings.Contains(doc, stale) {
 			t.Errorf("docs/coverage.md still cites %s", stale)
 		}
 	}
-	status := map[string]string{}
+	want := map[string]string{
+		"basic, LDAP, OAuth and OIDC login":                  "audited",
+		"ServiceAccount login:":                              "audited",
+		"`POST /usernames/check`":                            "audited",
+		"identity backfill at startup, with exact naming on": "audited",
+	}
+	seen := map[string]bool{}
 	for _, r := range coverageRows(t, doc) {
 		if r.component != "authn" {
 			continue
 		}
-		for _, prefix := range []string{"basic, LDAP, OAuth and OIDC login", "ServiceAccount login:"} {
-			if strings.HasPrefix(r.path, prefix) {
-				status[prefix] = r.status
-				if !strings.Contains(r.path, "authn@b0c25cb5") {
-					t.Errorf("docs/coverage.md:%d: %s does not cite authn@b0c25cb5", r.line, prefix)
-				}
+		for prefix, status := range want {
+			if !strings.HasPrefix(r.path, prefix) {
+				continue
+			}
+			seen[prefix] = true
+			if r.status != status {
+				t.Errorf("docs/coverage.md:%d: %s: status %q, want %q", r.line, prefix, r.status, status)
+			}
+			if !strings.Contains(r.path, "authn@3dd1695b") {
+				t.Errorf("docs/coverage.md:%d: %s does not cite authn@3dd1695b", r.line, prefix)
 			}
 		}
 	}
-	if status["ServiceAccount login:"] != "audited" || status["basic, LDAP, OAuth and OIDC login"] != coverageUnproven {
-		t.Errorf("statuses %v: want the ServiceAccount login audited and the logins %q", status, coverageUnproven)
+	for prefix := range want {
+		if !seen[prefix] {
+			t.Errorf("no authn row %q", prefix)
+		}
+	}
+	if !strings.Contains(doc, "auditlogtest/auditlogtest.go:37-43`") {
+		t.Error("docs/coverage.md does not cite Only at auditlogtest.go:37-43")
 	}
 }
 
@@ -452,10 +469,10 @@ func TestCoverage_CdcRowsRederived(t *testing.T) {
 	}
 }
 
-// The kept_existing_value text after authn's review (v0.14.0): authn#147 is
-// cited pending merge with no commit or line pin, the backfill is said to
-// compare those keys only with exact naming on, the usage example sends no
-// method, and the authn controller population names the backfill.
+// The kept_existing_value text matches authn's emitter: authn#147 is merged
+// and writes authn.identity.inconsistent (v0.14.1), the backfill compares
+// those keys only with exact naming on, the usage example sends no method,
+// and the authn controller population names the backfill.
 func TestKeptExistingValue_TextMatchesTheEmitter(t *testing.T) {
 	read := func(p string) string {
 		t.Helper()
@@ -479,9 +496,14 @@ func TestKeptExistingValue_TextMatchesTheEmitter(t *testing.T) {
 		t.Fatal("no \"A kept value\" bullet in docs/usage.md")
 	}
 	bullet := usage[ustart:uend]
+	// v0.14.1: authn#147 is merged and writes the record, so both texts say
+	// so; neither cites the superseded fdd4b61f nor calls it pending.
 	for name, text := range map[string]string{"schema/v1.yaml": comment, "docs/usage.md": bullet} {
-		if !strings.Contains(text, "authn#147, pending merge") || strings.Contains(text, "fdd4b61f") || strings.Contains(text, "backfill.go:") {
-			t.Errorf("%s: authn#147 is not cited pending merge without pins", name)
+		if !strings.Contains(text, "authn#147, merged") || strings.Contains(text, "fdd4b61f") || strings.Contains(text, "pending merge") {
+			t.Errorf("%s: authn#147 is not cited as merged", name)
+		}
+		if !strings.Contains(text, "authn.identity.inconsistent") {
+			t.Errorf("%s: does not name the literal authn writes", name)
 		}
 		if !strings.Contains(text, "exactUsernames.enabled") || !strings.Contains(text, "off by default") {
 			t.Errorf("%s: does not say the backfill compares the keys only with exact naming on", name)
@@ -498,11 +520,11 @@ func TestKeptExistingValue_TextMatchesTheEmitter(t *testing.T) {
 			}
 		}
 	}
-	if !strings.Contains(cov, "logs each differing key (key and uid, never a value) and records nothing until it adopts v0.14.0's kept_existing_value") {
-		t.Error("docs/coverage.md: the backfill row does not say what authn#147 does today")
+	if strings.Contains(cov, "records nothing until it adopts v0.14.0's kept_existing_value") {
+		t.Error("docs/coverage.md: the backfill row still says authn#147 records nothing; merged, it writes the record")
 	}
-	// The backfill row's planned literal and the usage example's Action are
-	// one literal: authn#147's ActionIdentityInconsistent.
+	// The backfill row's literal and the usage example's Action are one
+	// literal: authn#147's ActionIdentityInconsistent, now emitted.
 	exAction := regexp.MustCompile(`Action: "([^"]+)", Verb: "update",`).FindStringSubmatch(bullet)
 	if exAction == nil {
 		t.Fatal("docs/usage.md: no Action in the kept-value example")
@@ -520,7 +542,7 @@ func TestKeptExistingValue_TextMatchesTheEmitter(t *testing.T) {
 	if len(backfill) != 1 {
 		t.Fatalf("%d authn backfill kept-value rows, want 1", len(backfill))
 	}
-	if want := "planned: `" + exAction[1] + "` (authn#147)"; backfill[0].action != want {
+	if want := "`" + exAction[1] + "`"; backfill[0].action != want {
 		t.Errorf("docs/coverage.md:%d: krateo.action %q, want %q (the usage example's literal)", backfill[0].line, backfill[0].action, want)
 	}
 	if strings.Contains(bullet, "HTTPMethod:") {
