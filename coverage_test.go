@@ -139,6 +139,11 @@ func coverageProblems(rows []coverageRow, defined map[string]bool) []string {
 		if r.status == "audited" && !coverageConformance.MatchString(r.path) {
 			add(r, "status audited, but the path names no test that checks its records (Conformance: `<test file>:<line>`)")
 		}
+		// Every outcome the row lists must be checked: one the path says is
+		// not proven keeps the row from "audited".
+		if r.status == "audited" && strings.Contains(strings.ToLower(r.path), "not proven") {
+			add(r, "status audited, but the path says an outcome is not proven")
+		}
 		if !audited && !outOfScope && r.status != "not audited" {
 			add(r, "status %q is not audited, audited, conformance not yet proven, audited, non-conformant, not audited or out of scope (reason)", r.status)
 		}

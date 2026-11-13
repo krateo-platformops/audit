@@ -79,19 +79,22 @@ timestamp: 2026-11-12T00:00:00Z
     deletion are "audited, conformance not yet proven".
   - [coverage.md](./coverage.md)'s status rule: "audited" now means an
     owner test runs the path's real records through the schema's checker
-    (`AssertConformant`, or `auditschema check` for a projected record), and
-    the row names it after "Conformance:"; the coverage test enforces it on
-    every row. Re-derived on that rule: snowplow's RESTAction stage; authn's
-    logins, ServiceAccount login, `/delegate`, mapping-lookup refusals,
-    step-up sweep, certificate renewal, identity backfill and annotation sync
-    (route and controller tests at authn@1365bf03; the route tests check
-    each record through `auditlogtest.Only`); and the three agent-gateway
-    rows stay "audited" with their tests named. authn's OIDC step-up is
-    "audited" from authn#150's merge (`8e275506`), whose test checks a
-    granted step-up's record beside the refusals. The
-    `/usernames/check` row is re-derived from authn#136's merge
-    (`d733a5ad`) and is "audited". The krateo.action column's planned form
-    is documented, with a unit test of its guard.
+    (`AssertConformant`, or `auditschema check` for a projected record), for
+    every outcome the row lists, and the row names it after "Conformance:".
+    The coverage test enforces both on every row (a path that says an
+    outcome is "not proven" is never audited). Audited on that rule:
+    snowplow's RESTAction stage; authn's `/delegate`, mapping-lookup
+    refusals, OIDC step-up (from authn#150's merge, `8e275506`),
+    `/usernames/check` (from authn#136's merge, `d733a5ad`), step-up sweep,
+    identity backfill and annotation sync (tests at authn@1365bf03; the route
+    tests check each record through `auditlogtest.Only`); and the three
+    agent-gateway rows, whose fixture's provenance (agentgateway v1.5.0,
+    agentgateway-policies' access-log CEL; not re-captured in CI) is named.
+    "Audited, conformance not yet proven" for an outcome no test checks:
+    authn's logins and ServiceAccount login (failure; denied too for the
+    latter), the service certificate issue (success), the cdc's uninstall
+    and core-provider's RBAC set (failure). The krateo.action column's
+    planned form is documented, with a unit test of its guard.
   - `http.request.method` is `not_when: kept_existing_value`: Check refuses
     a method on a declined write. The verb `update` stays the writer's
     obligation, not checked.

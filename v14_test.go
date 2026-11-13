@@ -266,9 +266,9 @@ func TestCoverage_DerivedNameRuleIsScopedToRefusalsAndChecks(t *testing.T) {
 // core-provider's rows (v0.14.0, core-provider@b1f9b5f): every row that emits
 // names the core-provider scope, cites b1f9b5f and says it is released in
 // 2.13.87 (never "unreleased" again); the
-// seven literals are covered; and "audited" is claimed only by the row whose
-// conformance a core-provider test proves (audit_envtest_test.go:137). Every
-// other emitting row is "audited, conformance not yet proven".
+// seven literals are covered; and no row is "audited": the composition RBAC
+// set's envtest (audit_envtest_test.go:137) checks successes only, so every
+// emitting row is "audited, conformance not yet proven".
 func TestCoverage_CoreProviderRows(t *testing.T) {
 	raw, err := os.ReadFile("docs/coverage.md")
 	if err != nil {
@@ -310,8 +310,8 @@ func TestCoverage_CoreProviderRows(t *testing.T) {
 	if actions["secret.delete"] {
 		t.Error("a core-provider row carries secret.delete, which has no emit site")
 	}
-	if audited != 1 {
-		t.Errorf("%d core-provider rows are audited, want 1 (the composition RBAC set)", audited)
+	if audited != 0 {
+		t.Errorf("%d core-provider rows are audited, want 0: the RBAC set's envtest checks successes only, so a failed write is not proven", audited)
 	}
 	// The status is a closed value: an unproven path names its scope like any
 	// audited one, and a status that assumes conformance is refused.
@@ -373,9 +373,9 @@ func TestCoverage_CdcHelmWriteRow(t *testing.T) {
 }
 
 // The cdc's other rows, re-derived at core-provider@b1f9b5f: each names the
-// cdc scope and cites b1f9b5f; only the uninstall, whose real records the
-// integration suite checks (composition_test.go:1811), is "audited"; the
-// prune and the kept deletion are "audited, conformance not yet proven". No
+// cdc scope and cites b1f9b5f; the uninstall (success checked by the
+// integration suite, composition_test.go:1811, failure not), the prune and
+// the kept deletion are "audited, conformance not yet proven". No
 // row is left "not yet re-derived".
 func TestCoverage_CdcRowsRederived(t *testing.T) {
 	raw, err := os.ReadFile("docs/coverage.md")
@@ -387,7 +387,7 @@ func TestCoverage_CdcRowsRederived(t *testing.T) {
 	}
 	want := map[string]string{
 		"helm prune of a child":           coverageUnproven,
-		"helm uninstall of a Composition": "audited",
+		"helm uninstall of a Composition": coverageUnproven, // success checked (composition_test.go:1811), failure not
 		"a kept deletion":                 coverageUnproven,
 	}
 	seen := map[string]bool{}
@@ -520,6 +520,8 @@ func TestCoverage_PlannedLiteralAndAuditedEvidence(t *testing.T) {
 		{"audited, evidence without a line", "audited", "a backfill. Conformance: `internal/backfill_test.go`", "`authn.identity.backfilled`", "names no test that checks its records"},
 		{"audited, a test script", "audited", "a projection. Conformance: `tests/projection.py:12`", "`authn.identity.backfilled`", ""},
 		{"unproven needs no evidence", coverageUnproven, "a backfill", "`authn.identity.backfilled`", ""},
+		{"audited with an outcome not proven", "audited", "a backfill. Conformance: `internal/backfill_test.go:1`. Not proven for failure", "`authn.identity.backfilled`", "an outcome is not proven"},
+		{"unproven may name what is checked", coverageUnproven, "a backfill. Conformance, for success only: `internal/backfill_test.go:1`. Not proven for failure", "`authn.identity.backfilled`", ""},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			r := base
