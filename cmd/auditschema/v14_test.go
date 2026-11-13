@@ -38,7 +38,6 @@ const keptRecord = `{"eventName":"audit","attributes":[
   {"key":"krateo.audit.actor_class","value":{"stringValue":"controller"}},
   {"key":"krateo.action","value":{"stringValue":"authn.identity.inconsistent"}},
   {"key":"krateo.audit.verb","value":{"stringValue":"update"}},
-  {"key":"http.request.method","value":{"stringValue":"PUT"}},
   {"key":"krateo.audit.outcome","value":{"stringValue":"denied"}},
   {"key":"krateo.audit.denial_reason","value":{"stringValue":"kept_existing_value"}},
   {"key":"krateo.audit.authorization_key","value":{"stringValue":"annotation:authn.krateo.io/username"}},

@@ -474,7 +474,7 @@ A controller row (v0.14.0) for a write the controller declined: an object
 already holds an authorization-bearing annotation or label with a value
 other than the one the controller would write, and it leaves the value as
 found. Verb `update`, outcome `denied`, `krateo.audit.denial_reason`
-`kept_existing_value`, no status code (nothing was sent). The record names the
+`kept_existing_value`, no `http.request.method` and no status code (nothing was sent). The record names the
 object and, in `krateo.audit.authorization_key`, the one key it kept, as
 `<kind>:<key>` (`audit.AuthorizationKeyValue`): one record per conflicting key,
 never a value. The key's closed set is generated from
@@ -615,7 +615,7 @@ actor: `actor`). Each marker is counted under
 |---|---|---|
 | `github.com/krateo-platformops/snowplow/audit` | `request` | snowplow (H, and T for an agent going through /call) |
 | `github.com/krateo-platformops/authn/audit` | `request` | authn's login and /delegate records |
-| `github.com/krateo-platformops/authn/audit/controller` | `controller` | authn's background credential writes (certificate renewal, the step-up Secret sweep) |
+| `github.com/krateo-platformops/authn/audit/controller` | `controller` | authn's background credential writes (certificate renewal, the step-up Secret sweep, the startup identity backfill) |
 | `github.com/krateo-platformops/observability/gateway-audit` | `gateway` | the collector's gateway-audit projection |
 | `github.com/krateo-platformops/access-review/audit` | `controller` | access-review |
 | `github.com/krateo-platformops/identity-lifecycle/audit` | `controller` | identity-lifecycle |

@@ -400,6 +400,51 @@ func TestCoverage_CdcRowsRederived(t *testing.T) {
 	}
 }
 
+// The kept_existing_value text after authn's review (v0.14.0): authn#147 is
+// cited pending merge with no commit or line pin, the backfill is said to
+// compare those keys only with exact naming on, the usage example sends no
+// method, and the authn controller population names the backfill.
+func TestKeptExistingValue_TextMatchesTheEmitter(t *testing.T) {
+	read := func(p string) string {
+		t.Helper()
+		b, err := os.ReadFile(p)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return strings.Join(strings.Fields(string(b)), " ")
+	}
+	yaml := read("schema/v1.yaml")
+	start := strings.Index(yaml, "# kept_existing_value (v0.14.0)")
+	end := strings.Index(yaml, "controller: {level: optional, values: [kept_resource_policy, kept_existing_value]}")
+	if start < 0 || end < start {
+		t.Fatal("no kept_existing_value comment in schema/v1.yaml")
+	}
+	comment := yaml[start:end]
+	usage := read("docs/usage.md")
+	ustart := strings.Index(usage, "**A kept value.**")
+	uend := strings.Index(usage, "**Naming a derived credential Secret**")
+	if ustart < 0 || uend < ustart {
+		t.Fatal("no \"A kept value\" bullet in docs/usage.md")
+	}
+	bullet := usage[ustart:uend]
+	for name, text := range map[string]string{"schema/v1.yaml": comment, "docs/usage.md": bullet} {
+		if !strings.Contains(text, "authn#147, pending merge") || strings.Contains(text, "fdd4b61f") || strings.Contains(text, "backfill.go:") {
+			t.Errorf("%s: authn#147 is not cited pending merge without pins", name)
+		}
+		if !strings.Contains(text, "exactUsernames.enabled") || !strings.Contains(text, "off by default") {
+			t.Errorf("%s: does not say the backfill compares the keys only with exact naming on", name)
+		}
+	}
+	if strings.Contains(bullet, "HTTPMethod:") {
+		t.Error("docs/usage.md: the kept-value example sends a method, but nothing was sent")
+	}
+	for _, p := range Populations() {
+		if p.Scope == "github.com/krateo-platformops/authn/audit/controller" && !strings.Contains(p.Who, "the startup identity backfill") {
+			t.Errorf("authn's controller population does not name the startup identity backfill: %q", p.Who)
+		}
+	}
+}
+
 // Emit writes the kept key, one record per conflicting key, and each record
 // passes Check; no value is written.
 func TestEmit_KeptExistingValue(t *testing.T) {
@@ -409,7 +454,7 @@ func TestEmit_KeptExistingValue(t *testing.T) {
 			t.Fatalf("%v is not declared", conflict)
 		}
 		e, rec := newEmitter(t, WithWriter(WriterController), WithActor("system:serviceaccount:krateo-system:authn", ClassController))
-		e.Emit(spanCtx(t), Event{Action: "authn.identity.inconsistent", Verb: "update", HTTPMethod: "PUT",
+		e.Emit(spanCtx(t), Event{Action: "authn.identity.inconsistent", Verb: "update",
 			Outcome: OutcomeDenied, DenialReason: DenialReasonKeptExistingValue, AuthorizationKey: key, Preview: PreviewFalse,
 			Namespace: "krateo-system", Version: "v1", Resource: "secrets", Kind: "Secret", ObjectName: "example-user-clientconfig"})
 		got := attrs(only(t, rec))
@@ -418,6 +463,9 @@ func TestEmit_KeptExistingValue(t *testing.T) {
 		}
 		if _, here := got[KeyHTTPStatusCode]; here {
 			t.Error("a status code on a declined write")
+		}
+		if _, here := got[KeyHTTPMethod]; here {
+			t.Error("a method on a declined write: nothing was sent")
 		}
 		if vs := Check(WriterController, kvs(got)); len(vs) > 0 {
 			t.Errorf("%s: %v", key, vs)

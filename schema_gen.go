@@ -726,7 +726,7 @@ var schemaContentLabels = []string{"authn.krateo.io/principal", "authn.krateo.io
 var schemaPopulations = []Population{
 	{Scope: "github.com/krateo-platformops/snowplow/audit", Writer: WriterRequest, Who: "snowplow (H, and T for an agent going through /call)"},
 	{Scope: "github.com/krateo-platformops/authn/audit", Writer: WriterRequest, Who: "authn's login and /delegate records"},
-	{Scope: "github.com/krateo-platformops/authn/audit/controller", Writer: WriterController, Who: "authn's background credential writes (certificate renewal, the step-up Secret sweep)"},
+	{Scope: "github.com/krateo-platformops/authn/audit/controller", Writer: WriterController, Who: "authn's background credential writes (certificate renewal, the step-up Secret sweep, the startup identity backfill)"},
 	{Scope: "github.com/krateo-platformops/observability/gateway-audit", Writer: WriterGateway, Who: "the collector's gateway-audit projection"},
 	{Scope: "github.com/krateo-platformops/access-review/audit", Writer: WriterController, Who: "access-review"},
 	{Scope: "github.com/krateo-platformops/identity-lifecycle/audit", Writer: WriterController, Who: "identity-lifecycle"},

@@ -387,7 +387,7 @@ A controller row (v0.14.0) for a write the controller declined: an object
 already holds an authorization-bearing annotation or label with a value
 other than the one the controller would write, and it leaves the value as
 found. Verb ` + "`update`" + `, outcome ` + "`denied`" + `, ` + "`krateo.audit.denial_reason`" + `
-` + "`kept_existing_value`" + `, no status code (nothing was sent). The record names the
+` + "`kept_existing_value`" + `, no ` + "`http.request.method`" + ` and no status code (nothing was sent). The record names the
 object and, in ` + "`krateo.audit.authorization_key`" + `, the one key it kept, as
 ` + "`<kind>:<key>`" + ` (` + "`audit.AuthorizationKeyValue`" + `): one record per conflicting key,
 never a value. The key's closed set is generated from

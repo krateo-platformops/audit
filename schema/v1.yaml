@@ -350,7 +350,7 @@ populations:
     who: authn's login and /delegate records
   - scope: github.com/krateo-platformops/authn/audit/controller
     writer: controller
-    who: authn's background credential writes (certificate renewal, the step-up Secret sweep)
+    who: authn's background credential writes (certificate renewal, the step-up Secret sweep, the startup identity backfill)
   - scope: github.com/krateo-platformops/observability/gateway-audit
     writer: gateway
     who: the collector's gateway-audit projection
@@ -802,15 +802,16 @@ keys:
       # helm.sh/resource-policy: keep (verb delete, outcome denied).
       # kept_existing_value (v0.14.0): the writer declined to overwrite an
       # authorization-bearing value the object already holds with another
-      # value (verb update, outcome denied, no status code: nothing was
-      # sent). The record names the object and, in
-      # krateo.audit.authorization_key, the one key it left as found: one
-      # record per conflicting key, never a value. First user: authn's
-      # startup backfill (authn#147, pending merge, at fdd4b61f,
-      # go/authn/internal/identitybackfill/backfill.go:161-169, conflicts
-      # from missingExact :334-347): a credential Secret whose username
-      # annotation, principal label or username-label differs from what its
-      # certificate proves is left as found.
+      # value (verb update, outcome denied; nothing was sent, so no
+      # http.request.method and no status code). The record names the object
+      # and, in krateo.audit.authorization_key, the one key it left as found:
+      # one record per conflicting key, never a value. First user: authn's
+      # startup identity backfill (authn#147, pending merge; line pins follow
+      # its merge): a credential Secret whose username annotation, principal
+      # label or username-label differs from what its certificate proves is
+      # left as found. The backfill compares those keys only with exact
+      # naming on (exactUsernames.enabled, off by default), so authn writes
+      # no such record on its default path.
       controller: {level: optional, values: [kept_resource_policy, kept_existing_value]}
 
   - name: krateo.audit.check_result

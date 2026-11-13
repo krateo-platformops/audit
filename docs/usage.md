@@ -529,12 +529,15 @@ v0.14.0 is additive: a plain bump changes no record and no content hash.
   another value writes a denied `update` with
   `audit.DenialReasonKeptExistingValue` and the key it kept in
   `Event.AuthorizationKey` (`krateo.audit.authorization_key`), one record
-  per key, never a value, no status code:
+  per key, never a value. Nothing was sent, so the record has no
+  `HTTPMethod` and no status code: for a controller, `http.request.method`
+  is conditional on an HTTP request having been made, as on a kept
+  deletion:
 
   ```go
   key, ok := audit.AuthorizationKeyValue(audit.MetadataKindAnnotation, "authn.krateo.io/username")
   if ok {
-  	e.Emit(ctx, audit.Event{Action: "authn.identity.inconsistent", Verb: "update", HTTPMethod: "PUT",
+  	e.Emit(ctx, audit.Event{Action: "authn.identity.inconsistent", Verb: "update",
   		Outcome: audit.OutcomeDenied, DenialReason: audit.DenialReasonKeptExistingValue, AuthorizationKey: key,
   		Namespace: ns, Version: "v1", Resource: "secrets", Kind: "Secret", ObjectName: name, Preview: preview})
   }
@@ -543,8 +546,10 @@ v0.14.0 is additive: a plain bump changes no record and no content hash.
   The key's closed set is generated from `authorization_metadata`
   (`<kind>:<key>`), so it grows with that list. `Check` reports the key
   without the reason as `unexpected` and the reason without the key as
-  `missing`. First user: authn's startup backfill (authn#147, pending
-  merge).
+  `missing`. First user: authn's startup identity backfill (authn#147,
+  pending merge), which compares those keys only with exact naming on
+  (`exactUsernames.enabled`, off by default): on authn's default path it
+  writes no such record.
 - **Naming a derived credential Secret** ([coverage.md](./coverage.md)) now
   applies to refusals and username checks only: a successful write names
   the Secret it wrote.

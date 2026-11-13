@@ -30,9 +30,12 @@ timestamp: 2026-11-12T00:00:00Z
     `kept_existing_value`, makes `Check` hold the pair both ways: the key
     without the reason is `unexpected`, the reason without the key
     `missing`. One record per conflicting key, never a value.
-    `AuthorizationKeyValue(kind, key)` spells a declared key. First user:
-    authn's startup backfill (authn#147, pending merge, at `fdd4b61f`:
-    `go/authn/internal/identitybackfill/backfill.go:161-169`).
+    `AuthorizationKeyValue(kind, key)` spells a declared key. Nothing was
+    sent, so the record has no `http.request.method` and no status code.
+    First user: authn's startup identity backfill (authn#147, pending
+    merge; line pins follow its merge), only with exact naming on
+    (`exactUsernames.enabled`, off by default). The authn controller
+    population's `who` names that backfill.
   - [coverage.md](./coverage.md), "Naming a derived credential Secret":
     the derived-name rule (nameless unless the derivation leaves the
     username unchanged) is scoped to refusals and username checks. A
