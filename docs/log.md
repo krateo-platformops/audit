@@ -9,6 +9,104 @@ timestamp: 2026-11-12T00:00:00Z
 
 # Log
 
+- **2026-11-12**: v0.14.0. Additive: no record of an earlier
+  release changes, and no content hash.
+  - `authn.username.check` gains two check results,
+    `name_claimed_by_claimant` and `name_claimed_by_another`: the name is
+    claimed, and the claim is, or is not, the claimant's (authn#146,
+    pending merge, at `967e455e`: `config.CheckUsernameFor`,
+    `go/authn/internal/helpers/kube/config/availability.go:69-104`;
+    `routes/usernames/check.go` `readRequest` `:250-274`,
+    `Claimant.claim` `:79-87`). The writer's obligation, stated in the
+    schema since `Check` never sees the request: these only when the
+    request carried a claimant, bare `name_claimed` only when it didn't.
+    The claimant's identity is never recorded.
+  - The controller's denial reason `kept_existing_value`: the writer
+    declined to overwrite an authorization-bearing value already present
+    (verb update, outcome denied, no status code). With it, a new controller
+    key, `krateo.audit.authorization_key` (`Event.AuthorizationKey`), the
+    kept key as `<kind>:<key>`, whose closed set the generator builds from
+    `authorization_metadata` (`values_from`). A new condition,
+    `kept_existing_value`, makes `Check` hold the pair both ways: the key
+    without the reason is `unexpected`, the reason without the key
+    `missing`. One record per conflicting key, never a value.
+    `AuthorizationKeyValue(kind, key)` spells a declared key. Nothing was
+    sent, so the record has no `http.request.method` and no status code.
+    First user: authn's startup identity backfill (authn#147, pending
+    merge; line pins follow its merge), only with exact naming on
+    (`exactUsernames.enabled`, off by default). Until it adopts v0.14.0,
+    the backfill logs each differing key (key and uid, never a value) and
+    records nothing; its planned literal is `authn.identity.inconsistent`
+    (coverage.md: "planned: ... (authn#147)", a new form for a literal an
+    unmerged emitter will write, allowed only on a "not audited" row). The authn controller population's `who` names that
+    backfill.
+  - [coverage.md](./coverage.md), "Naming a derived credential Secret":
+    the derived-name rule (nameless unless the derivation leaves the
+    username unchanged) is scoped to refusals and username checks. A
+    successful write names its real target: on authn's default path since
+    authn#148 (authn 0.45.0, `dc732f89`), the name guard's claimless branch
+    (`guard.go:158-166`, `name_held_legacy`) and `Put`'s 409 re-check
+    (`storage/storage.go:194-216`, `ErrHeldByAnother`) prove a Secret
+    written before claims is the username's with plumbing's
+    `endpoints.OwnsSecret` before writing it.
+  - The population `github.com/krateo-platformops/oasgen-provider/audit`
+    (controller): oasgen-provider's RBAC (`rbac.apply`, `rbac.delete`)
+    and admission-policy (`admissionpolicy.apply`) writes
+    (oasgen-provider#543). rest-dynamic-controller's bare scope is noted as
+    a historical exception; a new scope is the module path plus `/audit`.
+  - The `krateo.action` registry gains core-provider's controller literals,
+    each described by its code path at core-provider@b1f9b5f:
+    `rbac.apply`, `rbac.delete`, `secret.apply`, `authn.mapping.apply`,
+    `composition.mirror`, `composition.hub.delete`, `composition.migrate`.
+    No `secret.delete`: no core-provider site deletes a credential Secret.
+  - [coverage.md](./coverage.md): core-provider's rows cite b1f9b5f, each
+    with its scope, literals and emit sites (released in core-provider
+    2.13.87). A fifth status, "audited, conformance not yet proven", for a
+    path that emits but whose own records no owner test has run
+    `AssertConformant` on. Only the composition RBAC set is "audited",
+    proven by core-provider's `audit_envtest_test.go:137`. The cdc's helm
+    child-write row: up to 2.13.86 the cdc counted a write that changes
+    only an authorization annotation or label as `metadata_only` and
+    recorded nothing (core-provider#465). It is fixed in core-provider#467
+    (`a644558`), released in 2.13.87: every cdc upgrade, reconcile and
+    rollback declares both authorization lists, rollbacks through
+    plumbing's `RollbackConfig`. No test runs `AssertConformant` on a real
+    authorization-metadata-only record yet, so the row is "audited,
+    conformance not yet proven".
+    The cdc's other rows are re-derived at b1f9b5f: a new uninstall row is
+    "audited" (its real records are checked by core-provider's
+    integration suite, `composition_test.go:1811`); the prune and the kept
+    deletion are "audited, conformance not yet proven".
+  - [coverage.md](./coverage.md)'s status rule: "audited" now means an
+    owner test runs the path's real records through the schema's checker
+    (`AssertConformant`, or `auditschema check` for a projected record), for
+    every outcome the row lists, and the row names it after "Conformance:".
+    The coverage test enforces both on every row (a path that says an
+    outcome is "not proven" is never audited). Audited on that rule:
+    snowplow's RESTAction stage; authn's `/delegate`, mapping-lookup
+    refusals, OIDC step-up (from authn#150's merge, `8e275506`),
+    `/usernames/check` (from authn#136's merge, `d733a5ad`), the service
+    certificate issue (from authn#151's merge, `a222a326`, success and
+    failure), step-up sweep, identity backfill and annotation sync (tests at
+    authn@1365bf03; the route tests check each record through
+    `auditlogtest.Only`); and the three agent-gateway rows, whose fixture's
+    provenance (agentgateway v1.5.0, agentgateway-policies' access-log CEL;
+    not re-captured in CI) is named. "Audited, conformance not yet proven"
+    for an outcome no test checks: authn's logins and ServiceAccount login
+    (failure; denied too for the latter), the cdc's uninstall and
+    core-provider's RBAC set (failure). The krateo.action column's
+    planned form is documented, with a unit test of its guard.
+  - `http.request.method` is `not_when: kept_existing_value`: Check refuses
+    a method on a declined write. The verb `update` stays the writer's
+    obligation, not checked.
+  - The `rbac.apply` and `rbac.delete` registry rows describe any
+    controller's RBAC write (core-provider's sites, and oasgen-provider's
+    planned ones). `admissionpolicy.apply` is not registered: no emit site
+    writes it yet.
+  - Compatibility: `testdata/v0.13.0/` (30 records audit v0.13.0's own
+    `Emit` wrote, its `rbac_not_allowed` refusal included) gives v0.13.0's
+    own report, and every earlier replay is unchanged.
+
 - **2026-11-12**: v0.13.0. Additive: one more declared annotation, one more
   request denial reason; no record shape, rule or content hash changes.
   - The authorization-bearing labels: `AuthorizationLabels()`

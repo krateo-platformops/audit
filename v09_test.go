@@ -12,6 +12,7 @@ import (
 var usernameCheckResults = []string{
 	CheckResultAvailable, CheckResultReserved, CheckResultNameClaimed, CheckResultNameHeldLegacy,
 	CheckResultNameProvisioned, CheckResultNameBound, CheckResultInvalid,
+	CheckResultNameClaimedByClaimant, CheckResultNameClaimedByAnother, // v0.14.0 (authn#146)
 }
 
 const usernameCheck = "authn.username.check"
@@ -69,7 +70,8 @@ func TestCheck_CheckResult(t *testing.T) {
 
 	// The set, by hand: the request writer's, on authn.username.check only,
 	// in audit#23's order; no key-level enum and no per-writer set.
-	want := []string{"available", "reserved", "name_claimed", "name_held_legacy", "name_provisioned", "name_bound", "invalid"}
+	want := []string{"available", "reserved", "name_claimed", "name_held_legacy", "name_provisioned", "name_bound", "invalid",
+		"name_claimed_by_claimant", "name_claimed_by_another"} // v0.14.0 (authn#146): a claimant's results
 	if !slices.Equal(usernameCheckResults, want) {
 		t.Errorf("constants %v, want %v", usernameCheckResults, want)
 	}

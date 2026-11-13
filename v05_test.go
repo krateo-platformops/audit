@@ -150,7 +150,7 @@ func TestSchema_CauseRefAndDenialReason(t *testing.T) {
 			"write_refused", "dry_run_not_executed", "dependency_failed", "uaf_on_write_verb", "invalid_path", "template_error",
 			"session_credential_missing", "step_up_required",
 			"rbac_not_allowed"}, // v0.13.0: the writer's own RBAC evaluation
-		WriterController: {"kept_resource_policy"},
+		WriterController: {"kept_resource_policy", "kept_existing_value"}, // v0.14.0: kept_existing_value
 	}
 	for _, w := range Writers() {
 		r := d.Writers[w]

@@ -166,6 +166,11 @@ conditions:
     description: >-
       krateo.audit.outcome is success: the authority answered and the action
       completed.
+  - id: kept_existing_value
+    go: CondKeptExistingValue
+    description: >-
+      krateo.audit.denial_reason is kept_existing_value: the writer declined
+      to overwrite an authorization-bearing value already present.
 
 # The value formats a key may declare (`format:` on the key). Each is one
 # exported validator, generated: audit.Valid<go>(s) (ValidOpaqueID), behind
@@ -345,7 +350,7 @@ populations:
     who: authn's login and /delegate records
   - scope: github.com/krateo-platformops/authn/audit/controller
     writer: controller
-    who: authn's background credential writes (certificate renewal, the step-up Secret sweep)
+    who: authn's background credential writes (certificate renewal, the step-up Secret sweep, the startup identity backfill)
   - scope: github.com/krateo-platformops/observability/gateway-audit
     writer: gateway
     who: the collector's gateway-audit projection
@@ -363,6 +368,11 @@ populations:
   - scope: rest-dynamic-controller/audit
     writer: controller
     who: rest-dynamic-controller
+    note: >-
+      rest-dynamic-controller's bare scope, with no module path, is a
+      historical exception, kept so its rows stay selectable. Every new scope
+      is the emitting module's path plus /audit
+      (github.com/krateo-platformops/<module>/audit).
   - scope: github.com/krateo-platformops/composition-dynamic-controller/audit
     writer: controller
     who: >-
@@ -377,6 +387,10 @@ populations:
     who: >-
       core-provider's *.krateo.io spec writes (authn mapping, spoke mirror
       Compositions, hub delete) and its RBAC and credential-Secret writes
+  # v0.14.0 (oasgen-provider#543).
+  - scope: github.com/krateo-platformops/oasgen-provider/audit
+    writer: controller
+    who: oasgen-provider's RBAC (rbac.apply, rbac.delete) and admission-policy (admissionpolicy.apply) writes
 
 # Rows written before this schema, kept as the positive control of the live
 # query: they carry no krateo.audit.schema_version and no event.name attribute.
@@ -568,7 +582,10 @@ keys:
       of the request the writer served (krateo.request.uri records what it
       received). A writer that knows no verb omits it and marks it. _OTHER
       for a method semconv does not name (lowercase included), with the
-      method as given in http.request.method_original.
+      method as given in http.request.method_original. Never on a
+      kept_existing_value record (v0.14.0): the writer declined the write and
+      sent nothing.
+    not_when: kept_existing_value
     writers:
       request: {level: required, markable: true}
       gateway: {level: required, markable: true}
@@ -786,7 +803,22 @@ keys:
       action: not_applicable
       # kept_resource_policy: helm declined a delete because the object carries
       # helm.sh/resource-policy: keep (verb delete, outcome denied).
-      controller: {level: optional, values: [kept_resource_policy]}
+      # kept_existing_value (v0.14.0): the writer declined to overwrite an
+      # authorization-bearing value the object already holds with another
+      # value (verb update, outcome denied; nothing was sent, so no
+      # http.request.method and no status code). Check enforces the absent
+      # method (http.request.method not_when kept_existing_value) and the
+      # absent status code (not_when denied); the verb update is the writer's
+      # obligation, which Check doesn't verify. The record names the object
+      # and, in krateo.audit.authorization_key, the one key it left as found:
+      # one record per conflicting key, never a value. First user: authn's
+      # startup identity backfill (authn#147, pending merge; line pins follow
+      # its merge): a credential Secret whose username annotation, principal
+      # label or username-label differs from what its certificate proves is
+      # left as found. The backfill compares those keys only with exact
+      # naming on (exactUsernames.enabled, off by default), so authn writes
+      # no such record on its default path.
+      controller: {level: optional, values: [kept_resource_policy, kept_existing_value]}
 
   - name: krateo.audit.check_result
     go: CheckResult
@@ -810,10 +842,46 @@ keys:
       # authn owns each value's meaning: available, or the name guard's
       # answer (reserved, name_claimed, name_held_legacy, name_provisioned,
       # name_bound), or invalid.
-      request: {level: optional, actions: {authn.username.check: [available, reserved, name_claimed, name_held_legacy, name_provisioned, name_bound, invalid]}}
+      # The claimant's results (v0.14.0; authn#146, pending merge, at
+      # 967e455e, go/authn/): a request may carry a claimant, the identity the
+      # caller expects to hold the name (routes/usernames/check.go:53-57,
+      # :64-68; read by readRequest, :250-274, its claim built by
+      # Claimant.claim, :79-87; a claimant that names no identity is
+      # invalid_request). When the name is claimed, config.CheckUsernameFor
+      # (internal/helpers/kube/config/availability.go:69-104, the comparison
+      # :97-104) says whether the claim is the claimant's:
+      #   name_claimed_by_claimant: the name's claim is the claimant's.
+      #   name_claimed_by_another: the name's claim is someone else's.
+      # The writer's obligation, which Check can't verify (it never sees the
+      # request): these two appear only when the request carried a claimant,
+      # and bare name_claimed only when it didn't. The record never carries
+      # the claimant's identity (its strategy, issuer or subject), nor whose
+      # claim holds the name: only whether it is the claimant's.
+      request: {level: optional, actions: {authn.username.check: [available, reserved, name_claimed, name_held_legacy, name_provisioned, name_bound, invalid, name_claimed_by_claimant, name_claimed_by_another]}}
       gateway: not_applicable
       action: not_applicable
       controller: not_applicable
+
+  - name: krateo.audit.authorization_key
+    go: AuthorizationKey
+    type: string
+    semconv: none
+    values_from: authorization_metadata
+    description: >-
+      The authorization-bearing annotation or label a controller declined to
+      overwrite (krateo.audit.denial_reason kept_existing_value), as
+      <kind>:<key>, e.g. annotation:authn.krateo.io/username. The closed set
+      is generated from authorization_metadata, so a key the schema does not
+      declare is never one. Present exactly when the denial reason is
+      kept_existing_value: one record per conflicting key. Never a value,
+      neither the one found nor the one the writer would have written: they
+      are identities.
+    only_when: kept_existing_value
+    writers:
+      request: not_applicable
+      gateway: not_applicable
+      action: not_applicable
+      controller: {level: conditional, when: the denial reason is kept_existing_value, check: kept_existing_value}
 
   - name: http.response.status_code
     go: HTTPStatusCode

@@ -96,6 +96,21 @@ type authorizationKey struct {
 	Reason string `yaml:"reason"`
 }
 
+// valuesFromAuthorizationMetadata is the one list a key's values_from may
+// name.
+const valuesFromAuthorizationMetadata = "authorization_metadata"
+
+// authorizationValues is every authorization_metadata entry as
+// <kind>:<key>, in schema order: the closed set of a key with values_from
+// authorization_metadata.
+func (s *schema) authorizationValues() []string {
+	out := make([]string, 0, len(s.AuthorizationMetadata))
+	for _, a := range s.AuthorizationMetadata {
+		out = append(out, a.Kind+":"+a.Key)
+	}
+	return out
+}
+
 // authorizationKeys returns the keys of kind k, in schema order.
 func (s *schema) authorizationKeys(k string) []string {
 	var out []string
@@ -157,19 +172,23 @@ type population struct {
 }
 
 type key struct {
-	Name       string   `yaml:"name"`
-	Go         string   `yaml:"go"`
-	Type       string   `yaml:"type"`
-	Semconv    string   `yaml:"semconv"`
-	Values     []string `yaml:"values"`
-	Format     string   `yaml:"format"`
-	Marker     string   `yaml:"marker"`
-	Identity   bool     `yaml:"identity"`
-	Asserted   bool     `yaml:"asserted"`
-	ReplacedBy string   `yaml:"replaced_by"`
-	DualWrite  *bool    `yaml:"dual_write"`
-	OnlyWhen   string   `yaml:"only_when"`
-	NotWhen    string   `yaml:"not_when"`
+	Name    string   `yaml:"name"`
+	Go      string   `yaml:"go"`
+	Type    string   `yaml:"type"`
+	Semconv string   `yaml:"semconv"`
+	Values  []string `yaml:"values"`
+	// ValuesFrom generates the key's closed set from a schema list instead of
+	// listing it: "authorization_metadata" is each entry as <kind>:<key>
+	// (v0.14.0, krateo.audit.authorization_key).
+	ValuesFrom string `yaml:"values_from"`
+	Format     string `yaml:"format"`
+	Marker     string `yaml:"marker"`
+	Identity   bool   `yaml:"identity"`
+	Asserted   bool   `yaml:"asserted"`
+	ReplacedBy string `yaml:"replaced_by"`
+	DualWrite  *bool  `yaml:"dual_write"`
+	OnlyWhen   string `yaml:"only_when"`
+	NotWhen    string `yaml:"not_when"`
 	// CredentialFree: never written on a record whose Kubernetes target is a
 	// credential target.
 	CredentialFree bool `yaml:"credential_free"`
@@ -345,6 +364,14 @@ func (s *schema) validate() error {
 		if len(k.Values) > 0 && k.Type != "string" && k.Type != "bool" {
 			return fmt.Errorf("key %q: values need a string or bool key", k.Name)
 		}
+		if k.ValuesFrom != "" {
+			if k.ValuesFrom != valuesFromAuthorizationMetadata {
+				return fmt.Errorf("key %q: values_from %q is not %s", k.Name, k.ValuesFrom, valuesFromAuthorizationMetadata)
+			}
+			if k.Type != "string" || len(k.Values) > 0 || slices.ContainsFunc(slices.Collect(maps.Values(k.Writers)), func(r requirement) bool { return r.Values != nil || r.Actions != nil }) {
+				return fmt.Errorf("key %q: values_from needs a string key with no values of its own", k.Name)
+			}
+		}
 		if k.Marker != "" {
 			if !markerName.MatchString(k.Marker) || markers[k.Marker] {
 				return fmt.Errorf("key %q: marker %q is malformed or duplicate", k.Name, k.Marker)
@@ -467,6 +494,11 @@ func (s *schema) validate() error {
 	}
 	if len(s.authorizationKeys("annotation")) == 0 || len(s.authorizationKeys("label")) == 0 {
 		return fmt.Errorf("authorization metadata: declares no annotation or no label")
+	}
+	for i := range s.Keys {
+		if s.Keys[i].ValuesFrom == valuesFromAuthorizationMetadata {
+			s.Keys[i].Values = s.authorizationValues()
+		}
 	}
 	scopes := map[string]bool{}
 	for _, p := range append(slices.Clone(s.Populations), s.LegacyControls...) {

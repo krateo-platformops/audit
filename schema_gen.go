@@ -65,7 +65,9 @@ const (
 	// get GET. Never the method of the request the writer served
 	// (krateo.request.uri records what it received). A writer that knows no verb
 	// omits it and marks it. _OTHER for a method semconv does not name (lowercase
-	// included), with the method as given in http.request.method_original.
+	// included), with the method as given in http.request.method_original. Never
+	// on a kept_existing_value record (v0.14.0): the writer declined the write and
+	// sent nothing.
 	KeyHTTPMethod = "http.request.method"
 	// KeyHTTPMethodOriginal is "http.request.method_original". The HTTP method
 	// exactly as the writer was given it, when http.request.method records it as
@@ -99,6 +101,15 @@ const (
 	// failure (the lookup failed) carry none. An action with no declared set
 	// cannot write it.
 	KeyCheckResult = "krateo.audit.check_result"
+	// KeyAuthorizationKey is "krateo.audit.authorization_key". The
+	// authorization-bearing annotation or label a controller declined to overwrite
+	// (krateo.audit.denial_reason kept_existing_value), as <kind>:<key>, e.g.
+	// annotation:authn.krateo.io/username. The closed set is generated from
+	// authorization_metadata, so a key the schema does not declare is never one.
+	// Present exactly when the denial reason is kept_existing_value: one record
+	// per conflicting key. Never a value, neither the one found nor the one the
+	// writer would have written: they are identities.
+	KeyAuthorizationKey = "krateo.audit.authorization_key"
 	// KeyHTTPStatusCode is "http.response.status_code". The status code the
 	// authority answered (Kubernetes responseStatus.code). Never on a denied
 	// record: denied means the writer itself refused, so no authority answered.
@@ -463,6 +474,9 @@ const (
 	// DenialReasonKeptResourcePolicy is "kept_resource_policy", a
 	// krateo.audit.denial_reason value of writer controller.
 	DenialReasonKeptResourcePolicy = "kept_resource_policy"
+	// DenialReasonKeptExistingValue is "kept_existing_value", a
+	// krateo.audit.denial_reason value of writer controller.
+	DenialReasonKeptExistingValue = "kept_existing_value"
 	// CheckResultAvailable is "available", a krateo.audit.check_result value of
 	// action authn.username.check (writer request).
 	CheckResultAvailable = "available"
@@ -485,6 +499,14 @@ const (
 	// CheckResultInvalid is "invalid", a krateo.audit.check_result value of action
 	// authn.username.check (writer request).
 	CheckResultInvalid = "invalid"
+	// CheckResultNameClaimedByClaimant is "name_claimed_by_claimant", a
+	// krateo.audit.check_result value of action authn.username.check (writer
+	// request).
+	CheckResultNameClaimedByClaimant = "name_claimed_by_claimant"
+	// CheckResultNameClaimedByAnother is "name_claimed_by_another", a
+	// krateo.audit.check_result value of action authn.username.check (writer
+	// request).
+	CheckResultNameClaimedByAnother = "name_claimed_by_another"
 )
 
 // The value formats a key may declare. Each has its exported validator below.
@@ -667,11 +689,15 @@ const (
 	// CondSucceeded: krateo.audit.outcome is success: the authority answered and
 	// the action completed.
 	CondSucceeded Condition = "succeeded"
+	// CondKeptExistingValue: krateo.audit.denial_reason is kept_existing_value:
+	// the writer declined to overwrite an authorization-bearing value already
+	// present.
+	CondKeptExistingValue Condition = "kept_existing_value"
 )
 
 var schemaWriters = []Writer{WriterRequest, WriterGateway, WriterAction, WriterController}
 
-var schemaConditions = []Condition{CondK8sTarget, CondWrite, CondMethodOther, CondDelegated, CondImpersonated, CondCaused, CondDenied, CondContentWrite, CondClientRejected, CondClientProvenance, CondConfirmedSet, CondEndpointTarget, CondSucceeded}
+var schemaConditions = []Condition{CondK8sTarget, CondWrite, CondMethodOther, CondDelegated, CondImpersonated, CondCaused, CondDenied, CondContentWrite, CondClientRejected, CondClientProvenance, CondConfirmedSet, CondEndpointTarget, CondSucceeded, CondKeptExistingValue}
 
 var schemaMarkers = []string{"actor", "actor_class", "action", "verb", "method", "preview", "session", "target"}
 
@@ -702,7 +728,7 @@ var schemaContentLabels = []string{"authn.krateo.io/principal", "authn.krateo.io
 var schemaPopulations = []Population{
 	{Scope: "github.com/krateo-platformops/snowplow/audit", Writer: WriterRequest, Who: "snowplow (H, and T for an agent going through /call)"},
 	{Scope: "github.com/krateo-platformops/authn/audit", Writer: WriterRequest, Who: "authn's login and /delegate records"},
-	{Scope: "github.com/krateo-platformops/authn/audit/controller", Writer: WriterController, Who: "authn's background credential writes (certificate renewal, the step-up Secret sweep)"},
+	{Scope: "github.com/krateo-platformops/authn/audit/controller", Writer: WriterController, Who: "authn's background credential writes (certificate renewal, the step-up Secret sweep, the startup identity backfill)"},
 	{Scope: "github.com/krateo-platformops/observability/gateway-audit", Writer: WriterGateway, Who: "the collector's gateway-audit projection"},
 	{Scope: "github.com/krateo-platformops/access-review/audit", Writer: WriterController, Who: "access-review"},
 	{Scope: "github.com/krateo-platformops/identity-lifecycle/audit", Writer: WriterController, Who: "identity-lifecycle"},
@@ -710,6 +736,7 @@ var schemaPopulations = []Population{
 	{Scope: "rest-dynamic-controller/audit", Writer: WriterController, Who: "rest-dynamic-controller"},
 	{Scope: "github.com/krateo-platformops/composition-dynamic-controller/audit", Writer: WriterController, Who: "the composition-dynamic-controller's helm writes to a Composition's children (one record per child installed, upgraded, pruned or kept)"},
 	{Scope: "github.com/krateo-platformops/core-provider/audit", Writer: WriterController, Who: "core-provider's *.krateo.io spec writes (authn mapping, spoke mirror Compositions, hub delete) and its RBAC and credential-Secret writes"},
+	{Scope: "github.com/krateo-platformops/oasgen-provider/audit", Writer: WriterController, Who: "oasgen-provider's RBAC (rbac.apply, rbac.delete) and admission-policy (admissionpolicy.apply) writes"},
 }
 
 var schemaLegacyControls = []Population{
@@ -1017,11 +1044,11 @@ var schemaKeys = []KeySpec{
 		ReplacedBy:     "",
 		DualWrite:      false,
 		OnlyWhen:       "",
-		NotWhen:        "",
+		NotWhen:        CondKeptExistingValue,
 		CredentialFree: false,
 		Min:            nil,
 		LessThan:       "",
-		Description:    "The HTTP method the writer sent or proxied, derived from the verb of the authority request the writer sent: for a Kubernetes target, create is POST, update PUT, patch PATCH, delete DELETE, get GET. Never the method of the request the writer served (krateo.request.uri records what it received). A writer that knows no verb omits it and marks it. _OTHER for a method semconv does not name (lowercase included), with the method as given in http.request.method_original.",
+		Description:    "The HTTP method the writer sent or proxied, derived from the verb of the authority request the writer sent: for a Kubernetes target, create is POST, update PUT, patch PATCH, delete DELETE, get GET. Never the method of the request the writer served (krateo.request.uri records what it received). A writer that knows no verb omits it and marks it. _OTHER for a method semconv does not name (lowercase included), with the method as given in http.request.method_original. Never on a kept_existing_value record (v0.14.0): the writer declined the write and sent nothing.",
 		Writers: map[Writer]Requirement{
 			WriterRequest:    {Level: LevelRequired, Markable: true},
 			WriterGateway:    {Level: LevelRequired, Markable: true},
@@ -1122,7 +1149,7 @@ var schemaKeys = []KeySpec{
 			WriterRequest:    {Level: LevelOptional, Values: []string{"name_reserved", "name_claimed", "name_held_legacy", "name_provisioned", "name_bound", "system_group", "group_not_allowed", "delegation_not_allowed", "delegation_too_deep", "platform_group", "name_missing", "subject_token_expired", "subject_token_invalid", "stepup_not_enabled", "insufficient_assurance", "stale_authentication", "no_mapping", "ambiguous_mapping", "not_a_service_account", "username_check_not_allowed", "invalid_request", "name_not_issued", "destination_refused", "per_user_credential_ref", "endpoint_ref_malformed", "internal_identity_context", "write_refused", "dry_run_not_executed", "dependency_failed", "uaf_on_write_verb", "invalid_path", "template_error", "session_credential_missing", "step_up_required", "rbac_not_allowed"}},
 			WriterGateway:    {Level: LevelNotApplicable},
 			WriterAction:     {Level: LevelNotApplicable},
-			WriterController: {Level: LevelOptional, Values: []string{"kept_resource_policy"}},
+			WriterController: {Level: LevelOptional, Values: []string{"kept_resource_policy", "kept_existing_value"}},
 		},
 	},
 	{
@@ -1143,10 +1170,34 @@ var schemaKeys = []KeySpec{
 		LessThan:       "",
 		Description:    "What a check the writer ran for the caller concluded, when the record's action is a check: one of the closed values its krateo.action declares, never free text. It is the check's answer, not the record's outcome: a check that completed is a success whatever it concluded. Optional: a record without it conforms. Only on a success, when the check ran: a denied record (the check never ran) and a failure (the lookup failed) carry none. An action with no declared set cannot write it.",
 		Writers: map[Writer]Requirement{
-			WriterRequest:    {Level: LevelOptional, ActionValues: map[string][]string{"authn.username.check": {"available", "reserved", "name_claimed", "name_held_legacy", "name_provisioned", "name_bound", "invalid"}}},
+			WriterRequest:    {Level: LevelOptional, ActionValues: map[string][]string{"authn.username.check": {"available", "reserved", "name_claimed", "name_held_legacy", "name_provisioned", "name_bound", "invalid", "name_claimed_by_claimant", "name_claimed_by_another"}}},
 			WriterGateway:    {Level: LevelNotApplicable},
 			WriterAction:     {Level: LevelNotApplicable},
 			WriterController: {Level: LevelNotApplicable},
+		},
+	},
+	{
+		Name:           KeyAuthorizationKey,
+		Type:           TypeString,
+		Semconv:        "none",
+		Values:         []string{"annotation:authn.krateo.io/strategy", "annotation:authn.krateo.io/groups", "annotation:authn.krateo.io/username", "label:authn.krateo.io/principal", "label:authn.krateo.io/username-label"},
+		Format:         "",
+		Marker:         "",
+		Identity:       false,
+		Asserted:       false,
+		ReplacedBy:     "",
+		DualWrite:      false,
+		OnlyWhen:       CondKeptExistingValue,
+		NotWhen:        "",
+		CredentialFree: false,
+		Min:            nil,
+		LessThan:       "",
+		Description:    "The authorization-bearing annotation or label a controller declined to overwrite (krateo.audit.denial_reason kept_existing_value), as <kind>:<key>, e.g. annotation:authn.krateo.io/username. The closed set is generated from authorization_metadata, so a key the schema does not declare is never one. Present exactly when the denial reason is kept_existing_value: one record per conflicting key. Never a value, neither the one found nor the one the writer would have written: they are identities.",
+		Writers: map[Writer]Requirement{
+			WriterRequest:    {Level: LevelNotApplicable},
+			WriterGateway:    {Level: LevelNotApplicable},
+			WriterAction:     {Level: LevelNotApplicable},
+			WriterController: {Level: LevelConditional, When: "the denial reason is kept_existing_value", Check: CondKeptExistingValue},
 		},
 	},
 	{

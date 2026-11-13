@@ -150,7 +150,13 @@ type Event struct {
 	// authn.username.check), never free text; Check reports any other value,
 	// or the key on an action that declares none.
 	CheckResult string
-	Preview     Preview
+	// AuthorizationKey names the one authorization-bearing annotation or
+	// label a controller declined to overwrite, as <kind>:<key>
+	// (krateo.audit.authorization_key, v0.14.0; AuthorizationKeyValue builds
+	// it): only with DenialReason DenialReasonKeptExistingValue, one record
+	// per key, never a value.
+	AuthorizationKey string
+	Preview          Preview
 	// DryRun marks a write the authority was asked to validate and not
 	// persist (Kubernetes dryRun=All) -> krateo.audit.dry_run=true. A request
 	// or action writer (WithWriter) gets dry_run=false on every other write
@@ -478,6 +484,7 @@ func attributes(ctx context.Context, ev Event, actor principal) []attribute.KeyV
 	add(KeyOutcome, ev.Outcome)
 	add(KeyDenialReason, ev.DenialReason)
 	add(KeyCheckResult, ev.CheckResult)
+	add(KeyAuthorizationKey, ev.AuthorizationKey)
 	if ev.Preview != PreviewUnknown {
 		attrs = append(attrs, attribute.Bool(KeyPreview, ev.Preview == PreviewTrue))
 	}

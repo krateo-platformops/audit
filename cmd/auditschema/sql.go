@@ -22,19 +22,20 @@ const window = "Timestamp >= {start:DateTime64(9)} AND Timestamp < {end:DateTime
 // row. TestConditionSQLIsTotal fails when the schema gains a condition this
 // map does not name.
 var conditionSQL = map[audit.Condition]string{
-	audit.CondK8sTarget:        k8sTargetSQL,
-	audit.CondMethodOther:      "(" + attr(audit.KeyHTTPMethod) + " = '_OTHER')",
-	audit.CondWrite:            attr(audit.KeyVerb) + " IN " + inList(audit.WriteVerbs()),
-	audit.CondDelegated:        "(" + attr(audit.KeyDelegation) + " != '' OR " + attr(audit.KeyOnBehalfOf) + " != '')",
-	audit.CondImpersonated:     "(" + attr(audit.KeyImpersonatedUser) + " != '' OR " + attr(audit.KeyImpersonatedRoles) + " != '')",
-	audit.CondCaused:           "arrayExists(k -> startsWith(k, 'krateo.audit.cause_ref.'), mapKeys(LogAttributes))",
-	audit.CondDenied:           "(" + attr(audit.KeyOutcome) + " = " + lit(audit.OutcomeDenied) + ")",
-	audit.CondContentWrite:     attr(audit.KeyVerb) + " IN " + inList(audit.ContentWriteVerbs()),
-	audit.CondClientRejected:   "(" + attr(audit.KeyClientRejected) + " != '')",
-	audit.CondClientProvenance: clientProvenanceSQL(),
-	audit.CondConfirmedSet:     "arrayExists(k -> startsWith(k, 'krateo.audit.client.confirmed_set.'), mapKeys(LogAttributes))",
-	audit.CondEndpointTarget:   "(" + attr(audit.KeyServerAddress) + " != '')",
-	audit.CondSucceeded:        "(" + attr(audit.KeyOutcome) + " = " + lit(audit.OutcomeSuccess) + ")",
+	audit.CondK8sTarget:         k8sTargetSQL,
+	audit.CondMethodOther:       "(" + attr(audit.KeyHTTPMethod) + " = '_OTHER')",
+	audit.CondWrite:             attr(audit.KeyVerb) + " IN " + inList(audit.WriteVerbs()),
+	audit.CondDelegated:         "(" + attr(audit.KeyDelegation) + " != '' OR " + attr(audit.KeyOnBehalfOf) + " != '')",
+	audit.CondImpersonated:      "(" + attr(audit.KeyImpersonatedUser) + " != '' OR " + attr(audit.KeyImpersonatedRoles) + " != '')",
+	audit.CondCaused:            "arrayExists(k -> startsWith(k, 'krateo.audit.cause_ref.'), mapKeys(LogAttributes))",
+	audit.CondDenied:            "(" + attr(audit.KeyOutcome) + " = " + lit(audit.OutcomeDenied) + ")",
+	audit.CondContentWrite:      attr(audit.KeyVerb) + " IN " + inList(audit.ContentWriteVerbs()),
+	audit.CondClientRejected:    "(" + attr(audit.KeyClientRejected) + " != '')",
+	audit.CondClientProvenance:  clientProvenanceSQL(),
+	audit.CondConfirmedSet:      "arrayExists(k -> startsWith(k, 'krateo.audit.client.confirmed_set.'), mapKeys(LogAttributes))",
+	audit.CondEndpointTarget:    "(" + attr(audit.KeyServerAddress) + " != '')",
+	audit.CondSucceeded:         "(" + attr(audit.KeyOutcome) + " = " + lit(audit.OutcomeSuccess) + ")",
+	audit.CondKeptExistingValue: "(" + attr(audit.KeyDenialReason) + " = " + lit(audit.DenialReasonKeptExistingValue) + ")",
 }
 
 var k8sTargetSQL = "(" + attr(audit.KeyNamespace) + " != '' OR arrayExists(k -> startsWith(k, 'krateo.audit.object_ref.'), mapKeys(LogAttributes)))"

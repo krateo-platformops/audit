@@ -84,6 +84,9 @@ var fixtureValue = map[string]attribute.Value{
 	audit.KeyURLPath:              attribute.StringValue("/debug/shadow-parity"),
 	audit.KeyEndpointRefNamespace: attribute.StringValue("example-ns"),
 	audit.KeyEndpointRefName:      attribute.StringValue("example-endpoint"),
+	// v0.14.0: the authorization key a controller kept, beside
+	// kept_existing_value (fixtureDenialReason).
+	audit.KeyAuthorizationKey: attribute.StringValue("annotation:authn.krateo.io/username"),
 }
 
 // firstActionValue is the first action, in sorted order, that declares a set
@@ -99,10 +102,12 @@ func firstActionValue(key string, w audit.Writer) (action, value string, ok bool
 	return action, sets[action][0], true
 }
 
-// fixtureDenialReason is one value of each writer's own closed set.
+// fixtureDenialReason is one value of each writer's own closed set. The
+// controller's is kept_existing_value (v0.14.0), so the rich row holds its
+// condition and may carry krateo.audit.authorization_key.
 var fixtureDenialReason = map[audit.Writer]string{
 	audit.WriterRequest:    audit.DenialReasonGroupNotAllowed,
-	audit.WriterController: audit.DenialReasonKeptResourcePolicy,
+	audit.WriterController: audit.DenialReasonKeptExistingValue,
 }
 
 type fixtureRow struct {
@@ -276,6 +281,33 @@ func fixtureRows(t *testing.T, w audit.Writer) []fixtureRow {
 				bad = attribute.BoolValue(!kv.Value.AsBool())
 			}
 			rows = append(rows, fixtureRow{k + " outside its set", setKey(rich, attribute.KeyValue{Key: kv.Key, Value: bad})})
+		}
+	}
+	// A condition this writer's own values never meet can still hold on its
+	// rows through another writer's value (v0.14.0: kept_existing_value, a
+	// controller reason, on a request row). Its not_when keys are then
+	// unexpected, so each such condition is made true once, from the first
+	// closed-set value of any writer that makes it hold alone.
+	for _, c := range audit.Conditions() {
+		if audit.Holds(c, rich) {
+			continue
+		}
+	made:
+		for _, spec := range audit.Keys() { // a key the writer may not write at all included (the gateway's denial reason)
+			k := spec.Name
+			if spec.Type != audit.TypeString {
+				continue
+			}
+			values := slices.Clone(spec.Values)
+			for _, other := range audit.Writers() {
+				values = append(values, spec.Writers[other].Values...)
+			}
+			for _, v := range values {
+				if audit.Holds(c, []attribute.KeyValue{attribute.String(k, v)}) {
+					rows = append(rows, fixtureRow{"made " + string(c) + " by " + k + " = " + v, withValue(rich, k, v)})
+					break made
+				}
+			}
 		}
 	}
 	for _, c := range audit.Conditions() {

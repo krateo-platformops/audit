@@ -312,6 +312,9 @@ func TestConditionSQL_MeansWhatHoldsMeans(t *testing.T) {
 		{s(audit.KeyOutcome, audit.OutcomeSuccess)},
 		{s(audit.KeyOutcome, audit.OutcomeFailure)},
 		{s(audit.KeyLegacyOutcome, audit.OutcomeDenied)}, // the v0.3 key alone is not krateo.audit.outcome
+		// v0.14.0: kept_existing_value, and another reason beside a denied outcome.
+		{s(audit.KeyOutcome, audit.OutcomeDenied), s(audit.KeyDenialReason, audit.DenialReasonKeptExistingValue)},
+		{s(audit.KeyOutcome, audit.OutcomeDenied), s(audit.KeyDenialReason, audit.DenialReasonKeptResourcePolicy)},
 		{s(audit.KeyVerb, "delete")},
 		{s(audit.KeyVerb, "get")},
 		{s(audit.KeyVerb, "post")},

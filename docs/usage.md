@@ -1,7 +1,7 @@
 ---
 type: Usage
 title: audit — usage
-description: Install the package, when and how to emit, who the actor is, adopting v0.4.0, v0.5.0, v0.6.0, v0.7.0, v0.8.0, v0.9.0, v0.10.0, v0.11.0, v0.12.0 and v0.13.0, testing a writer against the schema, and checking the live table.
+description: Install the package, when and how to emit, who the actor is, adopting v0.4.0, v0.5.0, v0.6.0, v0.7.0, v0.8.0, v0.9.0, v0.10.0, v0.11.0, v0.12.0, v0.13.0 and v0.14.0, testing a writer against the schema, and checking the live table.
 resource: github.com/krateo-platformops/audit
 tags: [library, audit, usage]
 timestamp: 2026-11-12T00:00:00Z
@@ -511,6 +511,57 @@ counts `authn.krateo.io/username`.
   refusing `POST /debug/shadow-parity` (schema/v1.yaml cites the sites).
   An authority's 403, such as the apiserver answering 403, is not this
   reason: it stays a failure with the authority's status code.
+
+## Adopting v0.14.0
+
+v0.14.0 is additive: a plain bump changes no record and no content hash.
+
+- **A username check's claimant.** `authn.username.check` gains two
+  results, `audit.CheckResultNameClaimedByClaimant` and
+  `audit.CheckResultNameClaimedByAnother`: the name is claimed, and the
+  claim is (or is not) the claimant's, the identity the request said it
+  expects (authn#146, pending merge). The writer's obligation, which
+  `Check` can't verify because it never sees the request: write these two
+  only when the request carried a claimant, and bare `name_claimed` only
+  when it didn't. Never record the claimant's identity.
+- **A kept value.** A controller that declines to overwrite an
+  authorization-bearing annotation or label an object already holds with
+  another value writes a denied `update` with
+  `audit.DenialReasonKeptExistingValue` and the key it kept in
+  `Event.AuthorizationKey` (`krateo.audit.authorization_key`), one record
+  per key, never a value. Nothing was sent, so the record has no
+  `HTTPMethod` and no status code: for a controller, `http.request.method`
+  is conditional on an HTTP request having been made, as on a kept
+  deletion:
+
+  ```go
+  key, ok := audit.AuthorizationKeyValue(audit.MetadataKindAnnotation, "authn.krateo.io/username")
+  if ok {
+  	e.Emit(ctx, audit.Event{Action: "authn.identity.inconsistent", Verb: "update",
+  		Outcome: audit.OutcomeDenied, DenialReason: audit.DenialReasonKeptExistingValue, AuthorizationKey: key,
+  		Namespace: ns, Version: "v1", Resource: "secrets", Kind: "Secret", ObjectName: name, Preview: preview})
+  }
+  ```
+
+  The key's closed set is generated from `authorization_metadata`
+  (`<kind>:<key>`), so it grows with that list. `Check` reports the key
+  without the reason as `unexpected` and the reason without the key as
+  `missing`. First user: authn's startup identity backfill (authn#147,
+  pending merge), which compares those keys only with exact naming on
+  (`exactUsernames.enabled`, off by default): on authn's default path it
+  writes no such record.
+- **Naming a derived credential Secret** ([coverage.md](./coverage.md)) now
+  applies to refusals and username checks only: a successful write names
+  the Secret it wrote.
+- **oasgen-provider's population**,
+  `github.com/krateo-platformops/oasgen-provider/audit` (controller), for
+  its RBAC and admission-policy writes (oasgen-provider#543). A new scope is
+  the emitting module's path plus `/audit`; rest-dynamic-controller's bare
+  `rest-dynamic-controller/audit` is a historical exception. Its
+  `admissionpolicy.apply` is not in the `krateo.action` registry yet: no
+  emit site writes it, and a literal is registered with its emit site.
+  `rbac.apply` and `rbac.delete` are registered (core-provider writes them)
+  and say oasgen-provider will write them too.
 
 ## Testing a writer
 

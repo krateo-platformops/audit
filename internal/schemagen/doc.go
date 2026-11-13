@@ -381,6 +381,19 @@ writer.
 `)
 
 	b.WriteString(`
+## Kept values
+
+A controller row (v0.14.0) for a write the controller declined: an object
+already holds an authorization-bearing annotation or label with a value
+other than the one the controller would write, and it leaves the value as
+found. Verb ` + "`update`" + `, outcome ` + "`denied`" + `, ` + "`krateo.audit.denial_reason`" + `
+` + "`kept_existing_value`" + `, no ` + "`http.request.method`" + ` and no status code (nothing was sent). The record names the
+object and, in ` + "`krateo.audit.authorization_key`" + `, the one key it kept, as
+` + "`<kind>:<key>`" + ` (` + "`audit.AuthorizationKeyValue`" + `): one record per conflicting key,
+never a value. The key's closed set is generated from
+` + "`authorization_metadata`" + `. ` + "`Check`" + ` holds the pair both ways: the key without
+the reason is ` + "`unexpected`" + `, and the reason without the key is ` + "`missing`" + `. It also refuses an ` + "`http.request.method`" + ` beside the reason (` + "`unexpected`" + `: nothing was sent); the verb ` + "`update`" + ` is the writer's obligation, not checked.
+
 ## Kept deletions and pruned children
 
 Two controller rows a helm-based controller writes for the children of the
@@ -494,6 +507,18 @@ var actionLiterals = []actionLiteral{
 	{"controller", "helm.reconcile", "helm reconciles a release to its desired state: Observe's self-heal or Update, through plumbing's Reconcile, a three-way merge that patches drift and prunes children"},
 	{"controller", "helm.rollback", "helm rolls a release back: Observe clearing a release stuck pending past the grace, and Delete's rollback; real child patches, creates and deletes (plumbing#140 per-child verdicts)"},
 	{"controller", "helm.uninstall", "helm uninstalls a release (cdc's Delete)"},
+	// core-provider's own writes (v0.14.0), at core-provider@b1f9b5f (core-provider#423, #464),
+	// go/core-provider/internal/. No secret.delete: no core-provider site deletes a credential Secret.
+	// No admissionpolicy.apply either: oasgen-provider's population names it (oasgen-provider#543),
+	// but no emit site writes it yet, and a literal with no emit site would read as coverage that
+	// doesn't exist. It is registered with its emit site.
+	{"controller", "rbac.apply", "a controller creates or updates RBAC: Roles, ClusterRoles, their bindings and ServiceAccounts. Emitted today by core-provider (core-provider@b1f9b5f): a composition's ServiceAccount, ClusterRole, ClusterRoleBinding, Role and RoleBinding (`tools/deploy/deploy.go:225-271`, `installRBACResources`), the credentials Secret's Role and RoleBinding (`deploy.go:450`, `:474`, `Deploy`), the RESTAction read-set ClusterRole and binding (`restactionrbac.go:148`, `:152`, `applyRestActionRBAC`), the chart-inspector RBAC projected onto a spoke (`chartinspector.go:110-131`, `ProjectChartInspector`), and a derived binding re-subjected to a new ServiceAccount (`resubject.go:119`, `ResubjectDerivedRBAC`). oasgen-provider will write it too (oasgen-provider#543; no emit site yet)"},
+	{"controller", "rbac.delete", "a controller deletes RBAC, the same kinds. Emitted today by core-provider (core-provider@b1f9b5f): a composition's set (`tools/deploy/deploy.go:376-408`, `uninstallRBACResources`), the credentials Secret's Role and RoleBinding (`deploy.go:806`, `:820`, `Undeploy`), the chart-inspector RBAC on a spoke (`chartinspector.go:301`, `DeleteProjectedChartInspector`), and dangling controller bindings with the roles no other binding references (`danglingrbac.go:204`, `:244`, `RemoveDanglingControllerBindings`). oasgen-provider will write it too (oasgen-provider#543; no emit site yet)"},
+	{"controller", "secret.apply", "core-provider copies a Secret the chart-inspector pod references from the hub onto a spoke (core-provider@b1f9b5f, `tools/deploy/chartinspector.go:220`, `projectPodRefs`)"},
+	{"controller", "authn.mapping.apply", "core-provider applies an authn ServiceAccount mapping (`serviceaccount.authn.krateo.io`, core-provider@b1f9b5f): a composition's apiRef mapping (`tools/deploy/authnmapping.go:121`, `applyAuthnServiceAccountMapping`) and core-provider's own singleton mapping (`:170`, `ensureSelfAuthnMapping`)"},
+	{"controller", "composition.mirror", "core-provider mirrors a hub Composition onto its spoke (core-provider@b1f9b5f): creates or updates the spoke copy (`controllers/compositionmirror/compositionmirror.go:634`, `:678`, `mirrorDown`) and deletes a spoke mirror with no hub counterpart (`:751`, `garbageCollect`)"},
+	{"controller", "composition.hub.delete", "core-provider deletes every hub Composition of a remote CompositionDefinition being deleted (core-provider@b1f9b5f, `controllers/compositionmirror/compositionmirror.go:303`, `:372`, `reconcileDelete` through `deleteAllHubCompositions`)"},
+	{"controller", "composition.migrate", "core-provider moves a Composition to a CompositionDefinition's new version, relabelled and written through the new version's endpoint (core-provider@b1f9b5f, `controllers/compositiondefinitions/helpers/getters/getters.go:381`, `UpdateCompositionsVersion` through `updateCompositionWithRetry`)"},
 	{"request", "authn.username.check", "authn's `POST /usernames/check`, whether a username is free; its result is `krateo.audit.check_result`"},
 	{"request", "debug.shadowParity", "snowplow's `POST /debug/shadow-parity`, which toggles a per-process dark parity measurement; its target is the non-resource path, `url.path` (v0.12.0)"},
 }
@@ -574,6 +599,9 @@ func keyNotes(k key) string {
 	var notes []string
 	if len(k.Values) > 0 {
 		notes = append(notes, "One of `"+strings.Join(k.Values, "`, `")+"`.")
+	}
+	if k.ValuesFrom != "" {
+		notes = append(notes, "The values are generated from `"+k.ValuesFrom+"`, each entry as `<kind>:<key>`.")
 	}
 	if k.Marker != "" {
 		notes = append(notes, "Marker `"+k.Marker+"`.")
