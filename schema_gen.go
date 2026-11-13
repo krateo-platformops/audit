@@ -1326,7 +1326,7 @@ var schemaKeys = []KeySpec{
 		LessThan:       "",
 		Description:    "The audience of the token a /delegate exchange issued (on success), or the audience it refused (krateo.audit.denial_reason audience_not_allowed): a recipient's name, never an identity, of format token_audience, so never free text. Absent when no audience was requested, and on any other record.",
 		Writers: map[Writer]Requirement{
-			WriterRequest:    {Level: LevelConditional, When: "the writer issued a token for a requested audience, or refused a requested audience of format token_audience (audience_not_allowed)"},
+			WriterRequest:    {Level: LevelConditional, When: "the writer issued a token for a requested audience, or refused the requested audience (audience_not_allowed, always well formed: a malformed one is invalid_request)"},
 			WriterGateway:    {Level: LevelNotApplicable},
 			WriterAction:     {Level: LevelNotApplicable},
 			WriterController: {Level: LevelNotApplicable},

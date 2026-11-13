@@ -28,7 +28,8 @@ timestamp: 2026-11-13T00:00:00Z
     (`Event.TokenAudience`, authn#155, the rulings on audit#37 as amended
     after authn's input): the audience of a `/delegate` token on success
     (only when one was requested), or the requested audience of an
-    `audience_not_allowed` refusal if it is of the format. Bounded by
+    `audience_not_allowed` refusal, always: that audience is always well
+    formed, since a malformed one is `invalid_request`. Bounded by
     format, not by values, since the allowlist is each actor mapping's
     `spec.delegation.audiences`: a new format, `token_audience`
     (`audit.ValidTokenAudience`), a DNS-1123 subdomain (lowercase, at most

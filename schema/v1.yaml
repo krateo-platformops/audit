@@ -769,8 +769,9 @@ keys:
       # audience_not_allowed (v0.15.0, authn#155): authn's /delegate refused
       # the requested audience: it isn't in the actor mapping's
       # spec.delegation.audiences allowlist (RFC 8693 section 2.2.2
-      # invalid_target, 400). The record carries the requested audience in
-      # krateo.audit.token.audience only if it is of format token_audience.
+      # invalid_target, 400). The audience is always well formed: a
+      # malformed one is invalid_request, never this reason. So the record
+      # always carries the requested audience in krateo.audit.token.audience.
       # Not AudienceMismatch (below): that is the actor's own token failing
       # verification, never a row.
       # platform_group: an identity source (LDAP, OAuth, OIDC) asserted a
@@ -1013,9 +1014,10 @@ keys:
   # an authn constant: so the key is bounded by format, not by values.
   # Written by authn on authn.delegate records only: on success, the
   # audience the token was issued for, only when one was requested (none
-  # requested, the key is absent); on an audience_not_allowed refusal, the
-  # requested audience, only if it is of the format. A malformed requested
-  # audience is invalid_request, recorded without it. Check holds the
+  # requested, the key is absent); on an audience_not_allowed refusal,
+  # always, the requested audience, which is always of the format: a
+  # malformed requested audience is invalid_request, recorded without it,
+  # never audience_not_allowed. Check holds the
   # outcome side (only_when issued_or_audience_refused: never on a failure
   # or on any other refusal) and the format; the action is the writer's
   # obligation, as Check enforces no krateo.action value.
@@ -1032,7 +1034,7 @@ keys:
       was requested, and on any other record.
     only_when: issued_or_audience_refused
     writers:
-      request: {level: conditional, when: "the writer issued a token for a requested audience, or refused a requested audience of format token_audience (audience_not_allowed)"}
+      request: {level: conditional, when: "the writer issued a token for a requested audience, or refused the requested audience (audience_not_allowed, always well formed: a malformed one is invalid_request)"}
       gateway: not_applicable
       action: not_applicable
       controller: not_applicable

@@ -177,6 +177,10 @@ func TestCheck_TokenAudience(t *testing.T) {
 		{"issued for an https URI", WriterRequest, aud(issued, "https://agentiko.example.com"), nil},
 		{"issued for an https URI with a port and a path", WriterRequest, aud(issued, "https://agentiko.example.com:8443/mcp/v1"), nil},
 		{"audience_not_allowed with the requested audience", WriterRequest, aud(refused, "other.example.com"), nil},
+		// Check's leniency, not authn's behaviour: authn always writes the
+		// refused audience on audience_not_allowed (it is always well formed;
+		// a malformed one is invalid_request), but the key is optional to
+		// Check, which can't see whether one was requested.
 		{"audience_not_allowed without it", WriterRequest, refused, nil},
 		{"invalid_request without the value", WriterRequest, delegateRefusal(DenialReasonInvalidRequest), nil},
 
@@ -431,6 +435,8 @@ func TestEmit_V015Keys(t *testing.T) {
 		{"a malformed claim", login(`["oidc", "iss", "sub"]`), KeyIdentityClaim, "", false},
 		{"an issued audience", delegate(OutcomeSuccess, "", "https://agentiko.example.com"), KeyTokenAudience, "https://agentiko.example.com", false},
 		{"a refused audience", delegate(OutcomeDenied, DenialReasonAudienceNotAllowed, "other.example.com"), KeyTokenAudience, "other.example.com", false},
+		// Emit's defence against a writer bug: a malformed audience is
+		// invalid_request, so authn never refuses one as audience_not_allowed.
 		{"a refused malformed audience", delegate(OutcomeDenied, DenialReasonAudienceNotAllowed, "Other Example"), KeyTokenAudience, "", false},
 		{"a malformed audience is invalid_request, without it", delegate(OutcomeDenied, DenialReasonInvalidRequest, "https://agentiko.example.com/?x=1"), KeyTokenAudience, "", false},
 		{"the public class", Event{UserName: "krateo:public", UserRoles: []string{"system:unauthenticated"}, ActorClass: ClassPublic,

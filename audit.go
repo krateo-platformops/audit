@@ -165,10 +165,12 @@ type Event struct {
 	IdentityClaim string
 	// TokenAudience is the audience of the token a /delegate exchange issued,
 	// or the requested audience it refused with
-	// DenialReasonAudienceNotAllowed (krateo.audit.token.audience, v0.15.0).
-	// Emit writes it only when it is of format token_audience
-	// (ValidTokenAudience): a malformed requested audience is never written,
-	// and its refusal is DenialReasonInvalidRequest.
+	// DenialReasonAudienceNotAllowed (krateo.audit.token.audience, v0.15.0),
+	// which is always set on such a refusal: that audience is always well
+	// formed, since a malformed requested audience is refused with
+	// DenialReasonInvalidRequest and never set here. Emit writes it only
+	// when it is of format token_audience (ValidTokenAudience), a defence
+	// against a writer bug, not a path a writer takes.
 	TokenAudience string
 	Preview       Preview
 	// DryRun marks a write the authority was asked to validate and not

@@ -595,8 +595,9 @@ and every record an earlier release wrote stays valid.
   (`krateo.audit.token.audience`): on success, the audience the token was
   issued for, only when one was requested; on a refusal with
   `audit.DenialReasonAudienceNotAllowed` (not in the actor mapping's
-  `spec.delegation.audiences`, RFC 8693 `invalid_target`), the requested
-  audience if it is of format `token_audience`. It is bounded by format,
+  `spec.delegation.audiences`, RFC 8693 `invalid_target`), always the
+  requested audience: it is always well formed, since a malformed one is
+  `invalid_request`, never `audience_not_allowed`. It is bounded by format,
   not by values: a DNS-1123 subdomain (lowercase, at most 253) or an
   absolute `https://` URI with no userinfo, query or fragment
   (`audit.ValidTokenAudience`). A malformed requested audience is
