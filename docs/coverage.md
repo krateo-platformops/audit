@@ -4,7 +4,7 @@ title: audit — coverage
 description: The cross-component audit inventory (AUDIT-4, installer#410). Every mutating path of every Krateo component, per writer class, with its identity source, status, owner issue, and the scope, action, verb and outcomes its records carry.
 resource: github.com/krateo-platformops/audit
 tags: [library, audit, coverage, inventory]
-timestamp: 2026-11-12T00:00:00Z
+timestamp: 2026-11-13T00:00:00Z
 ---
 
 # Coverage
@@ -233,6 +233,17 @@ snowplow's `main` at `219a076e`, relative to `go/snowplow/`.
   [snowplow#1381]'s.
 - **Agents.** An agent's `/call` records are written on the same scope, as
   the action writer (T), per the population. They are not listed apart.
+- **A public visitor** ([snowplow#1393], merged; snowplow `main` at
+  `8b728b17`). With the opt-in public identity on, a request with no
+  Authorization header field at all (`tokenless`,
+  `internal/handlers/middleware/public_identity.go:124`) is served as user
+  `krateo:public`, group `system:unauthenticated` (`:76`, `:79`, `:149`),
+  by impersonation, through the same routes and emit sites as the rows
+  below. Its records name that user and no actor class: `setActor`
+  (`internal/support/audit/audit.go:269`, `:279`) finds no `principal`
+  claim, so each is marked `actor_class`. audit v0.15.0 adds the class for
+  it, `public` (audit#38), which snowplow writes once it adopts v0.15.0;
+  the rows' statuses describe merged code and don't change until then.
 - **Tests.** snowplow's arms run `audittest.AssertConformant` on every
   record shape: the `AssertConformant` calls at
   `internal/handlers/audit_parity_1291_test.go:146` and `:228`, and
@@ -270,7 +281,14 @@ rows cite authn's `main` at `3dd1695b` (after [authn#136], [authn#146], [authn#1
 to [authn#153] merged), for both the emit sites and the conformance evidence:
 a test that drives the real route or controller and runs `AssertConformant`
 on what it records. The recorder's own tests in `internal/auditlog/` build
-the event by hand and don't count.
+the event by hand and don't count. audit v0.15.0 adds what authn will
+write next: the verified identity's claim on the sign-in rows (the logins,
+the ServiceAccount login, OIDC step-up), `krateo.audit.identity.claim`
+(audit#37), and, for `/delegate` with an identity provider's subject
+token ([authn#155], open), the issued token's audience,
+`krateo.audit.token.audience`, and two denial reasons,
+`subject_not_signed_in` and `audience_not_allowed`. authn writes none of
+them at `3dd1695b`, so no row's status changes until it does.
 
 | component | path (what changes) | writer class | identity source | status | owner issue | scope | krateo.action | verb | outcomes |
 |---|---|---|---|---|---|---|---|---|---|
@@ -454,7 +472,7 @@ All four are closed, and the gateway denies the tool to every caller.
 | snowplow | reads: `GET /call`, `POST /call/read`, `GET /list`, `GET /rbac` (`main.go:1378-1472`, behind UserConfig), and `GET /debug/*` (`debug_routes.go:208-216`, behind RefreshAuth and DebugAuthz) | — | the caller's verified JWT | out of scope (reads; AUDIT-4 covers mutations) | [installer#410] | | | | |
 | snowplow | reads with no identity: `GET /api-info/names` (`main.go:1373-1375`), `GET /capabilities` (`:1479`), `GET /health`, `GET /readyz`, `GET /swagger/` (`:1363-1367`) | — | none: no identity is read | out of scope (reads; AUDIT-4 covers mutations) | [installer#410] | | | | |
 | snowplow | `GET`, `POST /refreshes` (the live-refresh subscription, `main.go:1447-1458`, behind RefreshAuth) and `POST /jq` (evaluates over the request body, no I/O, `:1481`, behind UserConfig) | — | the caller's verified JWT | out of scope (no state changes) | [installer#410] | | | | |
-| snowplow | widgets served to a caller with no token, as a dedicated impersonated identity that no authenticator can issue; access is RBAC only. Proposed ([snowplow#1334], open); not on `main` at `219a076e` | — | the dedicated public identity | out of scope (reads only: no mutating path) | [snowplow#1334] | | | | |
+| snowplow | a request with no Authorization header field, served as a dedicated impersonated identity that no authenticator can issue; access is RBAC only. Opt-in, merged as [snowplow#1393] (snowplow `main` at `8b728b17`): every route authorized by the caller's identity takes it, the `/call` writes included (`public_identity.go:42-120`, `mountCallWriteRoutes` at `:117`), and `GET /rbac` never does (`:113`) | — | the dedicated public identity (`krateo:public`, `internal/handlers/middleware/public_identity.go:149`) | out of scope (recorded as the request rows: its writes go through the same routes and emit sites; actor class `public` from audit v0.15.0, marked `actor_class` until snowplow adopts it) | [snowplow#1334], [snowplow#1393] | | | | |
 | sse-proxy | the portal's audit view, read from `krateo_audit` | — | the viewer's token | out of scope (a reader of the trail) | [installer#410] | | | | |
 
 ## Open questions
@@ -515,6 +533,7 @@ Each open question is asked on its owner's issue; the link goes to the comment. 
 [snowplow#1291]: https://github.com/krateo-platformops/snowplow/issues/1291
 [snowplow#1333]: https://github.com/krateo-platformops/snowplow/issues/1333
 [snowplow#1334]: https://github.com/krateo-platformops/snowplow/issues/1334
+[snowplow#1393]: https://github.com/krateo-platformops/snowplow/pull/1393
 [snowplow#443]: https://github.com/krateo-platformops/snowplow/issues/443
 [snowplow#903]: https://github.com/krateo-platformops/snowplow/issues/903
 [snowplow#1348]: https://github.com/krateo-platformops/snowplow/pull/1348
@@ -535,6 +554,7 @@ Each open question is asked on its owner's issue; the link goes to the comment. 
 [authn#151]: https://github.com/krateo-platformops/authn/pull/151
 [authn#152]: https://github.com/krateo-platformops/authn/pull/152
 [authn#153]: https://github.com/krateo-platformops/authn/pull/153
+[authn#155]: https://github.com/krateo-platformops/authn/issues/155
 [observability#138]: https://github.com/krateo-platformops/observability/issues/138
 [observability#155]: https://github.com/krateo-platformops/observability/pull/155
 [observability#156]: https://github.com/krateo-platformops/observability/issues/156

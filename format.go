@@ -1,6 +1,7 @@
 package audit
 
 import (
+	"encoding/json"
 	"errors"
 	"slices"
 	"strings"
@@ -63,8 +64,122 @@ func formatRule(format string) (rule func(string) bool, ok bool) {
 			_, err := time.Parse(time.RFC3339, v)
 			return err == nil
 		}, true
+	case FormatIdentityClaim:
+		return validIdentityClaim, true
+	case FormatTokenAudience:
+		return func(v string) bool { return validDNSSubdomain(v) || validHTTPSAudience(v) }, true
 	}
 	return nil, false
+}
+
+// signInStrategies are authn's sign-in strategies, the first element of an
+// identity claim (authn's storage.Strategy values a login, the ServiceAccount
+// login or OIDC step-up verifies; not self or unknown, which no sign-in
+// verifies).
+var signInStrategies = []string{"basic", "ldap", "oauth", "oidc", "serviceaccount"}
+
+// validIdentityClaim is format identity_claim: a JSON array of three
+// strings, strategy, issuer and subject, exactly as authn's
+// storage.EncodeClaim renders it (json.Marshal of a []string), the strategy
+// a sign-in strategy and the subject not empty. Re-encoding the decoded
+// array must give back v byte for byte, so the value is the one string an
+// administrator writes to authn.krateo.io/claim.
+func validIdentityClaim(v string) bool {
+	var parts []string
+	if err := json.Unmarshal([]byte(v), &parts); err != nil || len(parts) != 3 {
+		return false
+	}
+	if !slices.Contains(signInStrategies, parts[0]) || parts[2] == "" {
+		return false
+	}
+	canonical, err := json.Marshal(parts)
+	return err == nil && string(canonical) == v
+}
+
+// maxHTTPSAudience bounds the URI form of format token_audience.
+const maxHTTPSAudience = 2048
+
+// validHTTPSAudience is the URI form of format token_audience (the ruling on
+// audit#40): at most 2048 characters, `https://`, a host that is a strict
+// DNS-1123 subdomain (validDNSHost), an optional port (validPort), and an
+// optional path (validAudiencePath). Nothing else: no userinfo, query,
+// fragment or percent-encoding can be spelled, since none of `@ ? # %` is
+// allowed anywhere.
+func validHTTPSAudience(v string) bool {
+	const scheme = "https://"
+	if len(v) > maxHTTPSAudience || !strings.HasPrefix(v, scheme) {
+		return false
+	}
+	rest := v[len(scheme):]
+	authority, path := rest, ""
+	if i := strings.IndexByte(rest, '/'); i >= 0 {
+		authority, path = rest[:i], rest[i:]
+	}
+	host, port, hasPort := strings.Cut(authority, ":")
+	if hasPort && !validPort(port) {
+		return false
+	}
+	return validDNSHost(host) && validAudiencePath(path)
+}
+
+// validDNSHost is a strict DNS-1123 subdomain: a DNS-1123 subdomain whose
+// labels are each at most 63 characters.
+func validDNSHost(h string) bool {
+	if !validDNSSubdomain(h) {
+		return false
+	}
+	for _, label := range strings.Split(h, ".") {
+		if len(label) > 63 {
+			return false
+		}
+	}
+	return true
+}
+
+// validPort is a decimal port from 1 to 65535 with no leading zero.
+func validPort(p string) bool {
+	if p == "" || len(p) > 5 || p[0] == '0' {
+		return false
+	}
+	n := 0
+	for i := 0; i < len(p); i++ {
+		if p[i] < '0' || p[i] > '9' {
+			return false
+		}
+		n = n*10 + int(p[i]-'0')
+	}
+	return n <= 65535
+}
+
+// validAudiencePath is the path of the URI form: empty, or `/`-separated
+// segments of the unreserved characters [A-Za-z0-9._~-], none empty except a
+// single trailing one (a trailing `/`), and none `.` or `..`.
+func validAudiencePath(p string) bool {
+	if p == "" {
+		return true
+	}
+	if p[0] != '/' {
+		return false
+	}
+	segments := strings.Split(p[1:], "/")
+	for i, s := range segments {
+		if s == "" {
+			if i == len(segments)-1 {
+				continue // a single trailing slash
+			}
+			return false
+		}
+		if s == "." || s == ".." {
+			return false
+		}
+		for j := 0; j < len(s); j++ {
+			c := s[j]
+			if !(c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c >= '0' && c <= '9' || c == '.' || c == '_' || c == '~' || c == '-') {
+				return false
+			}
+		}
+	}
+	return true
 }
 
 // perUserSecretSuffixes end the names of the per-user credential Secrets

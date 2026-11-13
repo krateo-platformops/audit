@@ -149,7 +149,8 @@ func TestSchema_CauseRefAndDenialReason(t *testing.T) {
 			"destination_refused", "per_user_credential_ref", "endpoint_ref_malformed", "internal_identity_context",
 			"write_refused", "dry_run_not_executed", "dependency_failed", "uaf_on_write_verb", "invalid_path", "template_error",
 			"session_credential_missing", "step_up_required",
-			"rbac_not_allowed"}, // v0.13.0: the writer's own RBAC evaluation
+			"rbac_not_allowed",                               // v0.13.0: the writer's own RBAC evaluation
+			"subject_not_signed_in", "audience_not_allowed"}, // v0.15.0 (authn#155): /delegate with an identity provider's subject token
 		WriterController: {"kept_resource_policy", "kept_existing_value"}, // v0.14.0: kept_existing_value
 	}
 	for _, w := range Writers() {

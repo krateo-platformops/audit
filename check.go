@@ -378,6 +378,16 @@ func evalCondition(c Condition, present map[string]attribute.Value) (holds, know
 	case CondKeptExistingValue:
 		r, ok := present[KeyDenialReason]
 		return ok && r.Type() == attribute.STRING && r.AsString() == DenialReasonKeptExistingValue, true
+	case CondPublicActor:
+		c, ok := present[KeyActorClass]
+		return ok && c.Type() == attribute.STRING && c.AsString() == string(ClassPublic), true
+	case CondIssuedOrAudienceRefused:
+		o, ok := present[KeyOutcome]
+		if ok && o.Type() == attribute.STRING && o.AsString() == OutcomeSuccess {
+			return true, true
+		}
+		r, ok := present[KeyDenialReason]
+		return ok && r.Type() == attribute.STRING && r.AsString() == DenialReasonAudienceNotAllowed, true
 	}
 	return false, false
 }

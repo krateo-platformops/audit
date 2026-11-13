@@ -113,6 +113,29 @@ var formatCases = map[string][]struct {
 	FormatDelegationLink: {
 		{"agent:example-agent", true}, {":example-subject", true},
 		{"agent:", false}, {"bogus:example-subject", false}, {"example-subject", false}, {"", false},
+		{"public:example-subject", false}, // v0.15.0: no credential carries the public class
+	},
+	// v0.15.0 (audit#37): authn's storage.EncodeClaim, byte for byte.
+	FormatIdentityClaim: {
+		{`["basic","example-system","example-user"]`, true},
+		{`["serviceaccount","example-system","example-mapping"]`, true},
+		{`["oidc","https://idp.example.com/a\u0026b","sub"]`, true},
+		{`["oidc","https://idp.example.com/a&b","sub"]`, false},
+		{`["oidc", "iss", "sub"]`, false}, {`["oidc","iss"]`, false}, {`["self","iss","sub"]`, false},
+		{`["oidc","iss",""]`, false}, {`oidc`, false}, {"", false},
+	},
+	// v0.15.0 (authn#155): a DNS-1123 subdomain or an https URI.
+	FormatTokenAudience: {
+		{"agentiko", true}, {"agentiko.example.com", true}, {"https://agentiko.example.com/mcp", true},
+		{strings.Repeat("a", 253), true}, {strings.Repeat("a", 254), false},
+		{"Agentiko", false}, {"https://agentiko.example.com/?a=b", false}, {"https://u@agentiko.example.com", false},
+		{"https://agentiko.example.com/#f", false}, {"http://agentiko.example.com", false}, {"agentiko\n", false}, {"", false},
+		// The ruling on #40's review: the URI form's edges.
+		{"https://agentiko.example.com/a2a", true}, {"https://h/", true}, {"https://h:65535", true},
+		{"https://x.example.com/alice@example.com", false}, {"https://x.example.com/john%20doe", false},
+		{"https://x.example.com/;user=alice", false}, {"https://h:0", false}, {"https://h:080", false},
+		{"https://h//x", false}, {"https://h/./x", false}, {"https://" + strings.Repeat("a", 64) + ".example.com", false},
+		{"https://h/" + strings.Repeat("a", 2048), false},
 	},
 }
 

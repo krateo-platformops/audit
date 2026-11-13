@@ -1,10 +1,10 @@
 ---
 type: Usage
 title: audit — usage
-description: Install the package, when and how to emit, who the actor is, adopting v0.4.0, v0.5.0, v0.6.0, v0.7.0, v0.8.0, v0.9.0, v0.10.0, v0.11.0, v0.12.0, v0.13.0 and v0.14.0, testing a writer against the schema, and checking the live table.
+description: Install the package, when and how to emit, who the actor is, adopting v0.4.0, v0.5.0, v0.6.0, v0.7.0, v0.8.0, v0.9.0, v0.10.0, v0.11.0, v0.12.0, v0.13.0, v0.14.0 and v0.15.0, testing a writer against the schema, and checking the live table.
 resource: github.com/krateo-platformops/audit
 tags: [library, audit, usage]
-timestamp: 2026-11-12T00:00:00Z
+timestamp: 2026-11-13T00:00:00Z
 ---
 
 # Usage
@@ -88,6 +88,14 @@ line. `Check` and `audittest` report keys and reasons, never values.
   }
   ```
 
+- **An unauthenticated visitor** (v0.15.0) is a request that carried no
+  credential at all, which the writer served as its configured public
+  identity (snowplow's opt-in `krateo:public`). It has no token, so there is
+  no claim to parse: the writer sets `ActorClass: audit.ClassPublic` itself,
+  and `UserName` to the public identity's fixed name, never a person's.
+  The class is the request writer's only. Never set it on a request that
+  presented a credential, however broken: that one is refused, not served
+  as public.
 - **The affected user is not the actor.** When an action is done *to* a user
   (a revoked grant's subject, a deactivated account), that user goes in
   `AffectedUser`, never in `UserName` and never in `Message`.
@@ -562,6 +570,67 @@ v0.14.0 is additive: a plain bump changes no record and no content hash.
   emit site writes it, and a literal is registered with its emit site.
   `rbac.apply` and `rbac.delete` are registered (core-provider writes them)
   and say oasgen-provider will write them too.
+
+## Adopting v0.15.0
+
+v0.15.0 is additive: a plain bump changes no record and no content hash,
+and every record an earlier release wrote stays valid.
+
+- **The verified identity's claim** (audit#37). authn's sign-in records
+  (the four logins, the ServiceAccount login, OIDC step-up) carry
+  `Event.IdentityClaim` (`krateo.audit.identity.claim`): exactly
+  `storage.EncodeClaim(strategy, subject.Issuer, subject.ID)`, built after
+  the identity verified, on success, denied and failure alike, so an
+  administrator can read from a denied record the string to write to the
+  `authn.krateo.io/claim` annotation. Never from request input; not on
+  `/delegate` or `/usernames/check`. It is identity, handled as `user.name`
+  is. `Check` refuses any other shape (format `identity_claim`, with
+  `audit.ValidIdentityClaim`), and Emit omits a value of another shape.
+
+  ```go
+  ev.IdentityClaim = storage.EncodeClaim(strategy, subject.Issuer, subject.ID) // e.g. ["oidc","https://idp.example.com/realms/krateo","<sub>"]
+  ```
+
+- **A `/delegate` token's audience** (authn#155). `Event.TokenAudience`
+  (`krateo.audit.token.audience`): on success, the audience the token was
+  issued for, only when one was requested; on a refusal with
+  `audit.DenialReasonAudienceNotAllowed` (not in the actor mapping's
+  `spec.delegation.audiences`, RFC 8693 `invalid_target`), always the
+  requested audience: it is always well formed, since a malformed one is
+  `invalid_request`, never `audience_not_allowed`. It is bounded by format,
+  not by values (`audit.ValidTokenAudience`): a DNS-1123 subdomain
+  (lowercase, at most 253), or an absolute URI of at most 2048 characters: `https://`, a host that is a strict DNS-1123 subdomain (lowercase, at most 253, labels 1 to 63 of `[a-z0-9-]` not starting or ending with `-`), an optional `:port` (decimal 1 to 65535, no leading zero, never empty), and an optional path: empty, or `/`-separated segments of `[A-Za-z0-9._~-]` only, none empty except a single trailing `/`, none `.` or `..`. So no userinfo, query, fragment or percent-encoding: none of `@ ; ? # %` can appear. For example
+  `https://agentiko.example.com/a2a` or `https://agentiko.example.com:8443/`;
+  never `https://x.example.com/alice@example.com`, `/john%20doe`, `/%00`,
+  `/;user=alice`, an uppercase host, port `0`, `080` or `65536`, `//`, a
+  `.` segment, or anything longer than 2048. A malformed requested audience is
+  `audit.DenialReasonInvalidRequest`, recorded without it: Emit drops a
+  malformed value, and `Check` refuses the key on any record that is not a
+  success or an `audience_not_allowed` refusal.
+- **`/delegate` with an identity provider's subject token** (authn#155).
+  The subject's username must have a credential Secret that already
+  carries exactly that identity's claim; three causes, three reasons, each
+  naming the username's credential Secret, with no status code:
+  `audit.DenialReasonSubjectNotSignedIn` (new: no credential Secret, the
+  person has never signed in; routine), `DenialReasonNameHeldLegacy` (a
+  Secret with no claim) and `DenialReasonNameClaimed` (another identity's
+  claim; security-relevant). `subject_token_invalid` also covers a wrong
+  `iss` or `aud`, and `platform_group` and `group_not_allowed` apply to the
+  subject token too.
+- **The public actor class** (audit#38). `audit.ClassPublic`, the request
+  writer's only, for a request that carried no credential at all and was
+  served as the writer's configured public identity (snowplow's opt-in
+  public identity, snowplow#1334). It is not `Known`, so `ParseClaim`
+  never returns it and no delegation link is of it: the writer sets it
+  itself. `Check` refuses it on any other writer, and beside
+  `krateo.audit.identity.claim`, `on_behalf_of` or `delegation`, which
+  name a person. A writer that recorded such records marked
+  `actor_class` now writes the class instead.
+- **The actor class's closed sets are per writer.** `KeySpec.Values` of
+  `krateo.audit.actor_class` is now empty; each writer's set is in
+  `Requirement.Values` (generated constants `audit.ActorClass*`). The four
+  credential classes are every writer's; only the request writer's adds
+  `public`.
 
 ## Testing a writer
 

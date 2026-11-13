@@ -54,11 +54,19 @@ func TestSchema_Rulings(t *testing.T) {
 	if p := get(KeyPreview); p.Type != TypeBool || p.Writers[WriterGateway].Level != LevelNotEstablished {
 		t.Errorf("preview: %+v", p)
 	}
-	// D2: the actor class is the claim's four values; human and gateway
-	// writers omit and mark it, controllers and tool executors always write it.
+	// D2: the actor class is the claim's four values, for every writer; human
+	// and gateway writers omit and mark it, controllers and tool executors
+	// always write it. v0.15.0: the request writer's set adds public, no
+	// credential's class (audit#38).
 	ac := get(KeyActorClass)
-	if !slices.Equal(ac.Values, []string{"human", "agent", "controller", "service"}) {
-		t.Errorf("actor_class values = %v", ac.Values)
+	for _, w := range Writers() {
+		want := []string{"human", "agent", "controller", "service"}
+		if w == WriterRequest {
+			want = append(want, "public")
+		}
+		if !slices.Equal(ac.Writers[w].Values, want) {
+			t.Errorf("actor_class values for %s = %v, want %v", w, ac.Writers[w].Values, want)
+		}
 	}
 	for _, w := range []Writer{WriterRequest, WriterGateway} {
 		if r := ac.Writers[w]; r.Level != LevelConditional || !r.Markable || r.Check != "" {
@@ -109,14 +117,21 @@ func TestSchema_Rulings(t *testing.T) {
 }
 
 func TestSchema_ClassesAndOutcomesMatchTheEnums(t *testing.T) {
+	// The credential classes are every writer's set (the controller's, here),
+	// and Known is exactly them; the request writer's set adds ClassPublic,
+	// which is not Known (v0.15.0).
 	ac, _ := LookupKey(KeyActorClass)
-	if got := []string{string(ClassHuman), string(ClassAgent), string(ClassController), string(ClassService)}; !slices.Equal(got, ac.Values) {
-		t.Errorf("Class constants %v differ from the schema's %v", got, ac.Values)
+	credential := ac.Writers[WriterController].Values
+	if got := []string{string(ClassHuman), string(ClassAgent), string(ClassController), string(ClassService)}; !slices.Equal(got, credential) {
+		t.Errorf("Class constants %v differ from the schema's %v", got, credential)
 	}
-	for _, c := range ac.Values {
-		if !Class(c).Known() {
-			t.Errorf("Class(%q).Known() = false", c)
+	for _, c := range ac.Writers[WriterRequest].Values {
+		if Class(c).Known() != slices.Contains(credential, c) {
+			t.Errorf("Class(%q).Known() = %v", c, Class(c).Known())
 		}
+	}
+	if got := ac.Writers[WriterRequest].Values; !slices.Equal(got, append(slices.Clone(credential), string(ClassPublic))) {
+		t.Errorf("the request writer's classes %v, want the credential classes and %s", got, ClassPublic)
 	}
 	oc, _ := LookupKey(KeyOutcome)
 	if got := []string{OutcomeSuccess, OutcomeFailure, OutcomeDenied}; !slices.Equal(got, oc.Values) {
@@ -154,7 +169,8 @@ func TestSchema_IdentityAndAssertion(t *testing.T) {
 	// installer#716 §4.1, plus enduser.id.
 	want := []string{"user.name", "user.roles", "krateo.audit.on_behalf_of.user.name", "krateo.audit.delegation",
 		"krateo.audit.impersonated_user.name", "krateo.audit.impersonated_user.roles",
-		"krateo.audit.affected_user.name", "krateo.request.uri", "krateo.request.source_ips", "enduser.id"}
+		"krateo.audit.affected_user.name", "krateo.request.uri", "krateo.request.source_ips", "enduser.id",
+		"krateo.audit.identity.claim"} // v0.15.0, audit#37
 	slices.Sort(identity)
 	slices.Sort(want)
 	if !slices.Equal(identity, want) {

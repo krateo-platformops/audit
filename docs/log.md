@@ -4,10 +4,71 @@ title: audit — log
 description: Curated history of the audit package.
 resource: github.com/krateo-platformops/audit
 tags: [library, audit, log]
-timestamp: 2026-11-12T00:00:00Z
+timestamp: 2026-11-13T00:00:00Z
 ---
 
 # Log
+
+- **2026-11-13**: v0.15.0. Additive: no record of an earlier release
+  changes, and no content hash.
+  - A new request key, `krateo.audit.identity.claim`
+    (`Event.IdentityClaim`, audit#37): the verified identity's claim on
+    authn's sign-ins (the four logins, the ServiceAccount login, OIDC
+    step-up), on success, denied and failure, exactly
+    `storage.EncodeClaim(strategy, subject.Issuer, subject.ID)`, the string
+    an administrator writes to `authn.krateo.io/claim`. Identity, handled
+    as `user.name`. A new format, `identity_claim`
+    (`audit.ValidIdentityClaim`): a JSON array of three strings as Go's
+    `encoding/json` renders it (byte for byte, so the record and the
+    annotation are one string), the strategy one of basic, ldap, oauth,
+    oidc, serviceaccount, the subject not empty. Not applicable to the
+    other writers. Which actions carry it is the writer's obligation:
+    `Check` enforces no `krateo.action` value.
+  - A new request key, `krateo.audit.token.audience`
+    (`Event.TokenAudience`, authn#155, the rulings on audit#37 as amended
+    after authn's input): the audience of a `/delegate` token on success
+    (only when one was requested), or the requested audience of an
+    `audience_not_allowed` refusal, always: that audience is always well
+    formed, since a malformed one is `invalid_request`. Bounded by
+    format, not by values, since the allowlist is each actor mapping's
+    `spec.delegation.audiences`: a new format, `token_audience`
+    (`audit.ValidTokenAudience`), a DNS-1123 subdomain (lowercase, at most
+    253) or an `https://` URI of at most 2048 characters whose host is a
+    strict DNS-1123 subdomain, with an optional port (1 to 65535, no
+    leading zero) and a path of unreserved characters only (no userinfo,
+    query, fragment, percent-encoding, empty, `.` or `..` segment; the
+    ruling on the review of #40). A new condition,
+    `issued_or_audience_refused`, is its `only_when`: `Check` refuses it on
+    a failure and on any refusal but `audience_not_allowed`, so a malformed
+    audience's `invalid_request` carries no value. Emit writes either new
+    key only when it is of its format.
+  - Two request denial reasons: `subject_not_signed_in` (`/delegate`'s
+    subject token verified, but its username has no credential Secret: the
+    person never signed in to the portal; routine; the record names the
+    Secret resource as a login record does, no status code) and
+    `audience_not_allowed` (the requested audience is not in the actor
+    mapping's allowlist, RFC 8693 `invalid_target`). The schema's comments
+    map `name_held_legacy` (a Secret with no claim) and `name_claimed`
+    (another identity's claim) onto `/delegate`, add "wrong iss or aud" to
+    `subject_token_invalid`, and say `platform_group` and
+    `group_not_allowed` apply to `/delegate`'s subject token too.
+  - A new actor class, `public` (`audit.ClassPublic`, audit#38): a request
+    that carried no credential at all, served as the writer's configured
+    public identity (snowplow's opt-in `krateo:public`, snowplow#1334,
+    merged as snowplow#1393). The request writer's only: the actor class's
+    closed sets are now per writer (`Requirement.Values`, generated
+    `audit.ActorClass*` constants), the four credential classes for every
+    writer and `public` added for the request writer; `KeySpec.Values` of
+    the key is now empty. `ClassPublic` is not `Known`, so `ParseClaim`
+    never returns it and no delegation link is of it; Emit writes it. A
+    new condition, `public_actor`, is `not_when` of
+    `krateo.audit.identity.claim`, `on_behalf_of` and `delegation`:
+    `Check` refuses the class beside a key that names a person.
+    `impersonated_user.*` stays allowed: for a public visitor it names the
+    public identity itself.
+  - Compatibility: `testdata/v0.14.1/` (34 records audit v0.14.1's own
+    `Emit` wrote, v0.14.0's claimant results and kept values included)
+    gives v0.14.1's own report, and every earlier replay is unchanged.
 
 - **2026-11-13**: v0.14.1. Docs and coverage only: no code, schema rule,
   record or content hash changes (schema/v1.yaml's comments are updated).

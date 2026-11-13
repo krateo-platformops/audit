@@ -36,6 +36,9 @@ var conditionSQL = map[audit.Condition]string{
 	audit.CondEndpointTarget:    "(" + attr(audit.KeyServerAddress) + " != '')",
 	audit.CondSucceeded:         "(" + attr(audit.KeyOutcome) + " = " + lit(audit.OutcomeSuccess) + ")",
 	audit.CondKeptExistingValue: "(" + attr(audit.KeyDenialReason) + " = " + lit(audit.DenialReasonKeptExistingValue) + ")",
+	audit.CondPublicActor:       "(" + attr(audit.KeyActorClass) + " = " + lit(string(audit.ClassPublic)) + ")",
+	audit.CondIssuedOrAudienceRefused: "(" + attr(audit.KeyOutcome) + " = " + lit(audit.OutcomeSuccess) +
+		" OR " + attr(audit.KeyDenialReason) + " = " + lit(audit.DenialReasonAudienceNotAllowed) + ")",
 }
 
 var k8sTargetSQL = "(" + attr(audit.KeyNamespace) + " != '' OR arrayExists(k -> startsWith(k, 'krateo.audit.object_ref.'), mapKeys(LogAttributes)))"
