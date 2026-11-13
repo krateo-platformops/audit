@@ -65,7 +65,9 @@ const (
 	// get GET. Never the method of the request the writer served
 	// (krateo.request.uri records what it received). A writer that knows no verb
 	// omits it and marks it. _OTHER for a method semconv does not name (lowercase
-	// included), with the method as given in http.request.method_original.
+	// included), with the method as given in http.request.method_original. Never
+	// on a kept_existing_value record (v0.14.0): the writer declined the write and
+	// sent nothing.
 	KeyHTTPMethod = "http.request.method"
 	// KeyHTTPMethodOriginal is "http.request.method_original". The HTTP method
 	// exactly as the writer was given it, when http.request.method records it as
@@ -1042,11 +1044,11 @@ var schemaKeys = []KeySpec{
 		ReplacedBy:     "",
 		DualWrite:      false,
 		OnlyWhen:       "",
-		NotWhen:        "",
+		NotWhen:        CondKeptExistingValue,
 		CredentialFree: false,
 		Min:            nil,
 		LessThan:       "",
-		Description:    "The HTTP method the writer sent or proxied, derived from the verb of the authority request the writer sent: for a Kubernetes target, create is POST, update PUT, patch PATCH, delete DELETE, get GET. Never the method of the request the writer served (krateo.request.uri records what it received). A writer that knows no verb omits it and marks it. _OTHER for a method semconv does not name (lowercase included), with the method as given in http.request.method_original.",
+		Description:    "The HTTP method the writer sent or proxied, derived from the verb of the authority request the writer sent: for a Kubernetes target, create is POST, update PUT, patch PATCH, delete DELETE, get GET. Never the method of the request the writer served (krateo.request.uri records what it received). A writer that knows no verb omits it and marks it. _OTHER for a method semconv does not name (lowercase included), with the method as given in http.request.method_original. Never on a kept_existing_value record (v0.14.0): the writer declined the write and sent nothing.",
 		Writers: map[Writer]Requirement{
 			WriterRequest:    {Level: LevelRequired, Markable: true},
 			WriterGateway:    {Level: LevelRequired, Markable: true},

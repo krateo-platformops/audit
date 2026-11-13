@@ -582,7 +582,10 @@ keys:
       of the request the writer served (krateo.request.uri records what it
       received). A writer that knows no verb omits it and marks it. _OTHER
       for a method semconv does not name (lowercase included), with the
-      method as given in http.request.method_original.
+      method as given in http.request.method_original. Never on a
+      kept_existing_value record (v0.14.0): the writer declined the write and
+      sent nothing.
+    not_when: kept_existing_value
     writers:
       request: {level: required, markable: true}
       gateway: {level: required, markable: true}
@@ -803,7 +806,10 @@ keys:
       # kept_existing_value (v0.14.0): the writer declined to overwrite an
       # authorization-bearing value the object already holds with another
       # value (verb update, outcome denied; nothing was sent, so no
-      # http.request.method and no status code). The record names the object
+      # http.request.method and no status code). Check enforces the absent
+      # method (http.request.method not_when kept_existing_value) and the
+      # absent status code (not_when denied); the verb update is the writer's
+      # obligation, which Check doesn't verify. The record names the object
       # and, in krateo.audit.authorization_key, the one key it left as found:
       # one record per conflicting key, never a value. First user: authn's
       # startup identity backfill (authn#147, pending merge; line pins follow
@@ -837,7 +843,7 @@ keys:
       # answer (reserved, name_claimed, name_held_legacy, name_provisioned,
       # name_bound), or invalid.
       # The claimant's results (v0.14.0; authn#146, pending merge, at
-      # 1bef35f3, go/authn/): a request may carry a claimant, the identity the
+      # 967e455e, go/authn/): a request may carry a claimant, the identity the
       # caller expects to hold the name (routes/usernames/check.go:53-57,
       # :64-68; read by readRequest, :250-274, its claim built by
       # Claimant.claim, :79-87; a claimant that names no identity is

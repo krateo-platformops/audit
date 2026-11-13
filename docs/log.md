@@ -9,12 +9,12 @@ timestamp: 2026-11-12T00:00:00Z
 
 # Log
 
-- **2026-11-12**: v0.14.0 (draft). Additive: no record of an earlier
+- **2026-11-12**: v0.14.0. Additive: no record of an earlier
   release changes, and no content hash.
   - `authn.username.check` gains two check results,
     `name_claimed_by_claimant` and `name_claimed_by_another`: the name is
     claimed, and the claim is, or is not, the claimant's (authn#146,
-    pending merge, at `1bef35f3`: `config.CheckUsernameFor`,
+    pending merge, at `967e455e`: `config.CheckUsernameFor`,
     `go/authn/internal/helpers/kube/config/availability.go:69-104`;
     `routes/usernames/check.go` `readRequest` `:250-274`,
     `Claimant.claim` `:79-87`). The writer's obligation, stated in the
@@ -60,23 +60,43 @@ timestamp: 2026-11-12T00:00:00Z
     `composition.mirror`, `composition.hub.delete`, `composition.migrate`.
     No `secret.delete`: no core-provider site deletes a credential Secret.
   - [coverage.md](./coverage.md): core-provider's rows cite b1f9b5f, each
-    with its scope, literals and emit sites (unreleased: core-provider
-    ships it in 2.13.87, after 2.13.86 rolls). A fifth status, "audited,
-    conformance not yet proven", for a path that emits but whose own
-    records no owner test has run `AssertConformant` on. Only the
-    composition RBAC set is "audited", proven by core-provider's
-    `audit_envtest_test.go:137`. The cdc's helm child-write row is
-    "audited, non-conformant for authorization-metadata-only changes": it
-    counts a write that changes only an authorization annotation or label
-    as `metadata_only` and records nothing (core-provider#465). It is fixed
-    in core-provider#467 (`a644558`), unreleased; ships in 2.13.87: every
-    cdc upgrade, reconcile and rollback declares both authorization lists,
-    rollbacks through plumbing v1.64.0's `RollbackConfig`. The row stays
-    non-conformant until a released cdc carries it.
+    with its scope, literals and emit sites (released in core-provider
+    2.13.87). A fifth status, "audited, conformance not yet proven", for a
+    path that emits but whose own records no owner test has run
+    `AssertConformant` on. Only the composition RBAC set is "audited",
+    proven by core-provider's `audit_envtest_test.go:137`. The cdc's helm
+    child-write row: up to 2.13.86 the cdc counted a write that changes
+    only an authorization annotation or label as `metadata_only` and
+    recorded nothing (core-provider#465). It is fixed in core-provider#467
+    (`a644558`), released in 2.13.87: every cdc upgrade, reconcile and
+    rollback declares both authorization lists, rollbacks through
+    plumbing's `RollbackConfig`. No test runs `AssertConformant` on a real
+    authorization-metadata-only record yet, so the row is "audited,
+    conformance not yet proven".
     The cdc's other rows are re-derived at b1f9b5f: a new uninstall row is
     "audited" (its real records are checked by core-provider's
     integration suite, `composition_test.go:1811`); the prune and the kept
     deletion are "audited, conformance not yet proven".
+  - [coverage.md](./coverage.md)'s status rule: "audited" now means an
+    owner test runs the path's real records through the schema's checker
+    (`AssertConformant`, or `auditschema check` for a projected record), and
+    the row names it after "Conformance:"; the coverage test enforces it on
+    every row. Re-derived on that rule: snowplow's RESTAction stage, authn's
+    mapping-lookup refusals, step-up sweep, certificate renewal, identity
+    backfill and annotation sync, and the three agent-gateway rows stay
+    "audited" with their tests named; authn's logins, ServiceAccount login,
+    OIDC step-up and issued `/delegate` token become "audited, conformance
+    not yet proven" (no route test checks those records). The
+    `/usernames/check` row is re-derived from authn#136's merge
+    (`d733a5ad`) and is "audited". The krateo.action column's planned form
+    is documented, with a unit test of its guard.
+  - `http.request.method` is `not_when: kept_existing_value`: Check refuses
+    a method on a declined write. The verb `update` stays the writer's
+    obligation, not checked.
+  - The `rbac.apply` and `rbac.delete` registry rows describe any
+    controller's RBAC write (core-provider's sites, and oasgen-provider's
+    planned ones). `admissionpolicy.apply` is not registered: no emit site
+    writes it yet.
   - Compatibility: `testdata/v0.13.0/` (30 records audit v0.13.0's own
     `Emit` wrote, its `rbac_not_allowed` refusal included) gives v0.13.0's
     own report, and every earlier replay is unchanged.

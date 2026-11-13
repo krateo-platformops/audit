@@ -283,6 +283,33 @@ func fixtureRows(t *testing.T, w audit.Writer) []fixtureRow {
 			rows = append(rows, fixtureRow{k + " outside its set", setKey(rich, attribute.KeyValue{Key: kv.Key, Value: bad})})
 		}
 	}
+	// A condition this writer's own values never meet can still hold on its
+	// rows through another writer's value (v0.14.0: kept_existing_value, a
+	// controller reason, on a request row). Its not_when keys are then
+	// unexpected, so each such condition is made true once, from the first
+	// closed-set value of any writer that makes it hold alone.
+	for _, c := range audit.Conditions() {
+		if audit.Holds(c, rich) {
+			continue
+		}
+	made:
+		for _, spec := range audit.Keys() { // a key the writer may not write at all included (the gateway's denial reason)
+			k := spec.Name
+			if spec.Type != audit.TypeString {
+				continue
+			}
+			values := slices.Clone(spec.Values)
+			for _, other := range audit.Writers() {
+				values = append(values, spec.Writers[other].Values...)
+			}
+			for _, v := range values {
+				if audit.Holds(c, []attribute.KeyValue{attribute.String(k, v)}) {
+					rows = append(rows, fixtureRow{"made " + string(c) + " by " + k + " = " + v, withValue(rich, k, v)})
+					break made
+				}
+			}
+		}
+	}
 	for _, c := range audit.Conditions() {
 		if !audit.Holds(c, rich) {
 			continue // a condition this writer's rows never meet (caused, off the controller)

@@ -557,7 +557,11 @@ v0.14.0 is additive: a plain bump changes no record and no content hash.
   `github.com/krateo-platformops/oasgen-provider/audit` (controller), for
   its RBAC and admission-policy writes (oasgen-provider#543). A new scope is
   the emitting module's path plus `/audit`; rest-dynamic-controller's bare
-  `rest-dynamic-controller/audit` is a historical exception.
+  `rest-dynamic-controller/audit` is a historical exception. Its
+  `admissionpolicy.apply` is not in the `krateo.action` registry yet: no
+  emit site writes it, and a literal is registered with its emit site.
+  `rbac.apply` and `rbac.delete` are registered (core-provider writes them)
+  and say oasgen-provider will write them too.
 
 ## Testing a writer
 

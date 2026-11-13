@@ -98,7 +98,9 @@ func TestCheck_KeptExistingValue(t *testing.T) {
 		{"a value, not a key", WriterController, keptRecord("example-user"), []Violation{v(KeyAuthorizationKey, ReasonBadEnum)}},
 		{"with a status code", WriterController, with(rec, attribute.Int(KeyHTTPStatusCode, 409)), []Violation{v(KeyHTTPStatusCode, ReasonUnexpected)}},
 		{"on a request record", WriterRequest, with(deniedRecord(baseRecord(WriterRequest)), attribute.String(KeyDenialReason, DenialReasonKeptExistingValue)),
-			[]Violation{v(KeyDenialReason, ReasonBadEnum)}},
+			[]Violation{v(KeyDenialReason, ReasonBadEnum), v(KeyHTTPMethod, ReasonUnexpected)}},
+		// Nothing was sent: Check refuses a method beside the reason (not_when kept_existing_value).
+		{"with a method", WriterController, with(rec, attribute.String(KeyHTTPMethod, "PUT")), []Violation{v(KeyHTTPMethod, ReasonUnexpected)}},
 		{"the key on a request record", WriterRequest, with(baseRecord(WriterRequest), attribute.String(KeyAuthorizationKey, "annotation:authn.krateo.io/username")),
 			[]Violation{v(KeyAuthorizationKey, ReasonNotForWriter), v(KeyAuthorizationKey, ReasonUnexpected)}},
 	} {
@@ -262,7 +264,8 @@ func TestCoverage_DerivedNameRuleIsScopedToRefusalsAndChecks(t *testing.T) {
 }
 
 // core-provider's rows (v0.14.0, core-provider@b1f9b5f): every row that emits
-// names the core-provider scope, cites b1f9b5f and says it is unreleased; the
+// names the core-provider scope, cites b1f9b5f and says it is released in
+// 2.13.87 (never "unreleased" again); the
 // seven literals are covered; and "audited" is claimed only by the row whose
 // conformance a core-provider test proves (audit_envtest_test.go:137). Every
 // other emitting row is "audited, conformance not yet proven".
@@ -281,8 +284,9 @@ func TestCoverage_CoreProviderRows(t *testing.T) {
 		if r.scope != scope {
 			t.Errorf("docs/coverage.md:%d: scope %s, want %s", r.line, r.scope, scope)
 		}
-		if !strings.Contains(r.path, "b1f9b5f") || !strings.Contains(r.owner, "unreleased") {
-			t.Errorf("docs/coverage.md:%d: the row does not cite b1f9b5f or say it is unreleased", r.line)
+		if !strings.Contains(r.path, "b1f9b5f") || !strings.Contains(r.owner, "released in core-provider 2.13.87") ||
+			strings.Contains(r.path+r.owner, "unreleased") {
+			t.Errorf("docs/coverage.md:%d: the row does not cite b1f9b5f and its release, 2.13.87, or still says unreleased", r.line)
 		}
 		switch r.status {
 		case "audited":
@@ -327,11 +331,12 @@ func TestCoverage_CoreProviderRows(t *testing.T) {
 	}
 }
 
-// The cdc's helm child-write row (core-provider#459, 2.13.86) is audited but
-// non-conformant for authorization-metadata-only changes, which it counts as
-// metadata_only and does not record (core-provider#465). It is fixed in
-// core-provider#467 (a644558), unreleased, so the row stays non-conformant
-// until a released cdc carries the fix.
+// The cdc's helm child-write row (core-provider#459): up to 2.13.86 it counted
+// an authorization-metadata-only write as metadata_only and recorded nothing
+// (core-provider#465); core-provider#467 (a644558) fixed it, released in
+// 2.13.87. No test runs AssertConformant on a real authorization-metadata-only
+// record, so the row is "audited, conformance not yet proven", and it never
+// says "unreleased" again.
 func TestCoverage_CdcHelmWriteRow(t *testing.T) {
 	raw, err := os.ReadFile("docs/coverage.md")
 	if err != nil {
@@ -343,14 +348,20 @@ func TestCoverage_CdcHelmWriteRow(t *testing.T) {
 			continue
 		}
 		found++
-		if !strings.HasPrefix(r.status, "audited, non-conformant for authorization-metadata-only changes: ") ||
-			!strings.Contains(r.status, "metadata_only") || !strings.Contains(r.status, "[core-provider#465]") ||
-			!strings.Contains(r.status, "is fixed in [core-provider#467] (`a644558`), unreleased; ships in 2.13.87") ||
-			!strings.Contains(r.status, "Non-conformant until a released cdc carries it") {
-			t.Errorf("docs/coverage.md:%d: status %q", r.line, r.status)
+		if r.status != coverageUnproven {
+			t.Errorf("docs/coverage.md:%d: status %q, want %q", r.line, r.status, coverageUnproven)
 		}
-		if strings.Contains(r.status, "not yet merged") || strings.Contains(r.owner, "not yet merged") {
-			t.Errorf("docs/coverage.md:%d: still says core-provider#467 is not yet merged", r.line)
+		for _, want := range []string{"metadata_only", "[core-provider#465]", "Fixed in [core-provider#467] (`a644558`), released in core-provider 2.13.87",
+			"no test produces a real authorization-metadata-only record"} {
+			if !strings.Contains(r.path, want) {
+				t.Errorf("docs/coverage.md:%d: the path does not say %q", r.line, want)
+			}
+		}
+		if !strings.Contains(r.owner, "released in core-provider 2.13.87") {
+			t.Errorf("docs/coverage.md:%d: the owner column does not name the release", r.line)
+		}
+		if row := r.path + r.status + r.owner; strings.Contains(row, "unreleased") || strings.Contains(row, "not yet merged") {
+			t.Errorf("docs/coverage.md:%d: still says core-provider#467 is unreleased or not merged", r.line)
 		}
 		if r.scope != "github.com/krateo-platformops/composition-dynamic-controller/audit" {
 			t.Errorf("docs/coverage.md:%d: scope %q", r.line, r.scope)
@@ -485,6 +496,42 @@ func TestKeptExistingValue_TextMatchesTheEmitter(t *testing.T) {
 		if p.Scope == "github.com/krateo-platformops/authn/audit/controller" && !strings.Contains(p.Who, "the startup identity backfill") {
 			t.Errorf("authn's controller population does not name the startup identity backfill: %q", p.Who)
 		}
+	}
+}
+
+// The krateo.action cell (v0.14.0): `literal`, or planned: `literal`
+// (owner#n) on a "not audited" row only; and "audited" needs its evidence,
+// a test after "Conformance:". Each case goes through coverageProblems.
+func TestCoverage_PlannedLiteralAndAuditedEvidence(t *testing.T) {
+	defined := map[string]bool{"authn#147": true}
+	base := coverageRow{line: 1, table: WriterController, component: "authn", path: "a backfill", writer: string(WriterController),
+		identity: "its own ServiceAccount", owner: "[authn#147]", scope: "github.com/krateo-platformops/authn/audit/controller"}
+	for _, tc := range []struct {
+		name, status, path, action, want string
+	}{
+		{"planned, not audited", "not audited", "a backfill", "planned: `authn.identity.inconsistent` (authn#147)", ""},
+		{"planned on an audited row", "audited", "a backfill. Conformance: `internal/backfill_test.go:1`", "planned: `authn.identity.inconsistent` (authn#147)", "is planned, but the status"},
+		{"planned on an unproven row", coverageUnproven, "a backfill", "planned: `authn.identity.inconsistent` (authn#147)", "is planned, but the status"},
+		{"planned without an owner", "not audited", "a backfill", "planned: `authn.identity.inconsistent`", "is not spelled"},
+		{"planned, bare literal", "not audited", "a backfill", "planned: authn.identity.inconsistent (authn#147)", "is not spelled"},
+		{"a literal", "audited", "a backfill. Conformance: `internal/backfill_test.go:1`", "`authn.identity.backfilled`", ""},
+		{"a literal, no backticks", "audited", "a backfill. Conformance: `internal/backfill_test.go:1`", "authn.identity.backfilled", "is not spelled"},
+		{"audited without evidence", "audited", "a backfill", "`authn.identity.backfilled`", "names no test that checks its records"},
+		{"audited, evidence without a line", "audited", "a backfill. Conformance: `internal/backfill_test.go`", "`authn.identity.backfilled`", "names no test that checks its records"},
+		{"audited, a test script", "audited", "a projection. Conformance: `tests/projection.py:12`", "`authn.identity.backfilled`", ""},
+		{"unproven needs no evidence", coverageUnproven, "a backfill", "`authn.identity.backfilled`", ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			r := base
+			r.status, r.path, r.action = tc.status, tc.path, tc.action
+			p := coverageProblems([]coverageRow{r}, defined)
+			switch {
+			case tc.want == "" && len(p) != 0:
+				t.Errorf("reported: %v", p)
+			case tc.want != "" && (len(p) != 1 || !strings.Contains(p[0], tc.want)):
+				t.Errorf("problems %v, want one containing %q", p, tc.want)
+			}
+		})
 	}
 }
 

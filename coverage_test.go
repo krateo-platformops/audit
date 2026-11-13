@@ -44,6 +44,10 @@ var (
 	// coveragePlannedAction is a literal an unmerged emitter will write:
 	// planned: `authn.identity.inconsistent` (authn#147).
 	coveragePlannedAction = regexp.MustCompile("^planned: `[a-z][A-Za-z0-9_.]*` \\([a-z][a-z0-9-]*#[0-9]+\\)$")
+	// coverageConformance is an audited row's evidence: "Conformance:", then
+	// the test that checks its real records, `<file>_test.go:<line>` or a
+	// test script, `<file>.py:<line>`.
+	coverageConformance = regexp.MustCompile("Conformance: [^|]*`[^`|]*(_test\\.go|\\.py):[0-9]+")
 )
 
 // coverageUnproven is the status of a path that emits records no owner test
@@ -130,6 +134,11 @@ func coverageProblems(rows []coverageRow, defined map[string]bool) []string {
 
 		outOfScope := coverageOutOfScope.MatchString(r.status)
 		audited := r.status == "audited" || r.status == coverageUnproven || strings.HasPrefix(r.status, "audited, non-conformant")
+		// "audited" means an owner test checks the path's real records
+		// (v0.14.0): the row names it after "Conformance:", by file:line.
+		if r.status == "audited" && !coverageConformance.MatchString(r.path) {
+			add(r, "status audited, but the path names no test that checks its records (Conformance: `<test file>:<line>`)")
+		}
 		if !audited && !outOfScope && r.status != "not audited" {
 			add(r, "status %q is not audited, audited, conformance not yet proven, audited, non-conformant, not audited or out of scope (reason)", r.status)
 		}
@@ -250,7 +259,7 @@ func TestCoverage_EveryRowMeetsTheAcceptance(t *testing.T) {
 // is not. The rows go through the same parser as the real page.
 func TestCoverage_TheCheckCanFail(t *testing.T) {
 	good := "## request (H)\n\n" + coverageHeader + "\n|---|---|---|---|---|---|---|---|---|---|\n" +
-		"| snowplow | `POST /call`: an object | request | the caller's JWT | audited | [snowplow#1] | `github.com/krateo-platformops/snowplow/audit` | `call` | create | success, failure |\n" +
+		"| snowplow | `POST /call`: an object. Conformance: `internal/handlers/call_test.go:1` | request | the caller's JWT | audited | [snowplow#1] | `github.com/krateo-platformops/snowplow/audit` | `call` | create | success, failure |\n" +
 		"\n[snowplow#1]: https://github.com/krateo-platformops/snowplow/issues/1\n"
 	rows := coverageRows(t, good)
 	defined, bad := coverageDefinitions(good)
@@ -341,7 +350,7 @@ func TestCoverage_CoreProviderScopesAreController(t *testing.T) {
 		if scopes[scope] != WriterController {
 			t.Errorf("%s: population writer %q, want controller", scope, scopes[scope])
 		}
-		row := coverageRow{line: 1, table: WriterController, component: "core-provider", path: "a helm write", writer: string(WriterController),
+		row := coverageRow{line: 1, table: WriterController, component: "core-provider", path: "a helm write. Conformance: `internal/helm_test.go:1`", writer: string(WriterController),
 			identity: "the controller's own ServiceAccount", status: "audited", owner: "[core-provider#1]", scope: scope, action: "`helm.upgrade`"}
 		if p := coverageProblems([]coverageRow{row}, defined); len(p) != 0 {
 			t.Errorf("%s as a controller row: %v", scope, p)
