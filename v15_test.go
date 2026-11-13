@@ -190,7 +190,7 @@ func TestCheck_TokenAudience(t *testing.T) {
 		{"an empty query", WriterRequest, aud(issued, "https://agentiko.example.com/?"), bad},
 		{"a fragment", WriterRequest, aud(issued, "https://agentiko.example.com/#a"), bad},
 		{"userinfo", WriterRequest, aud(issued, "https://user@agentiko.example.com"), bad},
-		{"userinfo with a password", WriterRequest, aud(issued, "https://user:secret@agentiko.example.com"), bad},
+		{"userinfo with a password", WriterRequest, aud(issued, "https://u:p@agentiko.example.com"), bad},
 		{"http", WriterRequest, aud(issued, "http://agentiko.example.com"), bad},
 		{"https in another case", WriterRequest, aud(issued, "HTTPS://agentiko.example.com"), bad},
 		{"no host", WriterRequest, aud(issued, "https:///mcp"), bad},
