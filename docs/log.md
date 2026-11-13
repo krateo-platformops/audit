@@ -81,12 +81,14 @@ timestamp: 2026-11-12T00:00:00Z
     owner test runs the path's real records through the schema's checker
     (`AssertConformant`, or `auditschema check` for a projected record), and
     the row names it after "Conformance:"; the coverage test enforces it on
-    every row. Re-derived on that rule: snowplow's RESTAction stage, authn's
-    mapping-lookup refusals, step-up sweep, certificate renewal, identity
-    backfill and annotation sync, and the three agent-gateway rows stay
-    "audited" with their tests named; authn's logins, ServiceAccount login,
-    OIDC step-up and issued `/delegate` token become "audited, conformance
-    not yet proven" (no route test checks those records). The
+    every row. Re-derived on that rule: snowplow's RESTAction stage; authn's
+    logins, ServiceAccount login, `/delegate`, mapping-lookup refusals,
+    step-up sweep, certificate renewal, identity backfill and annotation sync
+    (route and controller tests at authn@1365bf03; the route tests check
+    each record through `auditlogtest.Only`); and the three agent-gateway
+    rows stay "audited" with their tests named. authn's OIDC step-up becomes
+    "audited, conformance not yet proven": its tests check only refusals,
+    and the success arm is authn#150, pending merge. The
     `/usernames/check` row is re-derived from authn#136's merge
     (`d733a5ad`) and is "audited". The krateo.action column's planned form
     is documented, with a unit test of its guard.
