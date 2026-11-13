@@ -598,9 +598,12 @@ and every record an earlier release wrote stays valid.
   `spec.delegation.audiences`, RFC 8693 `invalid_target`), always the
   requested audience: it is always well formed, since a malformed one is
   `invalid_request`, never `audience_not_allowed`. It is bounded by format,
-  not by values: a DNS-1123 subdomain (lowercase, at most 253) or an
-  absolute `https://` URI with no userinfo, query or fragment
-  (`audit.ValidTokenAudience`). A malformed requested audience is
+  not by values (`audit.ValidTokenAudience`): a DNS-1123 subdomain
+  (lowercase, at most 253), or an absolute URI of at most 2048 characters: `https://`, a host that is a strict DNS-1123 subdomain (lowercase, at most 253, labels 1 to 63 of `[a-z0-9-]` not starting or ending with `-`), an optional `:port` (decimal 1 to 65535, no leading zero, never empty), and an optional path: empty, or `/`-separated segments of `[A-Za-z0-9._~-]` only, none empty except a single trailing `/`, none `.` or `..`. So no userinfo, query, fragment or percent-encoding: none of `@ ; ? # %` can appear. For example
+  `https://agentiko.example.com/a2a` or `https://agentiko.example.com:8443/`;
+  never `https://x.example.com/alice@example.com`, `/john%20doe`, `/%00`,
+  `/;user=alice`, an uppercase host, port `0`, `080` or `65536`, `//`, a
+  `.` segment, or anything longer than 2048. A malformed requested audience is
   `audit.DenialReasonInvalidRequest`, recorded without it: Emit drops a
   malformed value, and `Check` refuses the key on any record that is not a
   success or an `audience_not_allowed` refusal.

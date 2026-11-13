@@ -33,8 +33,11 @@ timestamp: 2026-11-13T00:00:00Z
     format, not by values, since the allowlist is each actor mapping's
     `spec.delegation.audiences`: a new format, `token_audience`
     (`audit.ValidTokenAudience`), a DNS-1123 subdomain (lowercase, at most
-    253) or an absolute `https://` URI with a host and no userinfo, query
-    or fragment, all printable ASCII. A new condition,
+    253) or an `https://` URI of at most 2048 characters whose host is a
+    strict DNS-1123 subdomain, with an optional port (1 to 65535, no
+    leading zero) and a path of unreserved characters only (no userinfo,
+    query, fragment, percent-encoding, empty, `.` or `..` segment; the
+    ruling on the review of #40). A new condition,
     `issued_or_audience_refused`, is its `only_when`: `Check` refuses it on
     a failure and on any refusal but `audience_not_allowed`, so a malformed
     audience's `invalid_request` carries no value. Emit writes either new

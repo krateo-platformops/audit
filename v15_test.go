@@ -202,6 +202,37 @@ func TestCheck_TokenAudience(t *testing.T) {
 		{"a space", WriterRequest, aud(issued, "https://agentiko.example.com/a b"), bad},
 		{"not ASCII", WriterRequest, aud(issued, "https://agentikö.example.com"), bad},
 		{"free text", WriterRequest, aud(issued, "the agentiko bridge"), bad},
+		// The ruling on #40's review: the URI form's host, port, path and
+		// length, at each edge, and the reviewer's five probes.
+		{"an a2a path", WriterRequest, aud(issued, "https://agentiko.example.com/a2a"), nil},
+		{"probe: an email in the path", WriterRequest, aud(issued, "https://x.example.com/alice@example.com"), bad},
+		{"probe: a percent-encoded space", WriterRequest, aud(issued, "https://x.example.com/john%20doe"), bad},
+		{"probe: a percent-encoded NUL", WriterRequest, aud(issued, "https://x.example.com/%00"), bad},
+		{"probe: a path parameter", WriterRequest, aud(issued, "https://x.example.com/;user=alice"), bad},
+		{"probe: 105,021 characters", WriterRequest, aud(issued, "https://x.example.com/"+strings.Repeat("a", 105021-len("https://x.example.com/"))), bad},
+		{"2048 characters", WriterRequest, aud(issued, uriOfLength(2048)), nil},
+		{"2049 characters", WriterRequest, aud(issued, uriOfLength(2049)), bad},
+		{"an uppercase host", WriterRequest, aud(issued, "https://Agentiko.example.com/a2a"), bad},
+		{"a host label of 63", WriterRequest, aud(issued, "https://"+strings.Repeat("a", 63)+".example.com"), nil},
+		{"a host label of 64", WriterRequest, aud(issued, "https://"+strings.Repeat("a", 64)+".example.com"), bad},
+		{"a host label ending in a hyphen", WriterRequest, aud(issued, "https://agentiko-.example.com"), bad},
+		{"an IPv6 literal host", WriterRequest, aud(issued, "https://[2001:db8::1]/x"), bad},
+		{"port 1", WriterRequest, aud(issued, "https://agentiko.example.com:1"), nil},
+		{"port 65535", WriterRequest, aud(issued, "https://agentiko.example.com:65535/a2a"), nil},
+		{"port 0", WriterRequest, aud(issued, "https://agentiko.example.com:0"), bad},
+		{"port 65536", WriterRequest, aud(issued, "https://agentiko.example.com:65536"), bad},
+		{"port 080", WriterRequest, aud(issued, "https://agentiko.example.com:080"), bad},
+		{"an empty port", WriterRequest, aud(issued, "https://agentiko.example.com:"), bad},
+		{"a port that is not a number", WriterRequest, aud(issued, "https://agentiko.example.com:https"), bad},
+		{"no path", WriterRequest, aud(issued, "https://h"), nil},
+		{"a bare slash", WriterRequest, aud(issued, "https://h/"), nil},
+		{"a trailing slash", WriterRequest, aud(issued, "https://h/a/"), nil},
+		{"an empty segment", WriterRequest, aud(issued, "https://h//x"), bad},
+		{"two trailing slashes", WriterRequest, aud(issued, "https://h/a//"), bad},
+		{"a dot segment", WriterRequest, aud(issued, "https://h/./x"), bad},
+		{"a dot-dot segment", WriterRequest, aud(issued, "https://h/a/.."), bad},
+		{"dots inside a segment", WriterRequest, aud(issued, "https://h/v1.2~x_y-z"), nil},
+		{"a colon in the path", WriterRequest, aud(issued, "https://h/a:b"), bad},
 		{"empty", WriterRequest, aud(issued, ""), []Violation{v15v(KeyTokenAudience, ReasonEmpty)}},
 
 		{"on invalid_request", WriterRequest, aud(delegateRefusal(DenialReasonInvalidRequest), "agentiko"), []Violation{v15v(KeyTokenAudience, ReasonUnexpected)}},
@@ -243,6 +274,21 @@ func TestCheck_TokenAudience(t *testing.T) {
 			t.Errorf("issued_or_audience_refused on %v = %v, want %v", attrs2map(tc.attrs), got, tc.want)
 		}
 	}
+}
+
+// uriOfLength is an https audience of exactly n characters: a host and a
+// path of segments of 63, the last one shortened.
+func uriOfLength(n int) string {
+	s := "https://agentiko.example.com"
+	for len(s) < n {
+		seg := min(63, n-len(s)-1)
+		if seg < 1 {
+			s += "/" // a single trailing slash fills the last character
+			break
+		}
+		s += "/" + strings.Repeat("a", seg)
+	}
+	return s
 }
 
 func attrs2map(a []attribute.KeyValue) map[string]string {
@@ -392,12 +438,12 @@ func TestValidFormat_IdentityClaimAndTokenAudience(t *testing.T) {
 	if ValidIdentityClaim(`["oidc","https://idp.example.com/a&b","sub"]`) {
 		t.Error("an & encoding/json escapes is accepted raw")
 	}
-	for _, v := range []string{"agentiko", "a", "agentiko.example.com", "https://agentiko.example.com", "https://10.0.0.1:8443/x", "https://[2001:db8::1]/x"} {
+	for _, v := range []string{"agentiko", "a", "agentiko.example.com", "https://agentiko.example.com", "https://10.0.0.1:8443/x", "https://agentiko.example.com/a2a"} {
 		if !ValidTokenAudience(v) {
 			t.Errorf("%q is not a valid audience", v)
 		}
 	}
-	for _, v := range []string{"", "Agentiko", "agentiko.", ".agentiko", "https://agentiko.example.com?x", "https://u@agentiko.example.com", "ftp://agentiko.example.com", "https:agentiko"} {
+	for _, v := range []string{"", "Agentiko", "agentiko.", ".agentiko", "https://agentiko.example.com?x", "https://u@agentiko.example.com", "https://[2001:db8::1]/x", "https://x.example.com/%00", "ftp://agentiko.example.com", "https:agentiko"} {
 		if ValidTokenAudience(v) {
 			t.Errorf("%q is a valid audience", v)
 		}

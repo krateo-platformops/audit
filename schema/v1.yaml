@@ -265,8 +265,8 @@ formats:
     description: >-
       the audience a token is issued for, a recipient's name: a DNS-1123
       subdomain (1 to 253 of `[a-z0-9.-]`, dot-separated labels each starting
-      and ending with a letter or digit), or an absolute `https://` URI with
-      a host and no userinfo, query or fragment, all printable ASCII.
+      and ending with a letter or digit), or an absolute URI of at most 2048 characters: `https://`, a host that is a strict DNS-1123 subdomain (lowercase, at most 253, labels 1 to 63 of `[a-z0-9-]` not starting or ending with `-`), an optional `:port` (decimal 1 to 65535, no leading zero, never empty), and an optional path: empty, or `/`-separated segments of `[A-Za-z0-9._~-]` only, none empty except a single trailing `/`, none `.` or `..`. So no userinfo, query, fragment or percent-encoding: none of `@ ; ? # %` can appear (the ruling on
+      audit#40).
 
 # Exactly one target per record: a Kubernetes object or an external endpoint,
 # and for the request writer also a non-resource path (url.path, v0.12.0: a
@@ -1030,8 +1030,12 @@ keys:
       The audience of the token a /delegate exchange issued (on success), or
       the audience it refused (krateo.audit.denial_reason
       audience_not_allowed): a recipient's name, never an identity, of
-      format token_audience, so never free text. Absent when no audience
-      was requested, and on any other record.
+      format token_audience, so never free text: a lowercase DNS-1123
+      subdomain, or an https URI of at most 2048 characters whose host is a
+      strict DNS-1123 subdomain, with an optional port (1 to 65535) and a
+      path of unreserved characters only (no userinfo, query, fragment,
+      percent-encoding, empty, `.` or `..` segment). Absent when no
+      audience was requested, and on any other record.
     only_when: issued_or_audience_refused
     writers:
       request: {level: conditional, when: "the writer issued a token for a requested audience, or refused the requested audience (audience_not_allowed, always well formed: a malformed one is invalid_request)"}

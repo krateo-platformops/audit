@@ -129,8 +129,12 @@ const (
 	// KeyTokenAudience is "krateo.audit.token.audience". The audience of the token
 	// a /delegate exchange issued (on success), or the audience it refused
 	// (krateo.audit.denial_reason audience_not_allowed): a recipient's name, never
-	// an identity, of format token_audience, so never free text. Absent when no
-	// audience was requested, and on any other record.
+	// an identity, of format token_audience, so never free text: a lowercase
+	// DNS-1123 subdomain, or an https URI of at most 2048 characters whose host is
+	// a strict DNS-1123 subdomain, with an optional port (1 to 65535) and a path
+	// of unreserved characters only (no userinfo, query, fragment,
+	// percent-encoding, empty, `.` or `..` segment). Absent when no audience was
+	// requested, and on any other record.
 	KeyTokenAudience = "krateo.audit.token.audience" // #nosec G101 -- a name schema/v1.yaml declares, never a credential
 	// KeyHTTPStatusCode is "http.response.status_code". The status code the
 	// authority answered (Kubernetes responseStatus.code). Never on a denied
@@ -603,8 +607,14 @@ const (
 	// FormatTokenAudience is the format "token_audience": the audience a token is
 	// issued for, a recipient's name: a DNS-1123 subdomain (1 to 253 of
 	// `[a-z0-9.-]`, dot-separated labels each starting and ending with a letter or
-	// digit), or an absolute `https://` URI with a host and no userinfo, query or
-	// fragment, all printable ASCII.
+	// digit), or an absolute URI of at most 2048 characters: `https://`, a host
+	// that is a strict DNS-1123 subdomain (lowercase, at most 253, labels 1 to 63
+	// of `[a-z0-9-]` not starting or ending with `-`), an optional `:port`
+	// (decimal 1 to 65535, no leading zero, never empty), and an optional path:
+	// empty, or `/`-separated segments of `[A-Za-z0-9._~-]` only, none empty
+	// except a single trailing `/`, none `.` or `..`. So no userinfo, query,
+	// fragment or percent-encoding: none of `@ ; ? # %` can appear (the ruling on
+	// audit#40).
 	FormatTokenAudience = "token_audience" // #nosec G101 -- a name schema/v1.yaml declares, never a credential
 )
 
@@ -688,8 +698,14 @@ func ValidIdentityClaim(s string) bool { return ValidFormat(FormatIdentityClaim,
 // ValidTokenAudience reports whether s is of format token_audience, as Check enforces it:
 // the audience a token is issued for, a recipient's name: a DNS-1123 subdomain
 // (1 to 253 of `[a-z0-9.-]`, dot-separated labels each starting and ending
-// with a letter or digit), or an absolute `https://` URI with a host and no
-// userinfo, query or fragment, all printable ASCII.
+// with a letter or digit), or an absolute URI of at most 2048 characters:
+// `https://`, a host that is a strict DNS-1123 subdomain (lowercase, at most
+// 253, labels 1 to 63 of `[a-z0-9-]` not starting or ending with `-`), an
+// optional `:port` (decimal 1 to 65535, no leading zero, never empty), and an
+// optional path: empty, or `/`-separated segments of `[A-Za-z0-9._~-]` only,
+// none empty except a single trailing `/`, none `.` or `..`. So no userinfo,
+// query, fragment or percent-encoding: none of `@ ; ? # %` can appear (the
+// ruling on audit#40).
 func ValidTokenAudience(s string) bool { return ValidFormat(FormatTokenAudience, s) }
 
 // formatValidators is each format's generated validator.
@@ -1324,7 +1340,7 @@ var schemaKeys = []KeySpec{
 		CredentialFree: false,
 		Min:            nil,
 		LessThan:       "",
-		Description:    "The audience of the token a /delegate exchange issued (on success), or the audience it refused (krateo.audit.denial_reason audience_not_allowed): a recipient's name, never an identity, of format token_audience, so never free text. Absent when no audience was requested, and on any other record.",
+		Description:    "The audience of the token a /delegate exchange issued (on success), or the audience it refused (krateo.audit.denial_reason audience_not_allowed): a recipient's name, never an identity, of format token_audience, so never free text: a lowercase DNS-1123 subdomain, or an https URI of at most 2048 characters whose host is a strict DNS-1123 subdomain, with an optional port (1 to 65535) and a path of unreserved characters only (no userinfo, query, fragment, percent-encoding, empty, `.` or `..` segment). Absent when no audience was requested, and on any other record.",
 		Writers: map[Writer]Requirement{
 			WriterRequest:    {Level: LevelConditional, When: "the writer issued a token for a requested audience, or refused the requested audience (audience_not_allowed, always well formed: a malformed one is invalid_request)"},
 			WriterGateway:    {Level: LevelNotApplicable},

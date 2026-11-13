@@ -130,6 +130,12 @@ var formatCases = map[string][]struct {
 		{strings.Repeat("a", 253), true}, {strings.Repeat("a", 254), false},
 		{"Agentiko", false}, {"https://agentiko.example.com/?a=b", false}, {"https://u@agentiko.example.com", false},
 		{"https://agentiko.example.com/#f", false}, {"http://agentiko.example.com", false}, {"agentiko\n", false}, {"", false},
+		// The ruling on #40's review: the URI form's edges.
+		{"https://agentiko.example.com/a2a", true}, {"https://h/", true}, {"https://h:65535", true},
+		{"https://x.example.com/alice@example.com", false}, {"https://x.example.com/john%20doe", false},
+		{"https://x.example.com/;user=alice", false}, {"https://h:0", false}, {"https://h:080", false},
+		{"https://h//x", false}, {"https://h/./x", false}, {"https://" + strings.Repeat("a", 64) + ".example.com", false},
+		{"https://h/" + strings.Repeat("a", 2048), false},
 	},
 }
 
