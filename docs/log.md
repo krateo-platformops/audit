@@ -36,7 +36,9 @@ timestamp: 2026-11-12T00:00:00Z
     merge; line pins follow its merge), only with exact naming on
     (`exactUsernames.enabled`, off by default). Until it adopts v0.14.0,
     the backfill logs each differing key (key and uid, never a value) and
-    records nothing. The authn controller population's `who` names that
+    records nothing; its planned literal is `authn.identity.inconsistent`
+    (coverage.md: "planned: ... (authn#147)", a new form for a literal an
+    unmerged emitter will write, allowed only on a "not audited" row). The authn controller population's `who` names that
     backfill.
   - [coverage.md](./coverage.md), "Naming a derived credential Secret":
     the derived-name rule (nameless unless the derivation leaves the

@@ -41,6 +41,9 @@ var (
 	// (name-clientconfig, name-clientconfig-stepup): describe it in words.
 	coverageUserSecret = regexp.MustCompile(`[A-Za-z0-9][A-Za-z0-9._-]*-clientconfig`)
 	coverageOutOfScope = regexp.MustCompile(`^out of scope \(.+\)$`)
+	// coveragePlannedAction is a literal an unmerged emitter will write:
+	// planned: `authn.identity.inconsistent` (authn#147).
+	coveragePlannedAction = regexp.MustCompile("^planned: `[a-z][A-Za-z0-9_.]*` \\([a-z][a-z0-9-]*#[0-9]+\\)$")
 )
 
 // coverageUnproven is the status of a path that emits records no owner test
@@ -162,8 +165,17 @@ func coverageProblems(rows []coverageRow, defined map[string]bool) []string {
 		case sw != w:
 			add(r, "scope %q is writer %s's population, the row says %s", r.scope, sw, r.writer)
 		}
-		if r.action != "" && (len(r.action) < 3 || !strings.HasPrefix(r.action, "`") || !strings.HasSuffix(r.action, "`")) {
-			add(r, "krateo.action %q is not spelled `...`", r.action)
+		// A literal the owner's records carry is `...`; one an unmerged
+		// emitter will carry is "planned: `...` (owner#n)" (v0.14.0), on a path
+		// that is not audited yet.
+		switch {
+		case r.action == "":
+		case coveragePlannedAction.MatchString(r.action):
+			if r.status != "not audited" {
+				add(r, "krateo.action %q is planned, but the status %q says records are emitted", r.action, r.status)
+			}
+		case len(r.action) < 3 || !strings.HasPrefix(r.action, "`") || !strings.HasSuffix(r.action, "`"):
+			add(r, "krateo.action %q is not spelled `...` or planned: `...` (owner#n)", r.action)
 		}
 	}
 	return out

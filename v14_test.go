@@ -2,6 +2,7 @@ package audit
 
 import (
 	"os"
+	"regexp"
 	"slices"
 	"strings"
 	"testing"
@@ -454,6 +455,28 @@ func TestKeptExistingValue_TextMatchesTheEmitter(t *testing.T) {
 	}
 	if !strings.Contains(cov, "logs each differing key (key and uid, never a value) and records nothing until it adopts v0.14.0's kept_existing_value") {
 		t.Error("docs/coverage.md: the backfill row does not say what authn#147 does today")
+	}
+	// The backfill row's planned literal and the usage example's Action are
+	// one literal: authn#147's ActionIdentityInconsistent.
+	exAction := regexp.MustCompile(`Action: "([^"]+)", Verb: "update",`).FindStringSubmatch(bullet)
+	if exAction == nil {
+		t.Fatal("docs/usage.md: no Action in the kept-value example")
+	}
+	rawCov, err := os.ReadFile("docs/coverage.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var backfill []coverageRow
+	for _, r := range coverageRows(t, string(rawCov)) {
+		if r.component == "authn" && strings.HasPrefix(r.path, "identity backfill at startup, with exact naming on") {
+			backfill = append(backfill, r)
+		}
+	}
+	if len(backfill) != 1 {
+		t.Fatalf("%d authn backfill kept-value rows, want 1", len(backfill))
+	}
+	if want := "planned: `" + exAction[1] + "` (authn#147)"; backfill[0].action != want {
+		t.Errorf("docs/coverage.md:%d: krateo.action %q, want %q (the usage example's literal)", backfill[0].line, backfill[0].action, want)
 	}
 	if strings.Contains(bullet, "HTTPMethod:") {
 		t.Error("docs/usage.md: the kept-value example sends a method, but nothing was sent")
