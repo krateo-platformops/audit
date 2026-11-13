@@ -19,9 +19,11 @@ const (
 	KeySchemaVersion = "krateo.audit.schema_version"
 	// KeyUserName is "user.name". The principal performing the action (Kubernetes
 	// user.username). On a delegated token, the outermost actor. For a controller,
-	// system:serviceaccount:<namespace>:<name>. A writer that names no actor still
-	// emits the record, without this key and marked actor: a record is never
-	// dropped.
+	// system:serviceaccount:<namespace>:<name>. For an unauthenticated visitor
+	// (actor class public, v0.15.0), the fixed name of the identity the writer
+	// serves it as (snowplow's krateo:public), never a person. A writer that names
+	// no actor still emits the record, without this key and marked actor: a record
+	// is never dropped.
 	KeyUserName = "user.name"
 	// KeyUserRoles is "user.roles". The groups of the principal in user.name
 	// (Kubernetes user.groups).
@@ -30,15 +32,20 @@ const (
 	// user.name, as its credential proves it: authn's signed `principal` claim
 	// (UserInfo.ActorPrincipal()). Omitted, never defaulted, when the claim is
 	// absent or unknown. Under TOKEN_PASSTHROUGH an agent replays a person's
-	// token, so the class is human; only a /delegate token names the agent.
+	// token, so the class is human; only a /delegate token names the agent. public
+	// (v0.15.0, the request writer's only) is a request that carried no credential
+	// at all, served as the writer's configured public identity: never a
+	// credential's class, and never beside a key that names a person.
 	KeyActorClass = "krateo.audit.actor_class"
 	// KeyOnBehalfOf is "krateo.audit.on_behalf_of.user.name". On a delegated
 	// token, the person the actor acts for (the token's sub). Read only from a
-	// signed act chain, never from baggage.
+	// signed act chain, never from baggage. Never on a public actor's record
+	// (v0.15.0): it names a person.
 	KeyOnBehalfOf = "krateo.audit.on_behalf_of.user.name"
 	// KeyDelegation is "krateo.audit.delegation". The signed act chain, outermost
 	// actor first and ending with the subject, each entry <class>:<subject>. A
-	// link whose class is unknown is written :<subject>.
+	// link whose class is unknown is written :<subject>. Never on a public actor's
+	// record (v0.15.0): it names people.
 	KeyDelegation = "krateo.audit.delegation"
 	// KeyImpersonatedUser is "krateo.audit.impersonated_user.name". The user the
 	// writer impersonated (Kubernetes impersonatedUser.username).
@@ -50,6 +57,15 @@ const (
 	// was done TO, when that is not the actor: separates "done to alice" from
 	// "done by alice". Never equal to user.name.
 	KeyAffectedUser = "krateo.audit.affected_user.name"
+	// KeyIdentityClaim is "krateo.audit.identity.claim". The verified identity's
+	// claim, as authn compares it in its name guard: exactly
+	// storage.EncodeClaim(strategy, subject.Issuer, subject.ID), the JSON array
+	// [strategy, issuer, subject], built after the identity provider or the
+	// apiserver verified the identity, never from request input. It is byte for
+	// byte the value an administrator writes to the authn.krateo.io/claim
+	// annotation to give that identity its name, so the record and the annotation
+	// are one string. Never on a public actor's record.
+	KeyIdentityClaim = "krateo.audit.identity.claim"
 	// KeyAction is "krateo.action". The emit site's logical action, a literal of
 	// the writer (call, export, restaction, rest.write, gateway.<backend type>).
 	// Not the verb.
@@ -110,6 +126,12 @@ const (
 	// per conflicting key. Never a value, neither the one found nor the one the
 	// writer would have written: they are identities.
 	KeyAuthorizationKey = "krateo.audit.authorization_key"
+	// KeyTokenAudience is "krateo.audit.token.audience". The audience of the token
+	// a /delegate exchange issued (on success), or the audience it refused
+	// (krateo.audit.denial_reason audience_not_allowed): a recipient's name, never
+	// an identity, of format token_audience, so never free text. Absent when no
+	// audience was requested, and on any other record.
+	KeyTokenAudience = "krateo.audit.token.audience" // #nosec G101 -- a name schema/v1.yaml declares, never a credential
 	// KeyHTTPStatusCode is "http.response.status_code". The status code the
 	// authority answered (Kubernetes responseStatus.code). Never on a denied
 	// record: denied means the writer itself refused, so no authority answered.
@@ -366,6 +388,21 @@ const (
 // writer it does not list, and a per-action value on an action it does not
 // list.
 const (
+	// ActorClassHuman is "human", a krateo.audit.actor_class value of writer
+	// request, gateway, action, controller.
+	ActorClassHuman = "human"
+	// ActorClassAgent is "agent", a krateo.audit.actor_class value of writer
+	// request, gateway, action, controller.
+	ActorClassAgent = "agent"
+	// ActorClassController is "controller", a krateo.audit.actor_class value of
+	// writer request, gateway, action, controller.
+	ActorClassController = "controller"
+	// ActorClassService is "service", a krateo.audit.actor_class value of writer
+	// request, gateway, action, controller.
+	ActorClassService = "service"
+	// ActorClassPublic is "public", a krateo.audit.actor_class value of writer
+	// request.
+	ActorClassPublic = "public"
 	// DenialReasonNameReserved is "name_reserved", a krateo.audit.denial_reason
 	// value of writer request.
 	DenialReasonNameReserved = "name_reserved"
@@ -471,6 +508,12 @@ const (
 	// DenialReasonRbacNotAllowed is "rbac_not_allowed", a
 	// krateo.audit.denial_reason value of writer request.
 	DenialReasonRbacNotAllowed = "rbac_not_allowed"
+	// DenialReasonSubjectNotSignedIn is "subject_not_signed_in", a
+	// krateo.audit.denial_reason value of writer request.
+	DenialReasonSubjectNotSignedIn = "subject_not_signed_in"
+	// DenialReasonAudienceNotAllowed is "audience_not_allowed", a
+	// krateo.audit.denial_reason value of writer request.
+	DenialReasonAudienceNotAllowed = "audience_not_allowed"
 	// DenialReasonKeptResourcePolicy is "kept_resource_policy", a
 	// krateo.audit.denial_reason value of writer controller.
 	DenialReasonKeptResourcePolicy = "kept_resource_policy"
@@ -549,9 +592,23 @@ const (
 	// FormatRFC3339 is the format "rfc3339": an RFC 3339 timestamp, with or
 	// without fractional seconds.
 	FormatRFC3339 = "rfc3339"
+	// FormatIdentityClaim is the format "identity_claim": authn's claim of a
+	// verified identity, `["<strategy>","<issuer>","<subject>"]`, exactly as
+	// authn's storage.EncodeClaim writes it (Go's encoding/json rendering of the
+	// three strings, so the value an admin writes to the authn.krateo.io/claim
+	// annotation is the same string): the strategy one of authn's sign-in
+	// strategies (basic, ldap, oauth, oidc, serviceaccount), the subject not
+	// empty.
+	FormatIdentityClaim = "identity_claim"
+	// FormatTokenAudience is the format "token_audience": the audience a token is
+	// issued for, a recipient's name: a DNS-1123 subdomain (1 to 253 of
+	// `[a-z0-9.-]`, dot-separated labels each starting and ending with a letter or
+	// digit), or an absolute `https://` URI with a host and no userinfo, query or
+	// fragment, all printable ASCII.
+	FormatTokenAudience = "token_audience" // #nosec G101 -- a name schema/v1.yaml declares, never a credential
 )
 
-var schemaFormats = []string{FormatDelegationLink, FormatMarkerList, FormatSHA256Hex, FormatContentHash, FormatUUID, FormatOpaqueID, FormatSessionID, FormatK8sNamespace, FormatEndpointRefName, FormatURLPath, FormatRFC3339}
+var schemaFormats = []string{FormatDelegationLink, FormatMarkerList, FormatSHA256Hex, FormatContentHash, FormatUUID, FormatOpaqueID, FormatSessionID, FormatK8sNamespace, FormatEndpointRefName, FormatURLPath, FormatRFC3339, FormatIdentityClaim, FormatTokenAudience}
 
 // formatPatterns holds the formats whose whole rule is a regular expression,
 // compiled once from schema/v1.yaml's patterns.
@@ -618,6 +675,23 @@ func ValidURLPath(s string) bool { return ValidFormat(FormatURLPath, s) }
 // an RFC 3339 timestamp, with or without fractional seconds.
 func ValidRFC3339(s string) bool { return ValidFormat(FormatRFC3339, s) }
 
+// ValidIdentityClaim reports whether s is of format identity_claim, as Check enforces it:
+// authn's claim of a verified identity,
+// `["<strategy>","<issuer>","<subject>"]`, exactly as authn's
+// storage.EncodeClaim writes it (Go's encoding/json rendering of the three
+// strings, so the value an admin writes to the authn.krateo.io/claim
+// annotation is the same string): the strategy one of authn's sign-in
+// strategies (basic, ldap, oauth, oidc, serviceaccount), the subject not
+// empty.
+func ValidIdentityClaim(s string) bool { return ValidFormat(FormatIdentityClaim, s) }
+
+// ValidTokenAudience reports whether s is of format token_audience, as Check enforces it:
+// the audience a token is issued for, a recipient's name: a DNS-1123 subdomain
+// (1 to 253 of `[a-z0-9.-]`, dot-separated labels each starting and ending
+// with a letter or digit), or an absolute `https://` URI with a host and no
+// userinfo, query or fragment, all printable ASCII.
+func ValidTokenAudience(s string) bool { return ValidFormat(FormatTokenAudience, s) }
+
 // formatValidators is each format's generated validator.
 var formatValidators = map[string]func(string) bool{
 	FormatDelegationLink:  ValidDelegationLink,
@@ -631,6 +705,8 @@ var formatValidators = map[string]func(string) bool{
 	FormatEndpointRefName: ValidEndpointRefName,
 	FormatURLPath:         ValidURLPath,
 	FormatRFC3339:         ValidRFC3339,
+	FormatIdentityClaim:   ValidIdentityClaim,
+	FormatTokenAudience:   ValidTokenAudience,
 }
 
 // The writer classes.
@@ -693,11 +769,19 @@ const (
 	// the writer declined to overwrite an authorization-bearing value already
 	// present.
 	CondKeptExistingValue Condition = "kept_existing_value"
+	// CondPublicActor: krateo.audit.actor_class is public: the request carried no
+	// credential at all, and the writer served it as its configured public
+	// identity.
+	CondPublicActor Condition = "public_actor"
+	// CondIssuedOrAudienceRefused: krateo.audit.outcome is success, or
+	// krateo.audit.denial_reason is audience_not_allowed: a token exchange that
+	// issued its token, or that refused the requested audience.
+	CondIssuedOrAudienceRefused Condition = "issued_or_audience_refused"
 )
 
 var schemaWriters = []Writer{WriterRequest, WriterGateway, WriterAction, WriterController}
 
-var schemaConditions = []Condition{CondK8sTarget, CondWrite, CondMethodOther, CondDelegated, CondImpersonated, CondCaused, CondDenied, CondContentWrite, CondClientRejected, CondClientProvenance, CondConfirmedSet, CondEndpointTarget, CondSucceeded, CondKeptExistingValue}
+var schemaConditions = []Condition{CondK8sTarget, CondWrite, CondMethodOther, CondDelegated, CondImpersonated, CondCaused, CondDenied, CondContentWrite, CondClientRejected, CondClientProvenance, CondConfirmedSet, CondEndpointTarget, CondSucceeded, CondKeptExistingValue, CondPublicActor, CondIssuedOrAudienceRefused}
 
 var schemaMarkers = []string{"actor", "actor_class", "action", "verb", "method", "preview", "session", "target"}
 
@@ -808,7 +892,7 @@ var schemaKeys = []KeySpec{
 		CredentialFree: false,
 		Min:            nil,
 		LessThan:       "",
-		Description:    "The principal performing the action (Kubernetes user.username). On a delegated token, the outermost actor. For a controller, system:serviceaccount:<namespace>:<name>. A writer that names no actor still emits the record, without this key and marked actor: a record is never dropped.",
+		Description:    "The principal performing the action (Kubernetes user.username). On a delegated token, the outermost actor. For a controller, system:serviceaccount:<namespace>:<name>. For an unauthenticated visitor (actor class public, v0.15.0), the fixed name of the identity the writer serves it as (snowplow's krateo:public), never a person. A writer that names no actor still emits the record, without this key and marked actor: a record is never dropped.",
 		Writers: map[Writer]Requirement{
 			WriterRequest:    {Level: LevelRequired, Markable: true},
 			WriterGateway:    {Level: LevelRequired, Markable: true},
@@ -844,7 +928,7 @@ var schemaKeys = []KeySpec{
 		Name:           KeyActorClass,
 		Type:           TypeString,
 		Semconv:        "none",
-		Values:         []string{"human", "agent", "controller", "service"},
+		Values:         nil,
 		Format:         "",
 		Marker:         "actor_class",
 		Identity:       false,
@@ -856,12 +940,12 @@ var schemaKeys = []KeySpec{
 		CredentialFree: false,
 		Min:            nil,
 		LessThan:       "",
-		Description:    "The class of the principal in user.name, as its credential proves it: authn's signed `principal` claim (UserInfo.ActorPrincipal()). Omitted, never defaulted, when the claim is absent or unknown. Under TOKEN_PASSTHROUGH an agent replays a person's token, so the class is human; only a /delegate token names the agent.",
+		Description:    "The class of the principal in user.name, as its credential proves it: authn's signed `principal` claim (UserInfo.ActorPrincipal()). Omitted, never defaulted, when the claim is absent or unknown. Under TOKEN_PASSTHROUGH an agent replays a person's token, so the class is human; only a /delegate token names the agent. public (v0.15.0, the request writer's only) is a request that carried no credential at all, served as the writer's configured public identity: never a credential's class, and never beside a key that names a person.",
 		Writers: map[Writer]Requirement{
-			WriterRequest:    {Level: LevelConditional, When: "the token carries a known principal claim", Markable: true},
-			WriterGateway:    {Level: LevelConditional, When: "the token carries a known principal claim", Markable: true},
-			WriterAction:     {Level: LevelRequired},
-			WriterController: {Level: LevelRequired},
+			WriterRequest:    {Level: LevelConditional, When: "the token carries a known principal claim, or the request carried no credential and was served as the public identity", Markable: true, Values: []string{"human", "agent", "controller", "service", "public"}},
+			WriterGateway:    {Level: LevelConditional, When: "the token carries a known principal claim", Markable: true, Values: []string{"human", "agent", "controller", "service"}},
+			WriterAction:     {Level: LevelRequired, Values: []string{"human", "agent", "controller", "service"}},
+			WriterController: {Level: LevelRequired, Values: []string{"human", "agent", "controller", "service"}},
 		},
 	},
 	{
@@ -876,11 +960,11 @@ var schemaKeys = []KeySpec{
 		ReplacedBy:     "",
 		DualWrite:      false,
 		OnlyWhen:       "",
-		NotWhen:        "",
+		NotWhen:        CondPublicActor,
 		CredentialFree: false,
 		Min:            nil,
 		LessThan:       "",
-		Description:    "On a delegated token, the person the actor acts for (the token's sub). Read only from a signed act chain, never from baggage.",
+		Description:    "On a delegated token, the person the actor acts for (the token's sub). Read only from a signed act chain, never from baggage. Never on a public actor's record (v0.15.0): it names a person.",
 		Writers: map[Writer]Requirement{
 			WriterRequest:    {Level: LevelConditional, When: "the token carries a signed act chain", Check: CondDelegated},
 			WriterGateway:    {Level: LevelConditional, When: "the token carries a signed act chain", Check: CondDelegated},
@@ -900,11 +984,11 @@ var schemaKeys = []KeySpec{
 		ReplacedBy:     "",
 		DualWrite:      false,
 		OnlyWhen:       "",
-		NotWhen:        "",
+		NotWhen:        CondPublicActor,
 		CredentialFree: false,
 		Min:            nil,
 		LessThan:       "",
-		Description:    "The signed act chain, outermost actor first and ending with the subject, each entry <class>:<subject>. A link whose class is unknown is written :<subject>.",
+		Description:    "The signed act chain, outermost actor first and ending with the subject, each entry <class>:<subject>. A link whose class is unknown is written :<subject>. Never on a public actor's record (v0.15.0): it names people.",
 		Writers: map[Writer]Requirement{
 			WriterRequest:    {Level: LevelConditional, When: "the token carries a signed act chain", Check: CondDelegated},
 			WriterGateway:    {Level: LevelConditional, When: "the token carries a signed act chain", Check: CondDelegated},
@@ -982,6 +1066,30 @@ var schemaKeys = []KeySpec{
 			WriterGateway:    {Level: LevelNotApplicable},
 			WriterAction:     {Level: LevelOptional},
 			WriterController: {Level: LevelConditional, When: "the object is about a user"},
+		},
+	},
+	{
+		Name:           KeyIdentityClaim,
+		Type:           TypeString,
+		Semconv:        "none",
+		Values:         nil,
+		Format:         "identity_claim",
+		Marker:         "",
+		Identity:       true,
+		Asserted:       false,
+		ReplacedBy:     "",
+		DualWrite:      false,
+		OnlyWhen:       "",
+		NotWhen:        CondPublicActor,
+		CredentialFree: false,
+		Min:            nil,
+		LessThan:       "",
+		Description:    "The verified identity's claim, as authn compares it in its name guard: exactly storage.EncodeClaim(strategy, subject.Issuer, subject.ID), the JSON array [strategy, issuer, subject], built after the identity provider or the apiserver verified the identity, never from request input. It is byte for byte the value an administrator writes to the authn.krateo.io/claim annotation to give that identity its name, so the record and the annotation are one string. Never on a public actor's record.",
+		Writers: map[Writer]Requirement{
+			WriterRequest:    {Level: LevelConditional, When: "the writer verified the identity of a sign-in (a login, the ServiceAccount login, OIDC step-up), whatever the outcome"},
+			WriterGateway:    {Level: LevelNotApplicable},
+			WriterAction:     {Level: LevelNotApplicable},
+			WriterController: {Level: LevelNotApplicable},
 		},
 	},
 	{
@@ -1146,7 +1254,7 @@ var schemaKeys = []KeySpec{
 		LessThan:       "",
 		Description:    "Why the writer itself refused, on a denied record only: one of the closed values its writer class declares, never free text. The caller's answer can stay opaque while the audit reader gets the reason. Optional: a denied record without it conforms. A writer class with no declared value cannot write it.",
 		Writers: map[Writer]Requirement{
-			WriterRequest:    {Level: LevelOptional, Values: []string{"name_reserved", "name_claimed", "name_held_legacy", "name_provisioned", "name_bound", "system_group", "group_not_allowed", "delegation_not_allowed", "delegation_too_deep", "platform_group", "name_missing", "subject_token_expired", "subject_token_invalid", "stepup_not_enabled", "insufficient_assurance", "stale_authentication", "no_mapping", "ambiguous_mapping", "not_a_service_account", "username_check_not_allowed", "invalid_request", "name_not_issued", "destination_refused", "per_user_credential_ref", "endpoint_ref_malformed", "internal_identity_context", "write_refused", "dry_run_not_executed", "dependency_failed", "uaf_on_write_verb", "invalid_path", "template_error", "session_credential_missing", "step_up_required", "rbac_not_allowed"}},
+			WriterRequest:    {Level: LevelOptional, Values: []string{"name_reserved", "name_claimed", "name_held_legacy", "name_provisioned", "name_bound", "system_group", "group_not_allowed", "delegation_not_allowed", "delegation_too_deep", "platform_group", "name_missing", "subject_token_expired", "subject_token_invalid", "stepup_not_enabled", "insufficient_assurance", "stale_authentication", "no_mapping", "ambiguous_mapping", "not_a_service_account", "username_check_not_allowed", "invalid_request", "name_not_issued", "destination_refused", "per_user_credential_ref", "endpoint_ref_malformed", "internal_identity_context", "write_refused", "dry_run_not_executed", "dependency_failed", "uaf_on_write_verb", "invalid_path", "template_error", "session_credential_missing", "step_up_required", "rbac_not_allowed", "subject_not_signed_in", "audience_not_allowed"}},
 			WriterGateway:    {Level: LevelNotApplicable},
 			WriterAction:     {Level: LevelNotApplicable},
 			WriterController: {Level: LevelOptional, Values: []string{"kept_resource_policy", "kept_existing_value"}},
@@ -1198,6 +1306,30 @@ var schemaKeys = []KeySpec{
 			WriterGateway:    {Level: LevelNotApplicable},
 			WriterAction:     {Level: LevelNotApplicable},
 			WriterController: {Level: LevelConditional, When: "the denial reason is kept_existing_value", Check: CondKeptExistingValue},
+		},
+	},
+	{
+		Name:           KeyTokenAudience,
+		Type:           TypeString,
+		Semconv:        "none",
+		Values:         nil,
+		Format:         "token_audience",
+		Marker:         "",
+		Identity:       false,
+		Asserted:       false,
+		ReplacedBy:     "",
+		DualWrite:      false,
+		OnlyWhen:       CondIssuedOrAudienceRefused,
+		NotWhen:        "",
+		CredentialFree: false,
+		Min:            nil,
+		LessThan:       "",
+		Description:    "The audience of the token a /delegate exchange issued (on success), or the audience it refused (krateo.audit.denial_reason audience_not_allowed): a recipient's name, never an identity, of format token_audience, so never free text. Absent when no audience was requested, and on any other record.",
+		Writers: map[Writer]Requirement{
+			WriterRequest:    {Level: LevelConditional, When: "the writer issued a token for a requested audience, or refused a requested audience of format token_audience (audience_not_allowed)"},
+			WriterGateway:    {Level: LevelNotApplicable},
+			WriterAction:     {Level: LevelNotApplicable},
+			WriterController: {Level: LevelNotApplicable},
 		},
 	},
 	{

@@ -4,7 +4,7 @@ title: audit — API
 description: The exported Go API of the audit package (emitter, schema, checker, claim parser, sanitiser), audittest, cmd/auditschema, and how each Event field maps to a record attribute.
 resource: github.com/krateo-platformops/audit
 tags: [library, audit, api]
-timestamp: 2026-11-12T00:00:00Z
+timestamp: 2026-11-13T00:00:00Z
 ---
 
 # API
@@ -57,7 +57,7 @@ const MetricRecordedMarkerUnattached = "krateo.audit.recorded_marker.unattached"
 | `Event` field | attribute | notes |
 |---|---|---|
 | `Message` | LogRecord body | closed-set text: no upstream body, no identity |
-| `UserName`, `UserRoles`, `ActorClass` | `user.name`, `user.roles`, `krateo.audit.actor_class` | the actor; when `UserName` is empty and the Emitter has `WithActor`, its principal, and the Event's roles and class are ignored. With neither, the Event's fields are written as given and the record is marked `actor`. A class that is not `Known` is omitted and marked |
+| `UserName`, `UserRoles`, `ActorClass` | `user.name`, `user.roles`, `krateo.audit.actor_class` | the actor; when `UserName` is empty and the Emitter has `WithActor`, its principal, and the Event's roles and class are ignored. With neither, the Event's fields are written as given and the record is marked `actor`. A class that is not `Known` is omitted and marked, except `ClassPublic` (v0.15.0), which is written: the request writer's class for a request that carried no credential, served as its public identity |
 | `EndUserID` | `enduser.id` | **Deprecated**: written only when set, as v0.3 did; `Emit` never adds it |
 | `OnBehalfOf`, `Delegation` | `krateo.audit.on_behalf_of.user.name`, `krateo.audit.delegation` | a delegated token's `sub` and its act chain, each `Link` written `<class>:<subject>` |
 | `ImpersonatedUser`, `ImpersonatedRoles` | `krateo.audit.impersonated_user.{name,roles}` | |
@@ -69,6 +69,8 @@ const MetricRecordedMarkerUnattached = "krateo.audit.recorded_marker.unattached"
 | `Outcome` | `krateo.audit.outcome` (+ `outcome`) | |
 | `DenialReason` | `krateo.audit.denial_reason` | on an `OutcomeDenied` record only; one of the writer class's own closed values, spelled through the generated `DenialReason*` constants (`DenialReasonNameClaimed`, `DenialReasonKeptResourcePolicy`, ...). No v0.3 key |
 | `AuthorizationKey` | `krateo.audit.authorization_key` | v0.14.0, controller only: the one authorization-bearing annotation or label a controller declined to overwrite, `<kind>:<key>` (build it with `AuthorizationKeyValue`). Exactly when `DenialReason` is `DenialReasonKeptExistingValue`; one record per key; never a value |
+| `IdentityClaim` | `krateo.audit.identity.claim` | v0.15.0, request writer (authn's sign-ins): the verified identity's claim, exactly `storage.EncodeClaim(strategy, issuer, subject)`; identity. Written only when of format `identity_claim` (`ValidIdentityClaim`); never beside `ClassPublic` |
+| `TokenAudience` | `krateo.audit.token.audience` | v0.15.0, request writer (authn's `/delegate`): the issued token's audience on success, or the refused one with `DenialReasonAudienceNotAllowed`; written only when of format `token_audience` (`ValidTokenAudience`), so a malformed requested audience is never written |
 | `Preview` | `krateo.audit.preview` | `PreviewUnknown` (omitted, and marked for any Kubernetes object), `PreviewFalse` (also for a cluster-scoped object), `PreviewTrue`; `PreviewOf(bool)` |
 | `DryRun` | `krateo.audit.dry_run` | `true` whenever set. `false` only on a write record (`Verb` in `WriteVerbs()`) of an Emitter declared `WithWriter(WriterRequest)` or `WithWriter(WriterAction)`. Never on a read or a controller record, and never added for an Emitter that declares no writer (a v0.3 caller). The `Action` literal is the caller's either way |
 | `Namespace` | `k8s.namespace.name` | |
@@ -92,7 +94,7 @@ Unset fields are omitted, never written empty.
 
 ```go
 type Writer string // WriterRequest (H) | WriterGateway (G) | WriterAction (T) | WriterController (C)
-type Class string  // ClassHuman | ClassAgent | ClassController | ClassService; (Class).Known()
+type Class string  // ClassHuman | ClassAgent | ClassController | ClassService; (Class).Known(). ClassPublic (v0.15.0): not Known, the request writer's only
 type Preview uint8 // PreviewUnknown | PreviewFalse | PreviewTrue
 type Link struct{ Class Class; Subject string }
 type CauseRef struct{ Group, Version, Resource, Namespace, Name, UID string; Generation int64 }
@@ -255,7 +257,7 @@ Concurrent `Emit`s on one holder or one span are safe.
 ## Claim, sanitiser, dual-write
 
 ```go
-func ParseClaim[P ~string](claim P) (Class, bool) // audit.ParseClaim(ui.ActorPrincipal()); "" or unknown -> ("", false): omit
+func ParseClaim[P ~string](claim P) (Class, bool) // audit.ParseClaim(ui.ActorPrincipal()); "" or unknown -> ("", false): omit. Never ClassPublic
 func Sanitize(kv attribute.KeyValue) attribute.KeyValue // the key and every string, at any depth, valid UTF-8
 func SanitizeValue(v attribute.Value) attribute.Value
 func WithLegacyKeys(attrs []attribute.KeyValue) []attribute.KeyValue // W1: add each v0.3 twin; removed when W1 closes

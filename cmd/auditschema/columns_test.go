@@ -87,6 +87,11 @@ var fixtureValue = map[string]attribute.Value{
 	// v0.14.0: the authorization key a controller kept, beside
 	// kept_existing_value (fixtureDenialReason).
 	audit.KeyAuthorizationKey: attribute.StringValue("annotation:authn.krateo.io/username"),
+	// v0.15.0: the verified identity's claim, and a /delegate token's
+	// audience (unexpected on the rich row, whose outcome is denied for
+	// another reason).
+	audit.KeyIdentityClaim: attribute.StringValue(`["oidc","https://idp.example.com/realms/krateo","00000000-0000-4000-8000-000000000001"]`),
+	audit.KeyTokenAudience: attribute.StringValue("agentiko"),
 }
 
 // firstActionValue is the first action, in sorted order, that declares a set

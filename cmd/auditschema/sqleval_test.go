@@ -315,6 +315,11 @@ func TestConditionSQL_MeansWhatHoldsMeans(t *testing.T) {
 		// v0.14.0: kept_existing_value, and another reason beside a denied outcome.
 		{s(audit.KeyOutcome, audit.OutcomeDenied), s(audit.KeyDenialReason, audit.DenialReasonKeptExistingValue)},
 		{s(audit.KeyOutcome, audit.OutcomeDenied), s(audit.KeyDenialReason, audit.DenialReasonKeptResourcePolicy)},
+		// v0.15.0: the public class and another, and audience_not_allowed.
+		{s(audit.KeyActorClass, string(audit.ClassPublic))},
+		{s(audit.KeyActorClass, string(audit.ClassHuman))},
+		{s(audit.KeyOutcome, audit.OutcomeDenied), s(audit.KeyDenialReason, audit.DenialReasonAudienceNotAllowed)},
+		{s(audit.KeyDenialReason, audit.DenialReasonAudienceNotAllowed)},
 		{s(audit.KeyVerb, "delete")},
 		{s(audit.KeyVerb, "get")},
 		{s(audit.KeyVerb, "post")},

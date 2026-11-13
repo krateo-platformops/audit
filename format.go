@@ -1,7 +1,9 @@
 package audit
 
 import (
+	"encoding/json"
 	"errors"
+	"net/url"
 	"slices"
 	"strings"
 	"time"
@@ -63,8 +65,53 @@ func formatRule(format string) (rule func(string) bool, ok bool) {
 			_, err := time.Parse(time.RFC3339, v)
 			return err == nil
 		}, true
+	case FormatIdentityClaim:
+		return validIdentityClaim, true
+	case FormatTokenAudience:
+		return func(v string) bool { return validDNSSubdomain(v) || validHTTPSAudience(v) }, true
 	}
 	return nil, false
+}
+
+// signInStrategies are authn's sign-in strategies, the first element of an
+// identity claim (authn's storage.Strategy values a login, the ServiceAccount
+// login or OIDC step-up verifies; not self or unknown, which no sign-in
+// verifies).
+var signInStrategies = []string{"basic", "ldap", "oauth", "oidc", "serviceaccount"}
+
+// validIdentityClaim is format identity_claim: a JSON array of three
+// strings, strategy, issuer and subject, exactly as authn's
+// storage.EncodeClaim renders it (json.Marshal of a []string), the strategy
+// a sign-in strategy and the subject not empty. Re-encoding the decoded
+// array must give back v byte for byte, so the value is the one string an
+// administrator writes to authn.krateo.io/claim.
+func validIdentityClaim(v string) bool {
+	var parts []string
+	if err := json.Unmarshal([]byte(v), &parts); err != nil || len(parts) != 3 {
+		return false
+	}
+	if !slices.Contains(signInStrategies, parts[0]) || parts[2] == "" {
+		return false
+	}
+	canonical, err := json.Marshal(parts)
+	return err == nil && string(canonical) == v
+}
+
+// validHTTPSAudience is the URI form of format token_audience: an absolute
+// https URI, all printable ASCII, with a host and no userinfo, query or
+// fragment.
+func validHTTPSAudience(v string) bool {
+	const scheme = "https://"
+	if !strings.HasPrefix(v, scheme) || strings.ContainsAny(v, "?#") {
+		return false
+	}
+	for i := 0; i < len(v); i++ {
+		if v[i] <= ' ' || v[i] > '~' {
+			return false
+		}
+	}
+	u, err := url.Parse(v)
+	return err == nil && u.Scheme == "https" && u.User == nil && u.Hostname() != "" && u.Opaque == ""
 }
 
 // perUserSecretSuffixes end the names of the per-user credential Secrets

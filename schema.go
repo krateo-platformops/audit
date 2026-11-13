@@ -27,7 +27,8 @@ type Writer string
 // proves it (krateo.audit.actor_class).
 type Class string
 
-// The actor classes. They are authn's `principal` claim values, one to one.
+// The actor classes a credential proves. They are authn's `principal` claim
+// values, one to one.
 const (
 	ClassHuman      Class = "human"
 	ClassAgent      Class = "agent"
@@ -35,7 +36,18 @@ const (
 	ClassService    Class = "service"
 )
 
-// Known reports whether c is one of the four classes.
+// ClassPublic (v0.15.0, audit#38) is an unauthenticated visitor: a request
+// that carried no credential at all, which the writer served as its
+// configured public identity (snowplow's opt-in krateo:public). It is the
+// request writer's only, and no credential carries it: it is not Known, so
+// ParseClaim never returns it and no delegation link is of it. A writer sets
+// it itself, as Event.ActorClass, on exactly those requests; Check refuses it
+// beside a key that names a person (krateo.audit.identity.claim,
+// on_behalf_of, delegation).
+const ClassPublic Class = "public"
+
+// Known reports whether c is one of the four classes a credential proves.
+// ClassPublic is not one.
 func (c Class) Known() bool {
 	switch c {
 	case ClassHuman, ClassAgent, ClassController, ClassService:
@@ -43,6 +55,10 @@ func (c Class) Known() bool {
 	}
 	return false
 }
+
+// recorded reports whether Emit writes c as krateo.audit.actor_class: a
+// class a credential proves, or the public identity's.
+func (c Class) recorded() bool { return c.Known() || c == ClassPublic }
 
 // Level is how strongly a writer must write a key.
 type Level uint8

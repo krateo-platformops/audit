@@ -114,7 +114,7 @@ type Event struct {
 	// dropped.
 	UserName   string   // user.name
 	UserRoles  []string // user.roles
-	ActorClass Class    // krateo.audit.actor_class; omitted (and marked) unless Known
+	ActorClass Class    // krateo.audit.actor_class; omitted (and marked) unless Known or ClassPublic
 
 	// Deprecated: enduser.id is deprecated in semconv and is removed when
 	// migration window W1 closes. Emit writes it only when it is set here, as
@@ -156,7 +156,21 @@ type Event struct {
 	// it): only with DenialReason DenialReasonKeptExistingValue, one record
 	// per key, never a value.
 	AuthorizationKey string
-	Preview          Preview
+	// IdentityClaim is the verified identity's claim on a sign-in record
+	// (krateo.audit.identity.claim, v0.15.0): authn's
+	// storage.EncodeClaim(strategy, issuer, subject), built after the
+	// identity was verified, never from request input. Emit writes it only
+	// when it is of format identity_claim (ValidIdentityClaim), and Check
+	// refuses it beside ClassPublic.
+	IdentityClaim string
+	// TokenAudience is the audience of the token a /delegate exchange issued,
+	// or the requested audience it refused with
+	// DenialReasonAudienceNotAllowed (krateo.audit.token.audience, v0.15.0).
+	// Emit writes it only when it is of format token_audience
+	// (ValidTokenAudience): a malformed requested audience is never written,
+	// and its refusal is DenialReasonInvalidRequest.
+	TokenAudience string
+	Preview       Preview
 	// DryRun marks a write the authority was asked to validate and not
 	// persist (Kubernetes dryRun=All) -> krateo.audit.dry_run=true. A request
 	// or action writer (WithWriter) gets dry_run=false on every other write
@@ -465,7 +479,7 @@ func attributes(ctx context.Context, ev Event, actor principal) []attribute.KeyV
 
 	add(KeyUserName, actor.name)
 	strs(KeyUserRoles, actor.roles)
-	if actor.class.Known() {
+	if actor.class.recorded() {
 		add(KeyActorClass, string(actor.class))
 	}
 	add(KeyLegacyEndUserID, ev.EndUserID)
@@ -485,6 +499,15 @@ func attributes(ctx context.Context, ev Event, actor principal) []attribute.KeyV
 	add(KeyDenialReason, ev.DenialReason)
 	add(KeyCheckResult, ev.CheckResult)
 	add(KeyAuthorizationKey, ev.AuthorizationKey)
+	// The claim and the audience only when they are of their formats: Emit
+	// never writes a value its own Check refuses, and a malformed requested
+	// audience is recorded without the value.
+	if ValidIdentityClaim(ev.IdentityClaim) {
+		add(KeyIdentityClaim, ev.IdentityClaim)
+	}
+	if ValidTokenAudience(ev.TokenAudience) {
+		add(KeyTokenAudience, ev.TokenAudience)
+	}
 	if ev.Preview != PreviewUnknown {
 		attrs = append(attrs, attribute.Bool(KeyPreview, ev.Preview == PreviewTrue))
 	}

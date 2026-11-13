@@ -75,7 +75,7 @@
 # emitted without it and names the key's marker in krateo.audit.incomplete;
 # Check reports it as incomplete.
 
-updated: "2026-11-12T00:00:00Z" # the generated docs/schema.md timestamp
+updated: "2026-11-13T00:00:00Z" # the generated docs/schema.md timestamp
 schema_version: "1"
 event_name: audit
 
@@ -171,6 +171,19 @@ conditions:
     description: >-
       krateo.audit.denial_reason is kept_existing_value: the writer declined
       to overwrite an authorization-bearing value already present.
+  # v0.15.0 (audit#38).
+  - id: public_actor
+    go: CondPublicActor
+    description: >-
+      krateo.audit.actor_class is public: the request carried no credential
+      at all, and the writer served it as its configured public identity.
+  # v0.15.0 (audit#37, authn#155).
+  - id: issued_or_audience_refused
+    go: CondIssuedOrAudienceRefused
+    description: >-
+      krateo.audit.outcome is success, or krateo.audit.denial_reason is
+      audience_not_allowed: a token exchange that issued its token, or that
+      refused the requested audience.
 
 # The value formats a key may declare (`format:` on the key). Each is one
 # exported validator, generated: audit.Valid<go>(s) (ValidOpaqueID), behind
@@ -236,6 +249,24 @@ formats:
   - id: rfc3339
     go: RFC3339
     description: an RFC 3339 timestamp, with or without fractional seconds.
+  # v0.15.0 (audit#37).
+  - id: identity_claim
+    go: IdentityClaim
+    description: >-
+      authn's claim of a verified identity, `["<strategy>","<issuer>","<subject>"]`,
+      exactly as authn's storage.EncodeClaim writes it (Go's encoding/json
+      rendering of the three strings, so the value an admin writes to the
+      authn.krateo.io/claim annotation is the same string): the strategy one
+      of authn's sign-in strategies (basic, ldap, oauth, oidc,
+      serviceaccount), the subject not empty.
+  # v0.15.0 (authn#155).
+  - id: token_audience
+    go: TokenAudience
+    description: >-
+      the audience a token is issued for, a recipient's name: a DNS-1123
+      subdomain (1 to 253 of `[a-z0-9.-]`, dot-separated labels each starting
+      and ending with a letter or digit), or an absolute `https://` URI with
+      a host and no userinfo, query or fragment, all printable ASCII.
 
 # Exactly one target per record: a Kubernetes object or an external endpoint,
 # and for the request writer also a non-resource path (url.path, v0.12.0: a
@@ -429,9 +460,11 @@ keys:
     description: >-
       The principal performing the action (Kubernetes user.username). On a
       delegated token, the outermost actor. For a controller,
-      system:serviceaccount:<namespace>:<name>. A writer that names no
-      actor still emits the record, without this key and marked actor: a
-      record is never dropped.
+      system:serviceaccount:<namespace>:<name>. For an unauthenticated
+      visitor (actor class public, v0.15.0), the fixed name of the identity
+      the writer serves it as (snowplow's krateo:public), never a person. A
+      writer that names no actor still emits the record, without this key
+      and marked actor: a record is never dropped.
     marker: actor
     writers:
       request: {level: required, markable: true}
@@ -452,22 +485,40 @@ keys:
       controller: optional
 
   - name: krateo.audit.actor_class
+    # The four credential classes are authn's `principal` claim values, one to
+    # one (audit.ParseClaim). public (v0.15.0, audit#38) is the request
+    # writer's only, and no credential carries it: ParseClaim never returns
+    # it, and no delegation link is of it. A writer writes it when the request
+    # carried no credential at all (snowplow: no Authorization header field)
+    # and it served the request as its configured public identity (snowplow's
+    # opt-in public identity, snowplow#1334, merged as snowplow#1393:
+    # user.name krateo:public, user.roles [system:unauthenticated], served by
+    # impersonation under RBAC; go/snowplow/internal/handlers/middleware/
+    # public_identity.go). That user.name is the identity's fixed name, never
+    # a person: the writer's obligation, which Check can't verify. Check
+    # refuses the class beside a key that names a person: the verified claim
+    # (krateo.audit.identity.claim), on_behalf_of and delegation (each
+    # not_when public_actor). impersonated_user.* stays allowed: it names
+    # whom the writer impersonated, and for a public visitor that is the
+    # public identity itself, not a person.
     go: ActorClass
     type: string
     semconv: none
-    values: [human, agent, controller, service]
     marker: actor_class
     description: >-
       The class of the principal in user.name, as its credential proves it:
       authn's signed `principal` claim (UserInfo.ActorPrincipal()). Omitted,
       never defaulted, when the claim is absent or unknown. Under
       TOKEN_PASSTHROUGH an agent replays a person's token, so the class is
-      human; only a /delegate token names the agent.
+      human; only a /delegate token names the agent. public (v0.15.0, the
+      request writer's only) is a request that carried no credential at
+      all, served as the writer's configured public identity: never a
+      credential's class, and never beside a key that names a person.
     writers:
-      request: {level: conditional, when: the token carries a known principal claim, markable: true}
-      gateway: {level: conditional, when: the token carries a known principal claim, markable: true}
-      action: required
-      controller: required
+      request: {level: conditional, when: "the token carries a known principal claim, or the request carried no credential and was served as the public identity", markable: true, values: [human, agent, controller, service, public]}
+      gateway: {level: conditional, when: the token carries a known principal claim, markable: true, values: [human, agent, controller, service]}
+      action: {level: required, values: [human, agent, controller, service]}
+      controller: {level: required, values: [human, agent, controller, service]}
 
   - name: krateo.audit.on_behalf_of.user.name
     go: OnBehalfOf
@@ -476,7 +527,9 @@ keys:
     identity: true
     description: >-
       On a delegated token, the person the actor acts for (the token's sub).
-      Read only from a signed act chain, never from baggage.
+      Read only from a signed act chain, never from baggage. Never on a
+      public actor's record (v0.15.0): it names a person.
+    not_when: public_actor
     writers:
       request: {level: conditional, when: the token carries a signed act chain, check: delegated}
       gateway: {level: conditional, when: the token carries a signed act chain, check: delegated}
@@ -492,7 +545,9 @@ keys:
     description: >-
       The signed act chain, outermost actor first and ending with the subject,
       each entry <class>:<subject>. A link whose class is unknown is written
-      :<subject>.
+      :<subject>. Never on a public actor's record (v0.15.0): it names
+      people.
+    not_when: public_actor
     writers:
       request: {level: conditional, when: the token carries a signed act chain, check: delegated}
       gateway: {level: conditional, when: the token carries a signed act chain, check: delegated}
@@ -536,6 +591,43 @@ keys:
       gateway: not_applicable
       action: optional
       controller: {level: conditional, when: the object is about a user}
+
+  # v0.15.0 (audit#37; authn's input of 2026-11-13). Written by authn's
+  # request writer only, on its sign-ins: the four logins (basic, LDAP, OAuth,
+  # OIDC; krateo.action authn.login.<strategy>), the ServiceAccount login
+  # (its claim is ["serviceaccount","<mapping namespace>","<mapping name>"])
+  # and OIDC step-up (authn.stepup.oidc, carrying the session's own claim:
+  # it is the same identity). Not on /delegate (its subject is named by
+  # on_behalf_of and delegation) nor on /usernames/check (not a sign-in).
+  # On every outcome once authn has verified the identity: success, denied
+  # (name_held_legacy, name_claimed: the record an administrator needs to
+  # give a refused person their name) and failure; a verified identity with
+  # no username (name_missing) still carries it. A refusal before
+  # verification has no identity and writes no record. Which actions carry
+  # it is the writer's obligation: Check enforces no krateo.action value.
+  # Same identity handling and retention as user.name: the subject is a
+  # stable person identifier (a Keycloak UUID, a GitHub id, an LDAP DN).
+  - name: krateo.audit.identity.claim
+    go: IdentityClaim
+    type: string
+    semconv: none
+    identity: true
+    format: identity_claim
+    description: >-
+      The verified identity's claim, as authn compares it in its name guard:
+      exactly storage.EncodeClaim(strategy, subject.Issuer, subject.ID),
+      the JSON array [strategy, issuer, subject], built after the identity
+      provider or the apiserver verified the identity, never from request
+      input. It is byte for byte the value an administrator writes to the
+      authn.krateo.io/claim annotation to give that identity its name, so
+      the record and the annotation are one string. Never on a public
+      actor's record.
+    not_when: public_actor
+    writers:
+      request: {level: conditional, when: "the writer verified the identity of a sign-in (a login, the ServiceAccount login, OIDC step-up), whatever the outcome"}
+      gateway: not_applicable
+      action: not_applicable
+      controller: not_applicable
 
   # --- what ----------------------------------------------------------------
   - name: krateo.action
@@ -654,15 +746,37 @@ keys:
       # authn 0.41.0's name guard: name_claimed includes the write-time race
       # re-check; name_held_legacy is a pre-claims Secret written by a different
       # strategy (no claim exists, so it is not name_claimed).
+      # On /delegate with an identity provider's subject token (authn#155,
+      # v0.15.0), the exchange is refused unless the subject's username has a
+      # credential Secret that already carries exactly that identity's claim,
+      # so the person signs in to the portal first. Three causes, three
+      # reasons, each named on the username's credential Secret as a login
+      # record names it, and with no status code:
+      #   subject_not_signed_in (v0.15.0): the subject token verified, but its
+      #   username has no credential Secret: the person has never signed in
+      #   to the portal. Routine: the next step is to sign in.
+      #   name_held_legacy: the Secret carries no claim (written before
+      #   claims, by another strategy), the same meaning as at a login.
+      #   name_claimed: the Secret carries another identity's claim, the same
+      #   meaning as the login name guard's. Security-relevant: a verified
+      #   identity asked for a name someone else holds.
       # group_not_allowed: an OIDCConfig's allowedGroups refused an identity the
-      # IdP verified, because it is in none of the admitted groups (403
-      # GroupNotAllowed).
+      # IdP verified, or /delegate's subject token, because it is in none of
+      # the admitted groups (403 GroupNotAllowed).
       # delegation_not_allowed, delegation_too_deep: authn's /delegate refused
       # the token exchange: the actor may not act for the subject, or the act
       # chain would exceed its depth bound (authn#123).
+      # audience_not_allowed (v0.15.0, authn#155): authn's /delegate refused
+      # the requested audience: it isn't in the actor mapping's
+      # spec.delegation.audiences allowlist (RFC 8693 section 2.2.2
+      # invalid_target, 400). The record carries the requested audience in
+      # krateo.audit.token.audience only if it is of format token_audience.
+      # Not AudienceMismatch (below): that is the actor's own token failing
+      # verification, never a row.
       # platform_group: an identity source (LDAP, OAuth, OIDC) asserted a
-      # krateo: group, which only the platform grants (403). Not system_group,
-      # which is a Kubernetes system: group.
+      # krateo: group, which only the platform grants (403), or /delegate's
+      # subject token did. Not system_group, which is a Kubernetes system:
+      # group.
       # name_missing: an identity source verified the identity but returned no
       # username (an OIDC claim absent or empty, an OAuth RESTAction with no
       # username, an LDAP entry with no uid), so authn refuses it (403). With
@@ -676,7 +790,9 @@ keys:
       # within authn's 1 s margin. Routine.
       # subject_token_invalid: the token did not verify: a bad signature, an
       # unknown or retired kid (a key retired to revoke tokens included),
-      # malformed, a wrong alg, or no exp. Security-relevant.
+      # malformed, a wrong alg, iss or aud, or no exp. Security-relevant.
+      # Both apply to an identity provider's subject token too (authn#155):
+      # they describe the subject token, whoever issued it.
       # authn's refusals after the identity verified (audit#20, authn#132),
       # each a denied record with no status code. The meanings are authn's
       # own (authn@9e352bde):
@@ -714,7 +830,10 @@ keys:
       #   JSON, so authn answers 400 and the check never runs. Denied, no
       #   status code, no check_result. With no username there is no Secret
       #   to name: the record names the Secret resource without a name, as
-      #   name_missing does.
+      #   name_missing does. On /delegate (v0.15.0, authn#155): a requested
+      #   audience that is not of format token_audience is invalid_request,
+      #   recorded without the value (no free text): Check refuses
+      #   krateo.audit.token.audience on any refusal but audience_not_allowed.
       #   name_not_issued (audit#29; plumbing usernames.ErrNotIssued, "authn
       #   would issue the username in another form"): a sign-in whose
       #   username an identity source chose, one the clientconfig Secret's
@@ -798,7 +917,7 @@ keys:
       # Not denial reasons: a Secret the apiserver answered NotFound or
       # Forbidden for, a page-budget cut, and a refused 3xx redirect are
       # failures with the authority's code (or none), never denied.
-      request: {level: optional, values: [name_reserved, name_claimed, name_held_legacy, name_provisioned, name_bound, system_group, group_not_allowed, delegation_not_allowed, delegation_too_deep, platform_group, name_missing, subject_token_expired, subject_token_invalid, stepup_not_enabled, insufficient_assurance, stale_authentication, no_mapping, ambiguous_mapping, not_a_service_account, username_check_not_allowed, invalid_request, name_not_issued, destination_refused, per_user_credential_ref, endpoint_ref_malformed, internal_identity_context, write_refused, dry_run_not_executed, dependency_failed, uaf_on_write_verb, invalid_path, template_error, session_credential_missing, step_up_required, rbac_not_allowed]}
+      request: {level: optional, values: [name_reserved, name_claimed, name_held_legacy, name_provisioned, name_bound, system_group, group_not_allowed, delegation_not_allowed, delegation_too_deep, platform_group, name_missing, subject_token_expired, subject_token_invalid, stepup_not_enabled, insufficient_assurance, stale_authentication, no_mapping, ambiguous_mapping, not_a_service_account, username_check_not_allowed, invalid_request, name_not_issued, destination_refused, per_user_credential_ref, endpoint_ref_malformed, internal_identity_context, write_refused, dry_run_not_executed, dependency_failed, uaf_on_write_verb, invalid_path, template_error, session_credential_missing, step_up_required, rbac_not_allowed, subject_not_signed_in, audience_not_allowed]}
       gateway: not_applicable
       action: not_applicable
       # kept_resource_policy: helm declined a delete because the object carries
@@ -885,6 +1004,38 @@ keys:
       gateway: not_applicable
       action: not_applicable
       controller: {level: conditional, when: the denial reason is kept_existing_value, check: kept_existing_value}
+
+  # v0.15.0 (authn#155, the rulings on audit#37 of 2026-11-13, as amended
+  # after authn's input). The issued token's audience decides where the
+  # token is accepted, so it is authorization-relevant. authn validates a
+  # requested audience against the actor mapping's
+  # spec.delegation.audiences, operator configuration on each mapping, not
+  # an authn constant: so the key is bounded by format, not by values.
+  # Written by authn on authn.delegate records only: on success, the
+  # audience the token was issued for, only when one was requested (none
+  # requested, the key is absent); on an audience_not_allowed refusal, the
+  # requested audience, only if it is of the format. A malformed requested
+  # audience is invalid_request, recorded without it. Check holds the
+  # outcome side (only_when issued_or_audience_refused: never on a failure
+  # or on any other refusal) and the format; the action is the writer's
+  # obligation, as Check enforces no krateo.action value.
+  - name: krateo.audit.token.audience
+    go: TokenAudience
+    type: string
+    semconv: none
+    format: token_audience
+    description: >-
+      The audience of the token a /delegate exchange issued (on success), or
+      the audience it refused (krateo.audit.denial_reason
+      audience_not_allowed): a recipient's name, never an identity, of
+      format token_audience, so never free text. Absent when no audience
+      was requested, and on any other record.
+    only_when: issued_or_audience_refused
+    writers:
+      request: {level: conditional, when: "the writer issued a token for a requested audience, or refused a requested audience of format token_audience (audience_not_allowed)"}
+      gateway: not_applicable
+      action: not_applicable
+      controller: not_applicable
 
   - name: http.response.status_code
     go: HTTPStatusCode
