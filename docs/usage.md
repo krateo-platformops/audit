@@ -1,10 +1,10 @@
 ---
 type: Usage
 title: audit — usage
-description: Install the package, when and how to emit, who the actor is, adopting v0.4.0, v0.5.0, v0.6.0, v0.7.0, v0.8.0, v0.9.0, v0.10.0, v0.11.0, v0.12.0, v0.13.0, v0.14.0 and v0.15.0, testing a writer against the schema, and checking the live table.
+description: Install the package, when and how to emit, who the actor is, adopting v0.4.0, v0.5.0, v0.6.0, v0.7.0, v0.8.0, v0.9.0, v0.10.0, v0.11.0, v0.12.0, v0.13.0, v0.14.0, v0.15.0 and v0.16.0, testing a writer against the schema, and checking the live table.
 resource: github.com/krateo-platformops/audit
 tags: [library, audit, usage]
-timestamp: 2026-11-13T00:00:00Z
+timestamp: 2026-11-21T00:00:00Z
 ---
 
 # Usage
@@ -631,6 +631,18 @@ and every record an earlier release wrote stays valid.
   `Requirement.Values` (generated constants `audit.ActorClass*`). The four
   credential classes are every writer's; only the request writer's adds
   `public`.
+
+## Adopting v0.16.0
+
+v0.16.0 is additive: a plain bump changes no record and no content hash,
+and every record an earlier release wrote stays valid.
+
+- **`/delegate` refusing a subject that is not a person** (authn#165).
+  `audit.DenialReasonSubjectNotAPerson`, the request writer's only, on a
+  denied record with no status code: an identity provider's subject token
+  verified, but it carries no user session (a service account's client
+  credentials token), so the exchange names no person to act for. Not
+  `subject_token_invalid`, which is a token that did not verify.
 
 ## Testing a writer
 

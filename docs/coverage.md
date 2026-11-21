@@ -289,6 +289,10 @@ token ([authn#155], open), the issued token's audience,
 `krateo.audit.token.audience`, and two denial reasons,
 `subject_not_signed_in` and `audience_not_allowed`. authn writes none of
 them at `3dd1695b`, so no row's status changes until it does.
+audit v0.16.0 adds one more `/delegate` denial reason authn will write,
+`subject_not_a_person` ([authn#165]): a verified identity-provider subject
+token that carries no user session (a service account's). It changes no
+row's status until authn writes it.
 
 | component | path (what changes) | writer class | identity source | status | owner issue | scope | krateo.action | verb | outcomes |
 |---|---|---|---|---|---|---|---|---|---|
@@ -577,3 +581,4 @@ Each open question is asked on its owner's issue; the link goes to the comment. 
 [identity-lifecycle#24]: https://github.com/krateo-platformops/identity-lifecycle/issues/24
 [identity-lifecycle#27]: https://github.com/krateo-platformops/identity-lifecycle/pull/27
 [identity-lifecycle#28]: https://github.com/krateo-platformops/identity-lifecycle/pull/28
+[authn#165]: https://github.com/krateo-platformops/authn/issues/165

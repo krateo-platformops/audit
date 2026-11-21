@@ -4,11 +4,22 @@ title: audit — log
 description: Curated history of the audit package.
 resource: github.com/krateo-platformops/audit
 tags: [library, audit, log]
-timestamp: 2026-11-13T00:00:00Z
+timestamp: 2026-11-21T00:00:00Z
 ---
 
 # Log
 
+- **2026-11-21**: v0.16.0. Additive: no record of an earlier release
+  changes, and no content hash.
+  - A new request denial reason, `subject_not_a_person`
+    (`audit.DenialReasonSubjectNotAPerson`, authn#165): authn's `/delegate`
+    verified an identity provider's subject token, but it carries no user
+    session. It is a service account's (client credentials), not a
+    person's, so no one can be acted for (403 `SubjectNotAPerson`). The
+    token is valid, so not `subject_token_invalid`. Security-relevant: a
+    client-credentials token reached an audience the exchange accepts. On a
+    denied record only, with no status code, like the other `/delegate`
+    refusals.
 - **2026-11-13**: v0.15.0. Additive: no record of an earlier release
   changes, and no content hash.
   - A new request key, `krateo.audit.identity.claim`
