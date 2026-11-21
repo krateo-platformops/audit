@@ -794,6 +794,13 @@ keys:
       # malformed, a wrong alg, iss or aud, or no exp. Security-relevant.
       # Both apply to an identity provider's subject token too (authn#155):
       # they describe the subject token, whoever issued it.
+      # subject_not_a_person (v0.16.0, authn#165): authn's /delegate verified
+      # an identity provider's subject token, but the token carries no user
+      # session: it is a service account's (client credentials), not a
+      # person's, so no one can be acted for (403 SubjectNotAPerson). The
+      # token is valid, so not subject_token_invalid. Security-relevant: a
+      # client-credentials token reached an audience the exchange accepts.
+      # No status code.
       # authn's refusals after the identity verified (audit#20, authn#132),
       # each a denied record with no status code. The meanings are authn's
       # own (authn@9e352bde):
@@ -918,7 +925,7 @@ keys:
       # Not denial reasons: a Secret the apiserver answered NotFound or
       # Forbidden for, a page-budget cut, and a refused 3xx redirect are
       # failures with the authority's code (or none), never denied.
-      request: {level: optional, values: [name_reserved, name_claimed, name_held_legacy, name_provisioned, name_bound, system_group, group_not_allowed, delegation_not_allowed, delegation_too_deep, platform_group, name_missing, subject_token_expired, subject_token_invalid, stepup_not_enabled, insufficient_assurance, stale_authentication, no_mapping, ambiguous_mapping, not_a_service_account, username_check_not_allowed, invalid_request, name_not_issued, destination_refused, per_user_credential_ref, endpoint_ref_malformed, internal_identity_context, write_refused, dry_run_not_executed, dependency_failed, uaf_on_write_verb, invalid_path, template_error, session_credential_missing, step_up_required, rbac_not_allowed, subject_not_signed_in, audience_not_allowed]}
+      request: {level: optional, values: [name_reserved, name_claimed, name_held_legacy, name_provisioned, name_bound, system_group, group_not_allowed, delegation_not_allowed, delegation_too_deep, platform_group, name_missing, subject_token_expired, subject_token_invalid, stepup_not_enabled, insufficient_assurance, stale_authentication, no_mapping, ambiguous_mapping, not_a_service_account, username_check_not_allowed, invalid_request, name_not_issued, destination_refused, per_user_credential_ref, endpoint_ref_malformed, internal_identity_context, write_refused, dry_run_not_executed, dependency_failed, uaf_on_write_verb, invalid_path, template_error, session_credential_missing, step_up_required, rbac_not_allowed, subject_not_signed_in, audience_not_allowed, subject_not_a_person]}
       gateway: not_applicable
       action: not_applicable
       # kept_resource_policy: helm declined a delete because the object carries
