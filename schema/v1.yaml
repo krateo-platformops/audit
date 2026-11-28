@@ -75,7 +75,7 @@
 # emitted without it and names the key's marker in krateo.audit.incomplete;
 # Check reports it as incomplete.
 
-updated: "2026-11-13T00:00:00Z" # the generated docs/schema.md timestamp
+updated: "2026-11-28T00:00:00Z" # the generated docs/schema.md timestamp
 schema_version: "1"
 event_name: audit
 
@@ -90,7 +90,16 @@ writers:
   - id: gateway
     code: G
     go: WriterGateway
-    description: The agent gateway's hop record, projected by the collector.
+    description: >-
+      The agent gateway's hop record, projected by the collector. A hop the
+      gateway refused before it had a verified identity (an empty user, for
+      example "authorization failed" on an MCP or A2A route, refused before
+      protocol parsing) is outside the gateway's rows: a refusal made before
+      the caller is verified is counted, never a row, here as for a request
+      writer. The collector counts it as a bounded metric with no identity, no
+      path and no source address (its "gateway refused hop" count, by route
+      class and reason). A hop refused after the gateway verified the caller
+      is a denied row.
   - id: action
     code: T
     go: WriterAction

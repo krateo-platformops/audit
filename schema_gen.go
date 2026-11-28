@@ -738,7 +738,14 @@ const (
 	// login and a /delegate token.
 	WriterRequest Writer = "request"
 	// WriterGateway (G): The agent gateway's hop record, projected by the
-	// collector.
+	// collector. A hop the gateway refused before it had a verified identity (an
+	// empty user, for example "authorization failed" on an MCP or A2A route,
+	// refused before protocol parsing) is outside the gateway's rows: a refusal
+	// made before the caller is verified is counted, never a row, here as for a
+	// request writer. The collector counts it as a bounded metric with no
+	// identity, no path and no source address (its "gateway refused hop" count, by
+	// route class and reason). A hop refused after the gateway verified the caller
+	// is a denied row.
 	WriterGateway Writer = "gateway"
 	// WriterAction (T): An agent's per-action record, written by whatever performs
 	// the action.

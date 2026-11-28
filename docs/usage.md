@@ -277,7 +277,8 @@ for authn:
 
 A token that does not verify never gets a row; an audience mismatch does
 (`DenialReasonAudienceMismatch`, v0.17.0): the token verified, so the sender is
-known.
+known. This holds for the gateway writer too: see its entry in
+[schema.md](./schema.md#writers) for a hop refused before verification.
 Failures after verification are `failure` rows, not denials, and their
 status code is the authority's answer, never authn's own HTTP status. A
 failed mapping lookup carries the apiserver's code when the apiserver
