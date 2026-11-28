@@ -772,8 +772,21 @@ keys:
       # invalid_target, 400). The audience is always well formed: a
       # malformed one is invalid_request, never this reason. So the record
       # always carries the requested audience in krateo.audit.token.audience.
-      # Not AudienceMismatch (below): that is the actor's own token failing
-      # verification, never a row.
+      # Not audience_mismatch (below): that is a recipient refusing a token
+      # issued for others.
+      # audience_mismatch (v0.17.0): a recipient refused a bearer token that
+      # verified (signature, issuer, expiry) but whose `aud` names only other
+      # recipients, or is an empty list (plumbing's ErrAudienceMismatch; a
+      # token with no `aud` is accepted and never this). It is a delegated
+      # token for another service. First user: snowplow (#1596), refusing it
+      # with a 401 TokenAudienceMismatch before dispatch. The signature IS
+      # verified when the audience is looked at, so the sender is known and
+      # the row names it (user.name from the token's actor, its class from the
+      # signed `principal`): recording it is what lets an auditor see which
+      # identity presented a token meant for another service, which a counter
+      # cannot say. Only a token that verified is ever recorded: one that
+      # failed verification is counted and never a row. Denied, no status
+      # code: snowplow's own 401 is never http.response.status_code.
       # platform_group: an identity source (LDAP, OAuth, OIDC) asserted a
       # krateo: group, which only the platform grants (403), or /delegate's
       # subject token did. Not system_group, which is a Kubernetes system:
@@ -854,8 +867,11 @@ keys:
       #   mapping) is not refused: it keeps signing in, and its records stay
       #   nameless under the same rule (authn#140).
       # Not denial reasons:
-      #   AudienceMismatch is part of verifying the token, so it is a counted
-      #   pre-verification refusal and never a row.
+      #   A token that does not verify (a bad signature, an unknown or retired
+      #   kid, malformed, expired) is a counted refusal and never a row: the
+      #   claims are not trusted, so the sender is not known. An audience
+      #   mismatch is not that (v0.17.0): the token verified, so it is the
+      #   row audience_mismatch.
       #   MappingLookupFailed is a failure row. Its status code is the
       #   apiserver's answer to the mapping lookup when it answered (a 403 or
       #   5xx from the list call), and omitted when nothing answered (a
@@ -925,7 +941,7 @@ keys:
       # Not denial reasons: a Secret the apiserver answered NotFound or
       # Forbidden for, a page-budget cut, and a refused 3xx redirect are
       # failures with the authority's code (or none), never denied.
-      request: {level: optional, values: [name_reserved, name_claimed, name_held_legacy, name_provisioned, name_bound, system_group, group_not_allowed, delegation_not_allowed, delegation_too_deep, platform_group, name_missing, subject_token_expired, subject_token_invalid, stepup_not_enabled, insufficient_assurance, stale_authentication, no_mapping, ambiguous_mapping, not_a_service_account, username_check_not_allowed, invalid_request, name_not_issued, destination_refused, per_user_credential_ref, endpoint_ref_malformed, internal_identity_context, write_refused, dry_run_not_executed, dependency_failed, uaf_on_write_verb, invalid_path, template_error, session_credential_missing, step_up_required, rbac_not_allowed, subject_not_signed_in, audience_not_allowed, subject_not_a_person]}
+      request: {level: optional, values: [name_reserved, name_claimed, name_held_legacy, name_provisioned, name_bound, system_group, group_not_allowed, delegation_not_allowed, delegation_too_deep, platform_group, name_missing, subject_token_expired, subject_token_invalid, stepup_not_enabled, insufficient_assurance, stale_authentication, no_mapping, ambiguous_mapping, not_a_service_account, username_check_not_allowed, invalid_request, name_not_issued, destination_refused, per_user_credential_ref, endpoint_ref_malformed, internal_identity_context, write_refused, dry_run_not_executed, dependency_failed, uaf_on_write_verb, invalid_path, template_error, session_credential_missing, step_up_required, rbac_not_allowed, subject_not_signed_in, audience_not_allowed, subject_not_a_person, audience_mismatch]}
       gateway: not_applicable
       action: not_applicable
       # kept_resource_policy: helm declined a delete because the object carries

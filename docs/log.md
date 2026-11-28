@@ -4,11 +4,22 @@ title: audit — log
 description: Curated history of the audit package.
 resource: github.com/krateo-platformops/audit
 tags: [library, audit, log]
-timestamp: 2026-11-21T00:00:00Z
+timestamp: 2026-11-28T00:00:00Z
 ---
 
 # Log
 
+- **2026-11-28**: v0.17.0. Additive: no record of an earlier release
+  changes, and no content hash.
+  - A new request denial reason, `audience_mismatch`
+    (`audit.DenialReasonAudienceMismatch`, snowplow#1596): a recipient
+    refused a bearer token that verified but whose `aud` names only other
+    recipients (or is an empty list). A token with no `aud` is accepted and
+    never this. The earlier rule, that an audience mismatch is part of
+    verification, a counted refusal and never a row, is changed on the
+    owner's ruling: the signature is verified when the audience is looked at,
+    so the sender is known, and the refusal is recorded with it. A token that
+    does not verify is still counted and never a row. Denied, no status code.
 - **2026-11-21**: v0.16.0. Additive: no record of an earlier release
   changes, and no content hash.
   - A new request denial reason, `subject_not_a_person`
