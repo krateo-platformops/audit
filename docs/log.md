@@ -20,6 +20,11 @@ timestamp: 2026-11-28T00:00:00Z
     owner's ruling: the signature is verified when the audience is looked at,
     so the sender is known, and the refusal is recorded with it. A token that
     does not verify is still counted and never a row. Denied, no status code.
+  - [coverage.md](./coverage.md): snowplow's inventory gains the row for a
+    verified token refused for the wrong audience, and its Exclusions say
+    that one is no longer counted-only. [usage.md](./usage.md) tells a
+    consumer to test `ErrAudienceMismatch` before `ErrTokenInvalid`, which
+    plumbing wraps it with.
 - **2026-11-21**: v0.16.0. Additive: no record of an earlier release
   changes, and no content hash.
   - A new request denial reason, `subject_not_a_person`
