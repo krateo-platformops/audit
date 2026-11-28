@@ -9,6 +9,11 @@ timestamp: 2026-11-28T00:00:00Z
 
 # Log
 
+- **2026-11-28**: docs only; no code, record, content hash or reason value
+  changes. The gateway writer's description in `schema/v1.yaml` now names the
+  count the collector releases for a hop refused before verification,
+  `krateo.gateway.refused_hops` (observability#230, 3.1.122), and its three
+  dimensions: `route.class`, `reason` and `http.status`.
 - **2026-11-28**: docs only; no code, no record and no content hash change,
   and no new reason value. The owner's ruling: a refusal made before the
   caller is verified is counted, never a row, and that covers the gateway. A
