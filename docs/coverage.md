@@ -191,7 +191,9 @@ None of these is a row anyone emits. Each is a decision.
   TokenInvalid, TokenExpired, KeyNotPublished; snowplow `219a076e`,
   `go/snowplow/internal/handlers/middleware/credential_status.go:64-80`).
   Those are counted, never rows, and stay visible in the gateway's access
-  log. Not every snowplow 401 is one of them: a **verified** caller refused
+  log. The gateway is no exception: a hop it refuses before it has a verified
+  identity is counted, never a row (the rule is the gateway writer's, in
+  [schema.md](./schema.md#writers)). Not every snowplow 401 is one of them: a **verified** caller refused
   because its session or step-up credential Secret is missing
   (`session_credential_missing`, `step_up_required`;
   `credential_status.go:195-199`, via `userconfig.go:363-364`) gets a row,
@@ -331,6 +333,8 @@ paths is a `post`. A hop the gateway refused before dialing still names its
 target: `server.address` is the route's configured backend. Every row is
 tested in observability's `check-gateway-audit` workflow against the real
 agentgateway's output with `auditschema check -writer gateway`.
+A hop refused before the gateway verified the caller has no row; see the
+gateway writer in [schema.md](./schema.md#writers).
 [observability#156] tracks the remaining test gaps. The live
 `auditschema sql` check follows the roll.
 

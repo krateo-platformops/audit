@@ -9,6 +9,15 @@ timestamp: 2026-11-28T00:00:00Z
 
 # Log
 
+- **2026-11-28**: docs only; no code, no record and no content hash change,
+  and no new reason value. The owner's ruling: a refusal made before the
+  caller is verified is counted, never a row, and that covers the gateway. A
+  hop the gateway refuses before it has a verified identity gets no
+  `krateo_audit` record; the collector counts it by route class and reason,
+  with no identity, path or source address. The rule is stated once, in the
+  gateway writer's description in `schema/v1.yaml` (generated into
+  [schema.md](./schema.md#writers)); [coverage.md](./coverage.md) and
+  [usage.md](./usage.md) point to it.
 - **2026-11-28**: v0.17.0. Additive: no record of an earlier release
   changes, and no content hash.
   - A new request denial reason, `audience_mismatch`
