@@ -742,10 +742,14 @@ const (
 	// empty user, for example "authorization failed" on an MCP or A2A route,
 	// refused before protocol parsing) is outside the gateway's rows: a refusal
 	// made before the caller is verified is counted, never a row, here as for a
-	// request writer. The collector counts it as a bounded metric with no
-	// identity, no path and no source address (its "gateway refused hop" count, by
-	// route class and reason). A hop refused after the gateway verified the caller
-	// is a denied row.
+	// request writer. The collector counts it in the sum
+	// krateo.gateway.refused_hops (observability 3.1.122, chart
+	// otel-collector-daemonset 0.1.40), a bounded metric with no identity, no path
+	// and no source address, whose only dimensions are route.class (mcp, a2a, llm,
+	// other), reason (authorization_failed, authentication_failed, rate_limited,
+	// other) and http.status (401, 403, 429, other). Each gateway hop is in
+	// exactly one of krateo_audit, krateo.gateway_audit.excluded and this count. A
+	// hop refused after the gateway verified the caller is a denied row.
 	WriterGateway Writer = "gateway"
 	// WriterAction (T): An agent's per-action record, written by whatever performs
 	// the action.
