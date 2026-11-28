@@ -4,7 +4,7 @@ title: audit — coverage
 description: The cross-component audit inventory (AUDIT-4, installer#410). Every mutating path of every Krateo component, per writer class, with its identity source, status, owner issue, and the scope, action, verb and outcomes its records carry.
 resource: github.com/krateo-platformops/audit
 tags: [library, audit, coverage, inventory]
-timestamp: 2026-11-13T00:00:00Z
+timestamp: 2026-11-28T00:00:00Z
 ---
 
 # Coverage
@@ -195,7 +195,10 @@ None of these is a row anyone emits. Each is a decision.
   because its session or step-up credential Secret is missing
   (`session_credential_missing`, `step_up_required`;
   `credential_status.go:195-199`, via `userconfig.go:363-364`) gets a row,
-  with its denial reason (audit v0.12.0).
+  with its denial reason (audit v0.12.0). So does a **verified** token
+  refused because its `aud` names only other recipients, or is an empty list
+  ([snowplow#1596]; `audience_mismatch`, audit v0.17.0): the signature
+  verified, so the sender is known. A token with no `aud` is accepted.
 - **Tool-server actions that run on the tool server's own ServiceAccount**
   (the kagent helm, istio, cilium, argo and shell tools) can't be
   attributed to a person by any hop. No record can name the human, so
@@ -302,6 +305,7 @@ row's status until authn writes it.
 | snowplow | `GET`, `POST /export`: nothing changes; data leaves as a file built from the caller's own `/call`. Emit: `internal/handlers/export.go:249-264` (`auditExport`), called after a render or send (`:271`, `:300`); routes `main.go:313-326` | request | as `/call` | audited, non-conformant: the exits before the render emit nothing: an unsupported format or mismatched header labels (`export.go:174-186`), a failed page from the `/call` lane, a row path that does not evaluate, or the page collection (`:213-237`) ([snowplow#986]). Pending [snowplow#1379] | [snowplow#986]; fix: [snowplow#1379]; emit: [snowplow#116], [snowplow#1348] | `github.com/krateo-platformops/snowplow/audit` | `export` | get (the read its `/call` lane dials, `audit_event.go` `dialledVerb`) | success, failure |
 | snowplow | `POST /debug/shadow-parity`: toggles a per-process dark parity measurement; it can't change an authorization verdict (`internal/handlers/debug_shadow_parity.go:92-100`, `rbac.SetShadowParityEnabled`). Its target is the non-resource path, `url.path` (audit v0.12.0). No emit; route `debug_routes.go:308` | request | the caller's JWT (RefreshAuth), authorized for verb `post` on the path by DebugAuthz (`debug_routes.go:208-216`, since [snowplow#1362]) | not audited | [snowplow#909] | | `debug.shadowParity` | post | success; denied (`rbac_not_allowed`, audit v0.13.0: DebugAuthz's own `rbac.EvaluateRBAC` verdict on the non-resource URL refused the caller, `internal/handlers/middleware/debugauthz.go:85-88`, `:93-99`; no status code) |
 | snowplow | a verified caller refused because its session or step-up credential Secret is missing (`internal/handlers/middleware/credential_status.go:195-199`, via `userconfig.go:363-364`) | request | the verified token | not audited | [snowplow#1381] | | | | denied (`session_credential_missing`, `step_up_required`) |
+| snowplow | a verified token refused for the wrong audience: its `aud` names only other recipients, or is an empty list (a token with no `aud` is accepted); UserConfig and RefreshAuth, before any handler (snowplow#1596) | request | the verified token (plumbing returns its claims with `ErrAudienceMismatch`) | not audited | [snowplow#1596] | | | | denied (`audience_mismatch`) |
 | snowplow | a RESTAction write stage in a background resolve (the refresher, a cohort seed, a prewarm, a demand revalidation, or a background hop: a `/call` snowplow makes to itself for one of them), refused before the dial (`internal/resolvers/restactions/api/background_write.go:155-173`; origins `internal/cache/background_writes.go:129-144`). The stage record is written only for a customer's own resolve (`stage_audit.go:107-109`) | request | none: no person is behind it | out of scope (nothing is sent, and no one requested it: background work has no requester and writes no record, [snowplow#903], [snowplow#1381]) | [snowplow#1381] | | | | |
 | snowplow | a RESTAction write stage in an export's resolve (`GET`, `POST /export`: the export's read is not the customer's own write), refused before the dial (`background_write.go:155-173`; origin `internal/cache/background_writes.go:145-147`, [snowplow#970]) | request | the export's verified caller: the refused write had a requester | not audited | [snowplow#1381] | | | | denied (`write_refused`) |
 | snowplow | a RESTAction write stage in an inline dry-run draft (`POST /call/read`): refused before egress (`internal/resolvers/restactions/api/resolve.go:831-840`, [snowplow#443]) | request | the caller | not audited | [snowplow#1381] | | | | denied (`dry_run_not_executed`) |
@@ -458,7 +462,7 @@ All four are closed, and the gateway denies the tool to every caller.
 
 | component | path (what changes) | writer class | identity source | status | owner issue | scope | krateo.action | verb | outcomes |
 |---|---|---|---|---|---|---|---|---|---|
-| snowplow | a refusal before verification on any route: a missing, invalid or expired token, or one signed by a key authn no longer publishes (TokenMissing, TokenInvalid, TokenExpired, KeyNotPublished; `internal/handlers/middleware/credential_status.go:64-80`) | — | none: no verified identity | out of scope (see Exclusions) | [installer#410] | | | | |
+| snowplow | a refusal before verification on any route: a missing, invalid or expired token, or one signed by a key authn no longer publishes (TokenMissing, TokenInvalid, TokenExpired, KeyNotPublished; `internal/handlers/middleware/credential_status.go:64-80`). Not a verified token for the wrong audience: that is the row above | — | none: no verified identity | out of scope (see Exclusions) | [installer#410] | | | | |
 | snowplow | `POST /convert` | — | none | out of scope (not mounted: the route is commented out, `main.go:1364`) | [installer#410] | | | | |
 | snowplow | `POST /telemetry/v1/traces`: browser spans on the trace plane (`main.go:237-247`, `mountTelemetryRoute`, behind RefreshAuth) | — | the caller's verified JWT | out of scope (no platform state changes) | [snowplow#1291] | | | | |
 | snowplow | snowplow's own writes to the cluster | — | snowplow's ServiceAccount | out of scope (there are none: the grant is `get`, `list`, `watch` on every resource, `create` on the non-persistent access reviews, and `impersonate` for reads; `helm/snowplow/templates/clusterrole.yaml:21-38`, `:60-95`) | [installer#410] | | | | |
@@ -582,3 +586,4 @@ Each open question is asked on its owner's issue; the link goes to the comment. 
 [identity-lifecycle#27]: https://github.com/krateo-platformops/identity-lifecycle/pull/27
 [identity-lifecycle#28]: https://github.com/krateo-platformops/identity-lifecycle/pull/28
 [authn#165]: https://github.com/krateo-platformops/authn/issues/165
+[snowplow#1596]: https://github.com/krateo-platformops/snowplow/issues/1596

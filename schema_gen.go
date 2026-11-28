@@ -521,6 +521,9 @@ const (
 	// DenialReasonSubjectNotAPerson is "subject_not_a_person", a
 	// krateo.audit.denial_reason value of writer request.
 	DenialReasonSubjectNotAPerson = "subject_not_a_person"
+	// DenialReasonAudienceMismatch is "audience_mismatch", a
+	// krateo.audit.denial_reason value of writer request.
+	DenialReasonAudienceMismatch = "audience_mismatch"
 	// DenialReasonKeptResourcePolicy is "kept_resource_policy", a
 	// krateo.audit.denial_reason value of writer controller.
 	DenialReasonKeptResourcePolicy = "kept_resource_policy"
@@ -1273,7 +1276,7 @@ var schemaKeys = []KeySpec{
 		LessThan:       "",
 		Description:    "Why the writer itself refused, on a denied record only: one of the closed values its writer class declares, never free text. The caller's answer can stay opaque while the audit reader gets the reason. Optional: a denied record without it conforms. A writer class with no declared value cannot write it.",
 		Writers: map[Writer]Requirement{
-			WriterRequest:    {Level: LevelOptional, Values: []string{"name_reserved", "name_claimed", "name_held_legacy", "name_provisioned", "name_bound", "system_group", "group_not_allowed", "delegation_not_allowed", "delegation_too_deep", "platform_group", "name_missing", "subject_token_expired", "subject_token_invalid", "stepup_not_enabled", "insufficient_assurance", "stale_authentication", "no_mapping", "ambiguous_mapping", "not_a_service_account", "username_check_not_allowed", "invalid_request", "name_not_issued", "destination_refused", "per_user_credential_ref", "endpoint_ref_malformed", "internal_identity_context", "write_refused", "dry_run_not_executed", "dependency_failed", "uaf_on_write_verb", "invalid_path", "template_error", "session_credential_missing", "step_up_required", "rbac_not_allowed", "subject_not_signed_in", "audience_not_allowed", "subject_not_a_person"}},
+			WriterRequest:    {Level: LevelOptional, Values: []string{"name_reserved", "name_claimed", "name_held_legacy", "name_provisioned", "name_bound", "system_group", "group_not_allowed", "delegation_not_allowed", "delegation_too_deep", "platform_group", "name_missing", "subject_token_expired", "subject_token_invalid", "stepup_not_enabled", "insufficient_assurance", "stale_authentication", "no_mapping", "ambiguous_mapping", "not_a_service_account", "username_check_not_allowed", "invalid_request", "name_not_issued", "destination_refused", "per_user_credential_ref", "endpoint_ref_malformed", "internal_identity_context", "write_refused", "dry_run_not_executed", "dependency_failed", "uaf_on_write_verb", "invalid_path", "template_error", "session_credential_missing", "step_up_required", "rbac_not_allowed", "subject_not_signed_in", "audience_not_allowed", "subject_not_a_person", "audience_mismatch"}},
 			WriterGateway:    {Level: LevelNotApplicable},
 			WriterAction:     {Level: LevelNotApplicable},
 			WriterController: {Level: LevelOptional, Values: []string{"kept_resource_policy", "kept_existing_value"}},

@@ -1,10 +1,10 @@
 ---
 type: Usage
 title: audit — usage
-description: Install the package, when and how to emit, who the actor is, adopting v0.4.0, v0.5.0, v0.6.0, v0.7.0, v0.8.0, v0.9.0, v0.10.0, v0.11.0, v0.12.0, v0.13.0, v0.14.0, v0.15.0 and v0.16.0, testing a writer against the schema, and checking the live table.
+description: Install the package, when and how to emit, who the actor is, adopting v0.4.0, v0.5.0, v0.6.0, v0.7.0, v0.8.0, v0.9.0, v0.10.0, v0.11.0, v0.12.0, v0.13.0, v0.14.0, v0.15.0, v0.16.0 and v0.17.0, testing a writer against the schema, and checking the live table.
 resource: github.com/krateo-platformops/audit
 tags: [library, audit, usage]
-timestamp: 2026-11-21T00:00:00Z
+timestamp: 2026-11-28T00:00:00Z
 ---
 
 # Usage
@@ -275,7 +275,9 @@ for authn:
   `DenialReasonAmbiguousMapping` (more than one does). The two mapping
   records name the mapping resource without a name.
 
-An audience mismatch is part of verification, so it never gets a row.
+A token that does not verify never gets a row; an audience mismatch does
+(`DenialReasonAudienceMismatch`, v0.17.0): the token verified, so the sender is
+known.
 Failures after verification are `failure` rows, not denials, and their
 status code is the authority's answer, never authn's own HTTP status. A
 failed mapping lookup carries the apiserver's code when the apiserver
@@ -643,6 +645,27 @@ and every record an earlier release wrote stays valid.
   verified, but it carries no user session (a service account's client
   credentials token), so the exchange names no person to act for. Not
   `subject_token_invalid`, which is a token that did not verify.
+
+## Adopting v0.17.0
+
+v0.17.0 is additive: a plain bump changes no record and no content hash,
+and every record an earlier release wrote stays valid.
+
+- **A recipient refusing a token meant for others** (snowplow#1596).
+  `audit.DenialReasonAudienceMismatch`, the request writer's only, on a
+  denied record with no status code: the bearer token verified, but its
+  `aud` names only other recipients, or is an empty list. A token with no
+  `aud` is accepted, never this. Record it only from claims that verified
+  (plumbing's `ErrAudienceMismatch` returns them), so the actor and its
+  class are the token's signed ones; a token that did not verify is counted,
+  never a row. This replaces the v0.16 rule that an audience mismatch never
+  gets a row.
+  **Test for it FIRST.** plumbing's validator returns `ErrAudienceMismatch`
+  wrapped with `ErrTokenInvalid` (`jwtutil/validate.go`, `fmt.Errorf("%w:
+  %w", ErrTokenInvalid, ErrAudienceMismatch)`), so `errors.Is(err,
+  jwtutil.ErrTokenInvalid)` is also true for it. A consumer that tests
+  `ErrTokenInvalid` before `ErrAudienceMismatch` sends it down the counted,
+  no-row branch and never writes the row.
 
 ## Testing a writer
 

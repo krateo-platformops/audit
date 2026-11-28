@@ -151,7 +151,8 @@ func TestSchema_CauseRefAndDenialReason(t *testing.T) {
 			"session_credential_missing", "step_up_required",
 			"rbac_not_allowed",                              // v0.13.0: the writer's own RBAC evaluation
 			"subject_not_signed_in", "audience_not_allowed", // v0.15.0 (authn#155): /delegate with an identity provider's subject token
-			"subject_not_a_person"}, // v0.16.0 (authn#165): /delegate refused a service account's subject token
+			"subject_not_a_person", // v0.16.0 (authn#165): /delegate refused a service account's subject token
+			"audience_mismatch"},   // v0.17.0 (snowplow#1596): a verified token meant for other recipients
 		WriterController: {"kept_resource_policy", "kept_existing_value"}, // v0.14.0: kept_existing_value
 	}
 	for _, w := range Writers() {

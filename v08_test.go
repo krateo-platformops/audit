@@ -74,7 +74,10 @@ func TestCheck_PostVerificationReasons(t *testing.T) {
 			t.Errorf("%s: the request writer's value only", r)
 		}
 	}
-	for _, r := range []string{"audience_mismatch", "mapping_lookup_failed", "stepup_misconfigured"} {
+	// audience_mismatch was ruled out here (#20) and is a denial reason since
+	// v0.17.0 (snowplow#1596): the token verified, so the sender is known
+	// (TestCheck_AudienceMismatch).
+	for _, r := range []string{"mapping_lookup_failed", "stepup_misconfigured"} {
 		if slices.Contains(d.Writers[WriterRequest].Values, r) {
 			t.Errorf("%s is a denial reason; #20 rules it out", r)
 		}
